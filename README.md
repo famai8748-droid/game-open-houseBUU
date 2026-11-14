@@ -89,6 +89,20 @@ docs/audit/           รายงานการตรวจสอบโปร�
 | `scare.mp3` | jumpscare | `cut_hit/rumble` |
 | `tension.mp3` | ตอนผีปรากฏ/หาเจออีกครั้ง | `riser/tension` |
 
+เสียงจริงจาก [Freesound](https://freesound.org) สัญญาอนุญาต **CC0** (ตรวจที่หน้าของแต่ละเสียงแล้ว ไม่ต้องให้เครดิต แต่ใส่ไว้เพื่อความโปร่งใส) ตัด/ปรับระดับเสียงแล้ว และตรวจด้วย earshot ว่าเป็นเสียงที่ตั้งใจ:
+
+| ไฟล์ | ใช้เป็น | ต้นฉบับ |
+|---|---|---|
+| `door_creak.mp3` | ประตูไม้ลั่น | [Big door creak](https://freesound.org/people/jemburyturner/sounds/273466/) — jemburyturner |
+| `rain_loop.mp3` | ฝนในป่า / ฝนนอกเรือน (ลูป) | [Pluie calme sur feuilles, Nuit, Foret](https://freesound.org/people/yaya-dc/sounds/667775/) — yaya-dc |
+| `birds_loop.mp3` | นกยามรุ่งอรุณ (ลูป) | [Coniferous forest dawn chorus](https://freesound.org/people/SamsterBirdies/sounds/745273/) — SamsterBirdies |
+| `step_wood_1/2.mp3` | ฝีเท้าบนพื้นไม้ | [Footsteps on wooden floor](https://freesound.org/people/PanosA/sounds/546362/) — PanosA |
+| `step_wood_3.mp3` | ฝีเท้าบนพื้นไม้ | [Footsteps on Wooden Floor](https://freesound.org/people/ftpalad/sounds/119914/) — ftpalad |
+| `scratch.mp3` | กุกกัก (ขูด/แทะไม้) | [Scratching The Door](https://freesound.org/people/adaws05/sounds/786915/) — adaws05 |
+| `thunder.mp3` | ฟ้าร้อง (ฉาก 1) | [Distant Thunder Clap_Gentle](https://freesound.org/people/mikala_oidua/sounds/347562/) — mikala_oidua |
+| `gecko.mp3` | ตุ๊กแก (ฉาก 1–2) | [Tookgeh Gecko](https://freesound.org/people/Organuz/sounds/686626/) — Organuz (อัดที่เชียงใหม่) |
+| `dog_howl.mp3` | หมาหอนไกลๆ (ฉาก 1) | [Dog singing during the night](https://freesound.org/people/felix.blume/sounds/463694/) — felix.blume |
+
 ถ้าไฟล์ไหนโหลดไม่ได้ เกมจะกลับไปใช้เสียงสังเคราะห์เดิมอัตโนมัติ เพิ่ม/เปลี่ยนไฟล์ได้ที่ `SAMPLE_FILES` ใน `public/game.js` (ใช้ `.mp3` โมโน เพื่อให้เล่นได้ทั้ง iPhone และ Android)
 
 ## ปรับสมดุลเกม

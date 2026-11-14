@@ -195,7 +195,15 @@ function playSound(type, opts = {}) {
   const now = audioCtx.currentTime;
   const out = outputNode(opts.gain == null ? 1 : opts.gain, opts.pan || 0, audioBus.sfx);
 
-  if (type === 'step') {
+  if (type === 'footstep') {
+    // real footsteps on old floorboards (random take, slight pitch variation); grass stays synthesized
+    const takes = ['step_wood_1', 'step_wood_2', 'step_wood_3'].filter((n) => samples[n]);
+    if (state.scene !== 1 && takes.length) {
+      playSample(takes[Math.floor(Math.random() * takes.length)], out, { gain: 0.55, rate: 0.94 + Math.random() * 0.12, t: now });
+    } else {
+      playSound('step', opts);
+    }
+  } else if (type === 'step') {
     if (state.scene === 1 && state.role === 'host') {
       // soft step on wet grass / dirt
       noiseHit(now, { dur: 0.09, peak: 0.12, filter: 'lowpass', freq: 520, out });
@@ -204,6 +212,8 @@ function playSound(type, opts = {}) {
       tone(now, { type: 'triangle', freq: 95 + Math.random() * 25, to: 38, dur: 0.09, peak: 0.14, out });
       noiseHit(now, { dur: 0.04, peak: 0.03, filter: 'bandpass', freq: 1800, q: 1.2, out });
     }
+  } else if (type === 'creak' && samples.creak) {
+    playSample('creak', out, { gain: 0.45, rate: 0.9 + Math.random() * 0.2, t: now });
   } else if (type === 'creak') {
     // long eerie wooden door creak
     const osc = audioCtx.createOscillator();
@@ -225,6 +235,13 @@ function playSound(type, opts = {}) {
     env.connect(out);
     osc.start(now);
     osc.stop(now + 1.4);
+  } else if (type === 'rustle' && samples.scratch) {
+    // something scratching and gnawing at the wood ("กุกกัก")
+    playSample('scratch', out, { gain: 0.5, rate: 0.92 + Math.random() * 0.16, t: now });
+  } else if (type === 'gecko') {
+    playSample('gecko', out, { gain: 0.35, t: now });
+  } else if (type === 'dog') {
+    playSample('dog', out, { gain: 0.22, rate: 0.95 + Math.random() * 0.1, t: now });
   } else if (type === 'rustle') {
     // the unexplained "กุกกัก... กุกกัก..." knocking
     for (let i = 0; i < 2; i++) {
@@ -257,6 +274,11 @@ function playSound(type, opts = {}) {
       });
       noiseHit(now, { dur: 0.6, peak: 0.22, filter: 'highpass', freq: 700, attack: 0.002, out });
     }
+  } else if (type === 'thunder') {
+    if (!playSample('thunder', out, { gain: 0.5, rate: 0.9 + Math.random() * 0.2, t: now })) {
+      noiseHit(now, { dur: 0.25, peak: 0.12, filter: 'highpass', freq: 1500, attack: 0.002, out });   // crack
+      noiseHit(now + 0.05, { dur: 2.6, peak: 0.35, filter: 'lowpass', freq: 160, attack: 0.08, out }); // rumble
+    }
   } else if (type === 'tension') {
     // rising dread when a ghost appears or finds you again (sample only)
     playSample('tension', out, { gain: 0.2, t: now });
@@ -283,11 +305,25 @@ function playSound(type, opts = {}) {
 // Rendered with earshot's sound bank (https://github.com/Leonxlnx/earshot, MIT): bell = fit/bell/small_bell,
 // whisper = reverse_swell/breath, scare = cut_hit/rumble, tension = riser/tension.
 const SAMPLE_FILES = {
+  // rendered with earshot (MIT)
   bell: 'assets/audio/bell.mp3',
   whisper: 'assets/audio/whisper.mp3',
   scare: 'assets/audio/scare.mp3',
-  tension: 'assets/audio/tension.mp3'
+  tension: 'assets/audio/tension.mp3',
+  // real recordings, CC0 (Freesound; see README for each source)
+  creak: 'assets/audio/door_creak.mp3',
+  rain: 'assets/audio/rain_loop.mp3',
+  birds: 'assets/audio/birds_loop.mp3',
+  step_wood_1: 'assets/audio/step_wood_1.mp3',
+  step_wood_2: 'assets/audio/step_wood_2.mp3',
+  step_wood_3: 'assets/audio/step_wood_3.mp3',
+  scratch: 'assets/audio/scratch.mp3',
+  thunder: 'assets/audio/thunder.mp3',
+  gecko: 'assets/audio/gecko.mp3',
+  dog: 'assets/audio/dog_howl.mp3'
 };
+// Loops: when one finishes loading after its scene already started, rebuild that scene's ambience.
+const AMBIENT_SAMPLES = new Set(['rain', 'birds']);
 const samples = {};
 let samplesRequested = false;
 
@@ -298,7 +334,14 @@ function loadSamples() {
     fetch(url)
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((data) => new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, reject)))
-      .then((buf) => { samples[name] = buf; })
+      .then((buf) => {
+        samples[name] = buf;
+        if (AMBIENT_SAMPLES.has(name) && ambient.scene) {
+          const scene = ambient.scene;
+          ambient.scene = null;
+          setAmbientScene(scene);
+        }
+      })
       .catch((err) => console.warn(`[audio] ${name} unavailable, using synthesized sound`, err && err.message));
   });
 }
@@ -357,6 +400,35 @@ function loopTone(type, freq, gain, lowpass = 0) {
   return g;
 }
 
+// A recorded loop (rain, birds) under the scene, optionally muffled through a lowpass.
+function loopSample(name, gain, lowpass = 0) {
+  const buf = samples[name];
+  if (!buf) return false;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  // skip the MP3 encoder padding at both ends so the loop has no tiny gap
+  if (buf.duration > 1) {
+    src.loopStart = 0.05;
+    src.loopEnd = buf.duration - 0.05;
+  }
+  const g = audioCtx.createGain();
+  g.gain.value = gain;
+  if (lowpass) {
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = lowpass;
+    src.connect(f);
+    f.connect(g);
+  } else {
+    src.connect(g);
+  }
+  g.connect(ambient.out);
+  src.start(audioCtx.currentTime, Math.random() * buf.duration);
+  ambient.sources.push(src);
+  return true;
+}
+
 // Slow random wobble on a gain (wind gusts, breathing drones).
 function wobble(param, rate, depth) {
   const lfo = audioCtx.createOscillator();
@@ -409,27 +481,34 @@ function setAmbientScene(scene) {
   ambient.out.connect(audioBus.ambient);
   ambient.out.gain.setTargetAtTime(1, audioCtx.currentTime, 1.0);
 
+  const randPan = () => Math.random() * 1.6 - 0.8;
   if (scene === 1) {
-    // night rain + gusting wind in the forest
-    loopNoise('highpass', 1100, 0.05);
-    const wind = loopNoise('lowpass', 380, 0.07);
-    wobble(wind.gain, 0.11, 0.05);
-    sprinkle(9000, 18000, () => playSound('rustle', { gain: 0.35, pan: Math.random() * 1.6 - 0.8 }));
+    // night rain in the forest (real recording when loaded) + gusting wind, a gecko, a far-off dog
+    if (!loopSample('rain', 0.75)) loopNoise('highpass', 1100, 0.05);
+    const wind = loopNoise('lowpass', 380, 0.05);
+    wobble(wind.gain, 0.11, 0.04);
+    sprinkle(9000, 18000, () => playSound('rustle', { gain: 0.35, pan: randPan() }));
+    sprinkle(14000, 26000, () => playSound('gecko', { pan: randPan() }));
+    sprinkle(22000, 40000, () => playSound('dog', { pan: Math.random() < 0.5 ? -0.85 : 0.85 }));
   } else if (scene >= 2 && scene <= 4) {
-    // old wooden house: low uneasy drone, room rumble, creaks and drips
-    const d1 = loopTone('triangle', 55, 0.05, 260);
-    loopTone('triangle', 55.7, 0.05, 260);
-    wobble(d1.gain, 0.07, 0.025);
-    loopNoise('lowpass', 200, 0.035);
+    // old wooden house: the rain outside heard through the walls, a low uneasy drone, creaks and drips
+    loopSample('rain', 0.4, 650);
+    const d1 = loopTone('triangle', 55, 0.035, 260);
+    loopTone('triangle', 55.7, 0.035, 260);
+    wobble(d1.gain, 0.07, 0.02);
+    loopNoise('lowpass', 200, 0.025);
+    if (scene === 2) sprinkle(18000, 32000, () => playSound('gecko', { gain: 0.7, pan: randPan() }));
     if (scene === 4) loopTone('sine', 82.4, 0.018); // a fifth above: more tension near the dancer
     sprinkle(7000, 16000, () => playSound('creak', { gain: 0.25, pan: Math.random() * 1.6 - 0.8 }));
     sprinkle(4000, 9000, () => playSound('drip', { gain: 0.8, pan: Math.random() * 1.4 - 0.7 }));
     if (scene >= 3) sprinkle(14000, 26000, () => playSound('whisper', { gain: 0.8, pan: Math.random() < 0.5 ? -0.7 : 0.7 }));
   } else if (scene === 5) {
-    // dawn: soft warm pad and birds
-    [220, 277.2, 329.6].forEach((f) => loopTone('sine', f, 0.012));
-    loopNoise('lowpass', 500, 0.015);
-    sprinkle(2500, 6000, () => playSound('bird', { pan: Math.random() * 1.6 - 0.8 }));
+    // dawn: real dawn chorus when loaded (synth chirps otherwise) over a soft warm pad
+    [220, 277.2, 329.6].forEach((f) => loopTone('sine', f, 0.008));
+    if (!loopSample('birds', 0.4)) {
+      loopNoise('lowpass', 500, 0.015);
+      sprinkle(2500, 6000, () => playSound('bird', { pan: randPan() }));
+    }
   }
 }
 
@@ -1827,6 +1906,40 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   overlay.classList.remove('hidden');
   let step = 0;
   let timer = null;
+  // Each still is rendered off-screen, then shown with a slow zoom/pan and a crossfade.
+  const layers = { prev: null, cur: null };
+  const fadeMs = Math.min(280, frameDurationMs * 0.5);
+
+  function drawLayer(layer, now, alpha) {
+    if (!layer || alpha <= 0) return;
+    const age = now - layer.start;
+    const z = REDUCED_MOTION ? 1 : 1 + 0.07 * Math.min(1, age / (frameDurationMs * 1.8));
+    const panX = REDUCED_MOTION ? 0 : layer.pan * (z - 1) * 400;
+    frameCtx.globalAlpha = alpha;
+    frameCtx.drawImage(layer.canvas, -(800 * z - 800) / 2 + panX, -(450 * z - 450) / 2, 800 * z, 450 * z);
+  }
+
+  function present() {
+    if (!activeCutscene) return;
+    const now = performance.now();
+    frameCtx.globalAlpha = 1;
+    frameCtx.imageSmoothingEnabled = true;
+    frameCtx.fillStyle = '#000';
+    frameCtx.fillRect(0, 0, 800, 450);
+    const curAlpha = layers.cur ? Math.min(1, (now - layers.cur.start) / fadeMs) : 0;
+    drawLayer(layers.prev, now, 1);
+    drawLayer(layers.cur, now, curAlpha);
+    frameCtx.globalAlpha = 1;
+    const vig = frameCtx.createRadialGradient(400, 225, 160, 400, 225, 470);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.65)');
+    frameCtx.fillStyle = vig;
+    frameCtx.fillRect(0, 0, 800, 450);
+    frameCtx.fillStyle = '#000'; // letterbox bars
+    frameCtx.fillRect(0, 0, 800, 38);
+    frameCtx.fillRect(0, 412, 800, 38);
+    requestAnimationFrame(present);
+  }
 
   function finish() {
     if (!activeCutscene) return;
@@ -1840,7 +1953,15 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   function stepFrame() {
     if (step >= order.length) return finish();
     const idx = order[step];
-    renderCutsceneFrame(frameCtx, prefix, idx);
+    const off = document.createElement('canvas');
+    off.width = 800;
+    off.height = 450;
+    renderCutsceneFrame(off.getContext('2d'), prefix, idx);
+    layers.prev = layers.cur;
+    layers.cur = { canvas: off, start: performance.now(), pan: step % 2 ? -1 : 1 };
+    captionEl.classList.remove('caption-in');
+    void captionEl.offsetWidth;
+    captionEl.classList.add('caption-in');
     captionEl.textContent = String(frameCaptions[idx] || '').replace(/^เฟรม\s*\d+\s*\/\s*\d+\s*:\s*/, '');
     if (step === 0) playSound('creak');
     if (idx === 3 && order.length > 2) playSound('chime');
@@ -1849,6 +1970,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   }
   activeCutscene = { finish, startedAt: performance.now() };
   stepFrame();
+  requestAnimationFrame(present);
 }
 
 // Skip the current cutscene (ignored for the first 300 ms so a held key doesn't skip by accident).
@@ -2083,7 +2205,7 @@ function triggerInteract() {
   if (state.flags.victory) return;
   // P1 on a phone (or E on the keyboard) can continue without touching the main screen:
   if (state.flags.gameOver) {
-    if (performance.now() - (state.gameOverAt || 0) > 1200) retryFromCheckpoint(); // ignore panic-mashing
+    if (performance.now() - (state.gameOverAt || 0) > 1600) retryFromCheckpoint(); // after the jumpscare; ignore panic-mashing
     return;
   }
   if (isPhotoModalOpen()) return placeNextPhotoPiece();
@@ -2244,7 +2366,7 @@ function updateGame(dt) {
     if (state.stepTimer >= 0.11) {
       state.stepTimer = 0;
       state.player.frame = (state.player.frame + 1) % 8;
-      if (state.player.frame % 4 === 0) playSound('step');
+      if (state.player.frame % 4 === 0) playSound('footstep');
     }
 
     // Auto-trigger Samphawesi if walking right up to it in Scene 3
@@ -2361,9 +2483,19 @@ function triggerGameOver() {
   closePhotoPuzzleModal();
   duckAmbient(true);
   playSound('scare');
-  const scareImg = document.getElementById('jumpscare-img');
-  scareImg.src = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
-  document.getElementById('gameover-modal').classList.remove('hidden');
+  const faceSrc = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
+  document.getElementById('jumpscare-img').src = faceSrc;
+  // Full-screen jumpscare first, then the game-over screen.
+  const js = document.getElementById('jumpscare');
+  document.getElementById('jumpscare-face').src = faceSrc;
+  js.classList.remove('hidden', 'play');
+  void js.offsetWidth; // restart the CSS animation
+  js.classList.add('play');
+  setTimeout(() => {
+    js.classList.add('hidden');
+    js.classList.remove('play');
+    if (state.flags.gameOver) document.getElementById('gameover-modal').classList.remove('hidden');
+  }, REDUCED_MOTION ? 500 : 1150);
   broadcastState();
 }
 
@@ -2413,7 +2545,26 @@ function drawSpriteProportional(img, bottomCenterX, bottomY, targetHeight, flipX
 
 function renderGame() {
   if (!ctx) return;
-  ctx.clearRect(0, 0, 1280, 720);
+  ctx.fillStyle = '#050407';
+  ctx.fillRect(0, 0, 1280, 720);
+  const shake = computeShake();
+  ctx.save();
+  if (shake) ctx.translate((Math.random() - 0.5) * shake * 2, (Math.random() - 0.5) * shake * 2);
+  renderScene();
+  ctx.restore();
+  renderPostFx();
+}
+
+// The camera trembles a little when the ghost is right on top of you (not while safely hidden).
+function computeShake() {
+  const g = state.ghost;
+  if (REDUCED_MOTION || !g.active || g.alpha < 0.5 || state.flags.gameOver || state.flags.cutscenePlaying) return 0;
+  if (state.player.hidden && !state.player.flashlight) return 0;
+  const d = Math.abs(g.x - state.player.x);
+  return d < 160 ? (1 - d / 160) * 3.5 : 0;
+}
+
+function renderScene() {
   ctx.imageSmoothingEnabled = false;
 
   // 1. Draw Scene Background (Crisp 32-bit HD Pixel Art)
@@ -2439,12 +2590,7 @@ function renderGame() {
     const idleIdx = Math.floor(performance.now() / 320) % 3;
     drawSpriteProportional(IMAGES[`samAnim${idleIdx}`], 765, 610, 195, false);
   } else if (state.ghost.active && (state.scene === 3 || state.scene === 4)) {
-    const gKey = state.ghost.type === 'dancer' ? `dancerAnim${state.ghost.frame}` : `samAnim${state.ghost.frame}`;
-    const gImg = IMAGES[gKey] || IMAGES.dancerAnim0;
-    const bob = state.ghost.type === 'dancer' ? Math.sin(performance.now() / 190) * 8 : 0;
-    const filter = state.ghost.stunTimer > 0 ? 'brightness(1.7) hue-rotate(120deg)' : null;
-    if (state.ghost.alpha > 0.05) drawGroundShadow(state.ghost.x, 610, 68, 14, 0.6 * state.ghost.alpha);
-    drawSpriteProportional(gImg, state.ghost.x, 612 + bob, 245, state.ghost.dir === 1, filter, state.ghost.alpha);
+    drawGhost();
   } else if (state.scene === 5) {
     drawGroundShadow(835, 612, 52, 12, 0.5);
     drawSpriteProportional(IMAGES.uncle0, 835, 614, 240, false);
@@ -2474,6 +2620,72 @@ function renderGame() {
 
   // 7. Hotspot markers
   renderHotspotIndicators();
+}
+
+// ---- ghost effects: afterimage trail while hunting, glitch bursts, the dancer's sway ----
+const ghostTrail = [];
+let ghostTrailAt = 0;
+let ghostGlitchUntil = 0;
+
+function drawGhost() {
+  const g = state.ghost;
+  const now = performance.now();
+  const gImg = IMAGES[g.type === 'dancer' ? `dancerAnim${g.frame}` : `samAnim${g.frame}`] || IMAGES.dancerAnim0;
+  const dancer = g.type === 'dancer';
+  const bob = dancer ? Math.sin(now / 190) * 8 : -Math.abs(Math.sin(now / 140)) * 5; // float vs. lurching crawl
+  const sway = dancer && !REDUCED_MOTION ? Math.sin(now / 420) * 0.07 : 0;          // slow Thai-dance sway
+  const stunned = g.stunTimer > 0;
+  const filter = stunned ? 'brightness(1.7) hue-rotate(120deg)' : null;
+  const dist = Math.abs(g.x - state.player.x);
+
+  if (!stunned && g.phase === 'chase' && !REDUCED_MOTION) {
+    if (now - ghostTrailAt > 70) {
+      ghostTrailAt = now;
+      ghostTrail.push({ img: gImg, x: g.x, y: 612 + bob, flip: g.dir === 1, rot: sway });
+      if (ghostTrail.length > 4) ghostTrail.shift();
+    }
+  } else {
+    ghostTrail.length = 0;
+  }
+  ghostTrail.forEach((t, i) => {
+    drawGhostSprite(t.img, t.x, t.y, 245, t.flip, 'brightness(0.6) sepia(1) hue-rotate(-40deg) saturate(3)', g.alpha * 0.07 * (i + 1), t.rot);
+  });
+
+  if (!REDUCED_MOTION && now > ghostGlitchUntil && Math.random() < (dist < 300 ? 0.025 : 0.006)) {
+    ghostGlitchUntil = now + 90 + Math.random() * 120;
+  }
+  const glitch = now < ghostGlitchUntil && !stunned;
+  if (g.alpha > 0.05) drawGroundShadow(g.x, 610, 68, 14, 0.6 * g.alpha);
+  drawGhostSprite(gImg, g.x, 612 + bob, 245, g.dir === 1, filter, g.alpha, sway, glitch);
+}
+
+function drawGhostSprite(img, x, bottomY, h, flip, filter, alpha, rot = 0, glitch = false) {
+  if (!isReady(img) || alpha <= 0) return;
+  const w = h * (img.naturalWidth / img.naturalHeight);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, bottomY);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  if (filter) ctx.filter = filter;
+  if (!glitch) {
+    ctx.drawImage(img, -w / 2, -h, w, h);
+  } else {
+    // torn horizontal slices + a colour-split ghost image
+    const bands = 14;
+    const sh = img.naturalHeight / bands;
+    const dh = h / bands;
+    for (let i = 0; i < bands; i++) {
+      const off = Math.random() < 0.45 ? (Math.random() - 0.5) * 40 : 0;
+      ctx.drawImage(img, 0, i * sh, img.naturalWidth, sh, -w / 2 + off, -h + i * dh, w, dh + 0.5);
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = alpha * 0.25;
+    ctx.filter = 'hue-rotate(180deg)';
+    ctx.drawImage(img, -w / 2 + 6, -h, w, h);
+  }
+  ctx.restore();
 }
 
 function drawSceneProps() {
@@ -2509,6 +2721,18 @@ function drawSceneProps() {
 }
 
 let lightCanvas = null;
+let flashlightDropUntil = 0;
+
+// The flashlight stutters when a ghost is close: short random dropouts.
+function isBeamOn() {
+  if (!state.player.flashlight || state.player.hidden) return false;
+  const g = state.ghost;
+  const now = performance.now();
+  if (g.active && g.alpha > 0.5 && Math.abs(g.x - state.player.x) < 380 && now > flashlightDropUntil && Math.random() < 0.035) {
+    flashlightDropUntil = now + 40 + Math.random() * 140;
+  }
+  return now >= flashlightDropUntil;
+}
 function renderDarknessAndFlashlight() {
   if (!lightCanvas) {
     lightCanvas = document.createElement('canvas');
@@ -2516,6 +2740,7 @@ function renderDarknessAndFlashlight() {
     lightCanvas.height = 720;
   }
   const dctx = lightCanvas.getContext('2d');
+  const beamOn = isBeamOn();
   // The light holes below are cut with 'destination-out'; reset it every frame, or the next
   // frame's darkness fill erases instead of paints (the darkness then vanishes after frame 1).
   dctx.globalCompositeOperation = 'source-over';
@@ -2561,7 +2786,7 @@ function renderDarknessAndFlashlight() {
   punchLight(px, py, 18, 115, 0.78);
 
   // Directional Flashlight Cone
-  if (state.player.flashlight && !state.player.hidden) {
+  if (beamOn) {
     const dir = state.player.dir;
     const startX = px + dir * 34;
     const startY = 486;
@@ -2585,7 +2810,7 @@ function renderDarknessAndFlashlight() {
   ctx.drawImage(lightCanvas, 0, 0);
 
   // Additive Warm Golden Volumetric Beam overlay (gives authentic HD Pixel Art lighting!)
-  if (state.player.flashlight && !state.player.hidden) {
+  if (beamOn) {
     const dir = state.player.dir;
     const startX = px + dir * 34;
     const startY = 486;
@@ -2616,6 +2841,98 @@ function renderGhostSilhouette() {
   const gKey = g.type === 'dancer' ? `dancerAnim${g.frame}` : `samAnim${g.frame}`;
   const bob = g.type === 'dancer' ? Math.sin(performance.now() / 190) * 8 : 0;
   drawSpriteProportional(IMAGES[gKey], g.x, 612 + bob, 245, g.dir === 1, 'brightness(0.35) contrast(1.2)', 0.22 * g.alpha);
+}
+
+// ---- post effects drawn over everything: lightning (forest), floor fog, film grain ----
+const lightning = { next: performance.now() + 6000, start: -1e9 };
+let fogSprite = null;
+let grainPattern = null;
+
+function makeFogSprite() {
+  const c = document.createElement('canvas');
+  c.width = 640;
+  c.height = 180;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 7; i++) {
+    const x = 60 + Math.random() * 520;
+    const y = 90 + Math.random() * 50;
+    const r = 70 + Math.random() * 90;
+    const grad = g.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(200, 205, 215, 0.55)');
+    grad.addColorStop(1, 'rgba(200, 205, 215, 0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 640, 180);
+  }
+  return c;
+}
+
+function makeGrainPattern() {
+  const c = document.createElement('canvas');
+  c.width = 160;
+  c.height = 160;
+  const g = c.getContext('2d');
+  const img = g.createImageData(160, 160);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.random() * 255;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return ctx.createPattern(c, 'repeat');
+}
+
+function lightningAlpha(t) {
+  if (t < 0) return 0;
+  if (t < 70) return 0.55;
+  if (t < 150) return 0.08;
+  if (t < 220) return 0.42;
+  return Math.max(0, 0.42 * (1 - (t - 220) / 480));
+}
+
+function renderPostFx() {
+  const now = performance.now();
+  const sceneOn = state.started && !state.flags.cutscenePlaying;
+
+  // Lightning in the forest, thunder a moment later
+  if (state.scene === 1 && sceneOn) {
+    if (now > lightning.next) {
+      lightning.start = now;
+      lightning.next = now + 9000 + Math.random() * 11000;
+      setTimeout(() => { if (state.scene === 1) playSound('thunder', { pan: Math.random() * 1.2 - 0.6 }); }, 500 + Math.random() * 1100);
+    }
+    const a = REDUCED_MOTION ? lightningAlpha(now - lightning.start) * 0.4 : lightningAlpha(now - lightning.start);
+    if (a > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.fillStyle = `rgba(205, 220, 255, ${a})`;
+      ctx.fillRect(0, 0, 1280, 720);
+      ctx.restore();
+    }
+  }
+
+  // Low fog drifting along the floor
+  if (state.scene <= 4) {
+    if (!fogSprite) fogSprite = makeFogSprite();
+    const fogAlpha = state.scene === 1 ? 0.16 : 0.09;
+    ctx.save();
+    ctx.globalAlpha = fogAlpha;
+    for (let i = 0; i < 3; i++) {
+      const speed = 9 + i * 6;
+      const x = (((now / 1000) * speed + i * 470) % 1920) - 640;
+      ctx.drawImage(fogSprite, x, 520 + i * 22, 640 + i * 120, 180);
+    }
+    ctx.restore();
+  }
+
+  // Film grain
+  if (!grainPattern) grainPattern = makeGrainPattern();
+  ctx.save();
+  ctx.globalAlpha = state.scene === 5 ? 0.035 : 0.06;
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.translate(Math.random() * 160, Math.random() * 160);
+  ctx.fillStyle = grainPattern;
+  ctx.fillRect(-160, -160, 1440, 880);
+  ctx.restore();
 }
 
 function renderAtmosphereParticles() {
