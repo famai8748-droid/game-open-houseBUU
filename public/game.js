@@ -549,6 +549,7 @@ const state = {
   bellCooldown: 0,       // seconds until P2's bell can be used again (host)
   remoteBellCooldown: 0, // same value as seen by the P2 phone
   revealTimer: 0,        // P2's sixth-sense pulse (reveals hotspots, no ghost penalty)
+  seenDoors: new Set(),  // doorway transitions already shown in full
   unhideGrace: 0,
   dialogueQueue: []
 };
@@ -1576,12 +1577,53 @@ function showNextDialogueLine() {
   }
   const current = state.dialogueQueue.shift();
   document.getElementById('dialogue-speaker').textContent = current.speaker;
-  document.getElementById('dialogue-text').textContent = current.text;
   box.classList.remove('hidden');
+  typeDialogueText(current.text);
 }
 
+// Typewriter text. Thai vowels and tone marks are combining characters, so the text is
+// split into grapheme clusters (a mark never shows up on its own mid-word).
+const typing = { timer: null, full: '' };
+const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+function splitGraphemes(text) {
+  if (window.Intl && Intl.Segmenter) {
+    return Array.from(new Intl.Segmenter('th', { granularity: 'grapheme' }).segment(text), (s) => s.segment);
+  }
+  return Array.from(text);
+}
+
+function typeDialogueText(text) {
+  const el = document.getElementById('dialogue-text');
+  clearInterval(typing.timer);
+  typing.full = text;
+  if (REDUCED_MOTION) {
+    el.textContent = text;
+    typing.timer = null;
+    return;
+  }
+  const parts = splitGraphemes(text);
+  let shown = 0;
+  el.textContent = '';
+  typing.timer = setInterval(() => {
+    shown = Math.min(parts.length, shown + 2);
+    el.textContent = parts.slice(0, shown).join('');
+    if (shown >= parts.length) finishTyping();
+  }, 30);
+}
+
+function finishTyping() {
+  if (!typing.timer) return false;
+  clearInterval(typing.timer);
+  typing.timer = null;
+  document.getElementById('dialogue-text').textContent = typing.full;
+  return true;
+}
+
+// First press completes the line being typed; the next press moves on.
 function advanceDialogue() {
   playSound('step');
+  if (finishTyping()) return;
   showNextDialogueLine();
 }
 
@@ -1707,36 +1749,52 @@ function renderCutsceneFrame(cx, prefix, idx) {
   }
 }
 
-function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComplete) {
+let activeCutscene = null;
+
+/**
+ * Plays still frames with captions. Tap / E / Space skips to the end.
+ * @param {number[]} [frameOrder] which frame indexes to show (default: all, in order)
+ */
+function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComplete, frameOrder = null) {
   state.flags.cutscenePlaying = true;
   state.moveInput = 0;
   const overlay = document.getElementById('door-cutscene');
   const frameCanvas = document.getElementById('cutscene-canvas');
   const frameCtx = frameCanvas.getContext('2d');
   closePhotoPuzzleModal();
-  const counterEl = document.getElementById('cutscene-frame-counter');
   const captionEl = document.getElementById('door-caption');
+  const order = frameOrder || frameCaptions.map((_, i) => i);
 
   overlay.classList.remove('hidden');
-  let idx = 0;
-  const total = frameCaptions.length;
+  let step = 0;
+  let timer = null;
+
+  function finish() {
+    if (!activeCutscene) return;
+    clearTimeout(timer);
+    activeCutscene = null;
+    overlay.classList.add('hidden');
+    state.flags.cutscenePlaying = false;
+    if (onComplete) onComplete();
+  }
 
   function stepFrame() {
-    if (idx >= total) {
-      overlay.classList.add('hidden');
-      state.flags.cutscenePlaying = false;
-      if (onComplete) onComplete();
-      return;
-    }
+    if (step >= order.length) return finish();
+    const idx = order[step];
     renderCutsceneFrame(frameCtx, prefix, idx);
-    counterEl.textContent = `FRAME ${idx + 1} / ${total}`;
-    captionEl.textContent = frameCaptions[idx];
-    if (idx === 0) playSound('creak');
-    if (idx === 3) playSound('chime');
-    idx++;
-    setTimeout(stepFrame, frameDurationMs);
+    captionEl.textContent = String(frameCaptions[idx] || '').replace(/^เฟรม\s*\d+\s*\/\s*\d+\s*:\s*/, '');
+    if (step === 0) playSound('creak');
+    if (idx === 3 && order.length > 2) playSound('chime');
+    step++;
+    timer = setTimeout(stepFrame, frameDurationMs);
   }
+  activeCutscene = { finish, startedAt: performance.now() };
   stepFrame();
+}
+
+// Skip the current cutscene (ignored for the first 300 ms so a held key doesn't skip by accident).
+function skipCutscene() {
+  if (activeCutscene && performance.now() - activeCutscene.startedAt > 300) activeCutscene.finish();
 }
 
 function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดดดดด...', showGhostFlash = false) {
@@ -1748,9 +1806,13 @@ function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดด�
     'เฟรม 5/6 : แสงไฟฉายสาดส่องฝ่าความมืดเข้าไป...',
     `เฟรม 6/6 : ${captionText}`
   ];
-  playFrameByFrameCutscene('cutscene_door', captions, 520, () => {
+  // The first time through a doorway shows the full sequence; going back and forth is quick.
+  const key = `${state.scene}->${targetScene}`;
+  const seen = state.seenDoors.has(key);
+  state.seenDoors.add(key);
+  playFrameByFrameCutscene('cutscene_door', captions, seen ? 380 : 520, () => {
     enterScene(targetScene, targetX);
-  });
+  }, seen ? [2, 5] : null);
 }
 
 function enterScene(sceneNum, startX) {
@@ -1947,7 +2009,8 @@ function leaveHiding() {
 }
 
 function triggerInteract() {
-  if (state.flags.cutscenePlaying || state.flags.gameOver || isPhotoModalOpen()) return;
+  if (state.flags.cutscenePlaying) return skipCutscene();
+  if (state.flags.gameOver || isPhotoModalOpen()) return;
   if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
     advanceDialogue();
     return;
@@ -2046,7 +2109,9 @@ window.addEventListener('keydown', (e) => {
   if (k === 'f') toggleFlashlight();
   if (e.code === 'Space') {
     e.preventDefault();
-    if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
+    if (state.flags.cutscenePlaying) {
+      skipCutscene();
+    } else if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
       advanceDialogue();
     } else {
       toggleSixthSense();
@@ -2324,6 +2389,7 @@ function renderGame() {
   // 5. Dynamic Darkness, Warm Volumetric Flashlight & Environmental Lights (Scenes 1..4)
   if (state.scene < 5) {
     renderDarknessAndFlashlight();
+    renderGhostSilhouette();
   }
 
   // 6. Atmospheric Weather / Dust Particles
@@ -2373,9 +2439,15 @@ function renderDarknessAndFlashlight() {
     lightCanvas.height = 720;
   }
   const dctx = lightCanvas.getContext('2d');
+  // The light holes below are cut with 'destination-out'; reset it every frame, or the next
+  // frame's darkness fill erases instead of paints (the darkness then vanishes after frame 1).
+  dctx.globalCompositeOperation = 'source-over';
   dctx.clearRect(0, 0, 1280, 720);
 
-  const baseAlpha = isSensing() ? 0.48 : (state.scene === 1 ? 0.58 : 0.76);
+  // Inside the house it is properly dark: the ghost is only clearly seen in the flashlight
+  // (or with the sixth sense, which lifts the darkness but draws the ghost faster).
+  const DARKNESS = { 1: 0.6, 2: 0.82, 3: 0.9, 4: 0.9 };
+  const baseAlpha = isSensing() ? 0.5 : (DARKNESS[state.scene] || 0.8);
   dctx.fillStyle = `rgba(5, 6, 12, ${baseAlpha})`;
   dctx.fillRect(0, 0, 1280, 720);
 
@@ -2400,16 +2472,16 @@ function renderDarknessAndFlashlight() {
   } else if (state.scene === 2) {
     punchLight(990, 380, 20, 220, 0.75); // Moonlight window
   } else if (state.scene === 3) {
-    punchLight(290, 380, 20, 190, 0.65); // Window
-    punchLight(670, 560, 12, 155 + flicker, 0.9); // Offering candle glow
+    punchLight(290, 360, 20, 160, 0.5); // Window (dim moonlight)
+    punchLight(670, 560, 12, 120 + flicker, 0.75); // Offering candle glow
   } else if (state.scene === 4) {
-    punchLight(640, 370, 15, 175 + flicker, 0.88); // Altar candle glow
+    punchLight(640, 370, 15, 140 + flicker, 0.75); // Altar candle glow
   }
 
   // Soft ambient halo around player
   const px = state.player.x;
   const py = 490;
-  punchLight(px, py, 18, 125, 0.82);
+  punchLight(px, py, 18, 115, 0.78);
 
   // Directional Flashlight Cone
   if (state.player.flashlight && !state.player.hidden) {
@@ -2458,6 +2530,15 @@ function renderDarknessAndFlashlight() {
     ctx.fill();
     ctx.restore();
   }
+}
+
+// A faint dark shape over the darkness, so an unlit ghost is felt rather than invisible.
+function renderGhostSilhouette() {
+  const g = state.ghost;
+  if (!g.active || g.alpha < 0.3 || !(state.scene === 3 || state.scene === 4)) return;
+  const gKey = g.type === 'dancer' ? `dancerAnim${g.frame}` : `samAnim${g.frame}`;
+  const bob = g.type === 'dancer' ? Math.sin(performance.now() / 190) * 8 : 0;
+  drawSpriteProportional(IMAGES[gKey], g.x, 612 + bob, 245, g.dir === 1, 'brightness(0.35) contrast(1.2)', 0.22 * g.alpha);
 }
 
 function renderAtmosphereParticles() {

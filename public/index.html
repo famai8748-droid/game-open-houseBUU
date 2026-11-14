@@ -43,7 +43,7 @@
       <div class="section-card">
         <h3>2. เลือกรูปแบบการเล่น</h3>
         <div class="mode-buttons">
-          <button id="btn-resume" class="btn-primary hidden" onclick="resumeFromCheckpoint()">
+          <button id="btn-resume" class="btn-resume hidden" onclick="resumeFromCheckpoint()">
             ⏯ เล่นต่อจากจุดที่บันทึกไว้
           </button>
           <button class="btn-primary" onclick="startSoloGame()">
@@ -144,12 +144,12 @@
       </div>
 
       <!-- FRAME-BY-FRAME PIXEL CUTSCENE OVERLAY -->
-      <div id="door-cutscene" class="door-cutscene hidden">
+      <div id="door-cutscene" class="door-cutscene hidden" onclick="skipCutscene()">
         <div class="cutscene-frame-viewer">
           <canvas id="cutscene-canvas" width="800" height="450" class="cutscene-frame-img pixel-img" aria-label="Cutscene"></canvas>
-          <div id="cutscene-frame-counter" class="cutscene-frame-counter">FRAME 1 / 6</div>
         </div>
         <div class="door-caption" id="door-caption">แอ๊ดดดดด...</div>
+        <div class="cutscene-skip">แตะหรือกด [E] เพื่อข้าม ▶▶</div>
       </div>
 
       <!-- PHOTO PUZZLE MODAL -->
