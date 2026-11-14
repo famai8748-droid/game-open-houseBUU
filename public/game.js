@@ -727,7 +727,7 @@ function connectRoomEventStream(code) {
           if (data.room) applyRoomStateToClient(data.room);
         }
       } catch (_) {}
-    } else if (!state.started) {
+    } else {
       broadcastState();
     }
   }, 320);
