@@ -7,6 +7,33 @@ const initialRoomParam = urlParams.get('room');
 const initialRoleParam = urlParams.get('role'); // 'p1' | 'p2'
 let eventSource = null;
 
+// ----------------------- Tunables (one place to balance the game) -----------------------
+const CONFIG = {
+  PLAYER_SPEED: 230,
+  GHOST_SPEED: { samphawesi: 95, dancer: 115 },
+  SIXTH_SENSE_GHOST_MULT: 1.35, // using your own sixth sense draws the ghost faster
+  CATCH_DIST: 58,
+  UNHIDE_GRACE: 0.6,            // seconds of safety after stepping out of a hiding spot
+  GHOST_SEARCH_LINGER: 1.6,     // the ghost lingers where it lost you...
+  GHOST_VANISH_TIME: 1.2,       // ...then fades away...
+  GHOST_FADE_IN_TIME: 1.0,      // ...and slowly re-forms off-screen, away from you
+  GHOST_REENTER_MARGIN: 70,
+  BELL_STUN: 4.0,
+  BELL_COOLDOWN: 12,
+  PULSE_DURATION: 3.5,
+  SYNC_INTERVAL_MS: 125,
+  SYNC_KEEPALIVE_MS: 1000,
+  POLL_REMOTE_MS: 320,          // phones without SSE (Vercel)
+  POLL_LOCAL_MS: 1000,          // phones with SSE (local server): presence + fallback only
+  REMOTE_MOVE_REPEAT_MS: 150,
+  REMOTE_MOVE_TIMEOUT_MS: 650
+};
+
+// An <img> that finished loading successfully (drawing a broken image throws).
+function isReady(img) {
+  return !!(img && img.complete && img.naturalWidth > 0);
+}
+
 // ----------------------- Web Audio Horror Synthesizer -----------------------
 let audioCtx = null;
 let audioMuted = false;
@@ -201,8 +228,16 @@ const state = {
     frame: 0,
     animTimer: 0,
     stunTimer: 0,
-    alertLevel: 5
+    alertLevel: 5,
+    alpha: 1,          // fades while the ghost "loses" a hidden player
+    phase: 'chase',    // 'chase' | 'search' | 'vanish' | 'lurk'
+    searchX: 0,
+    timer: 0
   },
+  bellCooldown: 0,       // seconds until P2's bell can be used again (host)
+  remoteBellCooldown: 0, // same value as seen by the P2 phone
+  revealTimer: 0,        // P2's sixth-sense pulse (reveals hotspots, no ghost penalty)
+  unhideGrace: 0,
   dialogueQueue: []
 };
 
@@ -354,7 +389,7 @@ function getSceneHotspots(sceneNum) {
         width: 110,
         label: 'กลับไปโถงรูปถ่าย (ฉากที่ 2)',
         onInteract: () => {
-          playDoorCutscene(2, 1100, 'ย้อนกลับไปโถงรูปถ่าย...');
+          playDoorCutscene(2, 1110, 'ย้อนกลับไปโถงรูปถ่าย...');
         }
       },
       {
@@ -424,7 +459,7 @@ function getSceneHotspots(sceneNum) {
         width: 110,
         label: 'ย้อนกลับห้องเครื่องเซ่น (ฉากที่ 3)',
         onInteract: () => {
-          playDoorCutscene(3, 1100, 'กลับไปห้องเครื่องเซ่น...');
+          playDoorCutscene(3, 1110, 'กลับไปห้องเครื่องเซ่น...');
         }
       },
       {
@@ -451,7 +486,7 @@ function getSceneHotspots(sceneNum) {
         x: 640,
         width: 160,
         label: 'หิ้งบูชา & กระทงเครื่องเซ่น (วางของเซ่นไหว้ / เศษรูป)',
-        isHiddenClue: !state.Flags?.offeringsPlaced,
+        isHiddenClue: !state.flags.offeringsPlaced,
         onInteract: () => {
           if (!state.inventory.photos.includes(3)) {
             state.inventory.photos.push(3);
@@ -476,9 +511,12 @@ function getSceneHotspots(sceneNum) {
             updateHud();
             queueDialogue([
               { speaker: getPlayerName(), text: 'ผมวางพวงมาลัย ธูปเทียน และพานขนมลงในกระทงเครื่องเซ่นครบแล้ว... ขอให้ดวงวิญญาณในเรือนนี้สงบลงด้วยเถิด' },
-              { speaker: getPlayerName(), text: 'เหลือแค่ประกอบ "เศษรูปถ่ายทั้ง 3 ชิ้น" ให้ครบเพื่อปลดผนึกประตูหลังเรือน!' }
+              state.flags.photosRestored
+                ? { speaker: getPlayerName(), text: 'ทั้งของเซ่นไหว้และรูปภาพครบสมบูรณ์แล้ว... ขอให้ดวงวิญญาณในเรือนนี้ไปสู่สุคติเถิด' }
+                : { speaker: getPlayerName(), text: 'เหลือแค่ประกอบ "เศษรูปถ่ายทั้ง 3 ชิ้น" ให้ครบเพื่อปลดผนึกประตูหลังเรือน!' }
             ], () => {
               if (!state.flags.photosRestored) showPhotoPuzzleModal();
+              else checkRitualComplete();
             });
           } else if (!state.flags.photosRestored) {
             showPhotoPuzzleModal();
@@ -556,37 +594,58 @@ function startSoloGame() {
 
 async function openCoopLobby() {
   initAudio();
-  const infoRes = await fetch('/api/server-info');
-  const info = await infoRes.json();
-  const hostOrigin = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-    ? window.location.origin
-    : (info.publicUrl || `http://${info.lanIp}:${info.port}`);
+  // Re-open the existing lobby instead of creating a second room.
+  if (state.roomCode && net.hostToken) {
+    document.getElementById('coop-modal').classList.remove('hidden');
+    return;
+  }
+  const btn = document.getElementById('btn-open-lobby');
+  if (btn) btn.disabled = true;
+  try {
+    const info = await getServerInfo();
+    const res = await apiPost('create-room', { mode: 'coop', character: state.character });
+    if (!res.ok) throw new Error(res.message || res.error || 'create-room failed');
 
-  const createRes = await fetch('/api/create-room', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode: 'coop', character: state.character })
-  });
-  const res = await createRes.json();
-  if (!res || !res.ok) return;
+    clearCheckpoint();
+    state.role = 'host';
+    state.roomCode = res.code;
+    net.hostToken = res.hostToken;
+    startHostChannel();
 
-  state.roomCode = res.room.code;
-  connectRoomEventStream(state.roomCode);
+    document.getElementById('lobby-room-code').textContent = state.roomCode;
+    document.getElementById('hud-room-badge').textContent = `ห้อง: ${state.roomCode}`;
+    document.getElementById('hud-room-badge').classList.remove('hidden');
 
-  document.getElementById('lobby-room-code').textContent = state.roomCode;
-  document.getElementById('hud-room-badge').textContent = `ห้อง: ${state.roomCode}`;
-  document.getElementById('hud-room-badge').classList.remove('hidden');
+    const hostOrigin = getShareOrigin(info);
+    const p1Url = `${hostOrigin}/?room=${state.roomCode}&role=p1`;
+    const p2Url = `${hostOrigin}/?room=${state.roomCode}&role=p2`;
+    const [qr1, qr2] = await Promise.all([
+      apiGet(`qr?text=${encodeURIComponent(p1Url)}`),
+      apiGet(`qr?text=${encodeURIComponent(p2Url)}`)
+    ]);
+    if (qr1.ok) document.getElementById('qr-p1-img').src = qr1.dataUrl;
+    if (qr2.ok) document.getElementById('qr-p2-img').src = qr2.dataUrl;
+    document.getElementById('lobby-url-hint').textContent = `สแกนด้วยกล้องมือถือ หรือเปิดลิงก์: ${hostOrigin} แล้วกรอกรหัส ${state.roomCode}`;
+    if (info.isVercel && !info.sharedStore) {
+      console.warn('Vercel without a shared store: co-op relies on a single warm instance. Set UPSTASH_REDIS_REST_URL/TOKEN.');
+    }
+    updateLobbyPlayerStatus({ p1: false, p2: false });
+    document.getElementById('coop-modal').classList.remove('hidden');
+  } catch (err) {
+    console.error(err);
+    showToast('เปิดห้องไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง', 'warn');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
-  const p1Url = `${hostOrigin}/?room=${state.roomCode}&role=p1`;
-  const p2Url = `${hostOrigin}/?room=${state.roomCode}&role=p2`;
-
-  const qr1 = await (await fetch(`/api/qr?text=${encodeURIComponent(p1Url)}`)).json();
-  const qr2 = await (await fetch(`/api/qr?text=${encodeURIComponent(p2Url)}`)).json();
-
-  document.getElementById('qr-p1-img').src = qr1.dataUrl;
-  document.getElementById('qr-p2-img').src = qr2.dataUrl;
-  document.getElementById('lobby-url-hint').textContent = `สแกนด้วยกล้องมือถือ หรือเปิดลิงก์: ${hostOrigin} แล้วกรอกรหัส ${state.roomCode}`;
-  document.getElementById('coop-modal').classList.remove('hidden');
+function getShareOrigin(info) {
+  const host = window.location.hostname;
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  if (!isLoopback || info.isVercel) return window.location.origin;
+  if (info.publicUrl) return info.publicUrl;
+  if (info.lanIp && info.lanIp !== 'localhost') return `http://${info.lanIp}:${info.port || window.location.port}`;
+  return window.location.origin;
 }
 
 function closeCoopLobby() {
@@ -603,8 +662,8 @@ function startFromLobby() {
 
 function joinRoomByCode(role) {
   const code = document.getElementById('join-code-input').value.trim();
-  if (!code) {
-    alert('กรุณากรอกรหัสห้อง 4 หลักก่อนครับ');
+  if (!/^\d{4}$/.test(code)) {
+    showToast('กรุณากรอกรหัสห้องเป็นตัวเลข 4 หลักครับ', 'warn');
     return;
   }
   joinAsMobileRole(code, role);
@@ -612,23 +671,40 @@ function joinRoomByCode(role) {
 
 async function joinAsMobileRole(code, role) {
   initAudio();
-  state.role = role;
-  state.roomCode = code;
-  connectRoomEventStream(code);
+  if (!/^\d{4}$/.test(String(code))) {
+    showToast('รหัสห้องไม่ถูกต้อง', 'warn');
+    return;
+  }
+  try {
+    const info = await getServerInfo();
+    const res = await apiPost('join-room', { code, role });
+    if (!res.ok) {
+      showToast(res.error === 'room_not_found'
+        ? `ไม่พบห้อง ${code} (ห้องอาจหมดอายุหรือรหัสผิด) ลองสแกน QR ใหม่จากจอกลาง`
+        : 'เข้าห้องไม่สำเร็จ ลองใหม่อีกครั้ง', 'warn', 6000);
+      return;
+    }
+    state.role = role;
+    state.roomCode = code;
+    net.playerToken = res.playerToken;
+    net.closed = false;
+    applyRoomStateToClient(res.room);
 
-  await fetch('/api/join-room', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, role })
-  });
-
-  if (role === 'p1') {
-    document.getElementById('p1-room-label').textContent = `ห้อง ${code}`;
-    switchScreen('p1-screen');
-  } else {
-    document.getElementById('p2-room-label').textContent = `ห้อง ${code}`;
-    switchScreen('p2-screen');
-    requestAnimationFrame(renderP2RadarLoop);
+    if (role === 'p1') {
+      document.getElementById('p1-room-label').textContent = `ห้อง ${code}`;
+      switchScreen('p1-screen');
+    } else {
+      document.getElementById('p2-room-label').textContent = `ห้อง ${code}`;
+      switchScreen('p2-screen');
+      if (!net.radarRunning) {
+        net.radarRunning = true;
+        requestAnimationFrame(renderP2RadarLoop);
+      }
+    }
+    startMobileChannel(info);
+  } catch (err) {
+    console.error(err);
+    showToast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต', 'warn');
   }
 }
 
@@ -639,35 +715,224 @@ if (initialRoomParam && (initialRoleParam === 'p1' || initialRoleParam === 'p2')
   });
 }
 
-// ----------------------- Real-Time SSE & Vercel Serverless Polling Sync -----------------------
-let pollTimer = null;
+// ----------------------- Networking: host sync, phone polling, SSE -----------------------
+const net = {
+  info: null,
+  hostToken: null,
+  playerToken: null,
+  stateSeq: 0,
+  inFlight: false,
+  lastSentJson: '',
+  lastSentAt: 0,
+  lastInputId: 0,
+  lastMoveSeq: -1,
+  remoteMoving: false,
+  remoteMoveAt: 0,
+  inputSeq: 0,
+  moveRepeat: null,
+  syncTimer: null,
+  pollTimer: null,
+  failures: 0,
+  closed: false,
+  radarRunning: false
+};
 
-function handleIncomingRemoteInput({ action, value }) {
-  if (state.role !== 'host') return;
-  if (action === 'move') setMove(value);
-  if (action === 'interact') {
-    if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
-      advanceDialogue();
-    } else {
-      triggerInteract();
-    }
+async function apiGet(path) {
+  const r = await fetch(`/api/${path}`, { cache: 'no-store' });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, ...data, ok: r.ok && data.ok !== false };
+}
+
+async function apiPost(route, body) {
+  const r = await fetch(`/api/${route}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await r.json().catch(() => ({}));
+  return { status: r.status, ...data, ok: r.ok && data.ok !== false };
+}
+
+async function getServerInfo() {
+  if (net.info) return net.info;
+  try {
+    const info = await apiGet('server-info');
+    net.info = info.ok ? info : { isVercel: false, sse: false };
+  } catch (_) {
+    net.info = { isVercel: false, sse: false };
   }
+  return net.info;
+}
+
+function openEventStream(params, handlers) {
+  if (eventSource) eventSource.close();
+  eventSource = null;
+  if (!net.info || !net.info.sse || typeof EventSource === 'undefined') return;
+  const qs = new URLSearchParams(params).toString();
+  try {
+    eventSource = new EventSource(`/api/events?${qs}`);
+    Object.entries(handlers).forEach(([name, fn]) => {
+      eventSource.addEventListener(name, (ev) => {
+        try { fn(JSON.parse(ev.data)); } catch (_) {}
+      });
+    });
+  } catch (_) {
+    eventSource = null;
+  }
+}
+
+// ---- Host side ----
+function startHostChannel() {
+  net.closed = false;
+  net.failures = 0;
+  openEventStream({ code: state.roomCode, role: 'host', token: net.hostToken }, {
+    remote_input: (inp) => handleRemoteInputs([inp]),
+    room_updated: (data) => updateLobbyPlayerStatus(data.players)
+  });
+  if (net.syncTimer) clearInterval(net.syncTimer);
+  net.syncTimer = setInterval(hostSyncTick, CONFIG.SYNC_INTERVAL_MS);
+  hostSyncTick();
+}
+
+function stopCoop(message) {
+  net.closed = true;
+  if (net.syncTimer) clearInterval(net.syncTimer);
+  if (net.pollTimer) clearInterval(net.pollTimer);
+  if (net.moveRepeat) clearInterval(net.moveRepeat);
+  net.syncTimer = net.pollTimer = net.moveRepeat = null;
+  if (eventSource) eventSource.close();
+  eventSource = null;
+  if (state.role === 'host') {
+    state.roomCode = null;
+    net.hostToken = null;
+    document.getElementById('hud-room-badge').classList.add('hidden');
+    saveCheckpoint();
+  }
+  if (message) showToast(message, 'warn', 6000);
+}
+
+function buildStatePatch() {
+  return {
+    scene: state.scene,
+    character: state.character,
+    started: state.started,
+    player: state.player,
+    inventory: state.inventory,
+    flags: state.flags,
+    ghost: {
+      active: state.ghost.active,
+      type: state.ghost.type,
+      x: Math.round(state.ghost.x),
+      dir: state.ghost.dir,
+      frame: state.ghost.frame,
+      stunTimer: Math.round(state.ghost.stunTimer * 10) / 10,
+      alertLevel: state.ghost.alertLevel,
+      alpha: Math.round(state.ghost.alpha * 10) / 10
+    },
+    support: { bellCooldown: Math.ceil(state.bellCooldown) }
+  };
+}
+
+async function hostSyncTick() {
+  if (state.role !== 'host' || !state.roomCode || !net.hostToken || net.closed || net.inFlight) return;
+  const patch = buildStatePatch();
+  patch.player = { ...patch.player, x: Math.round(patch.player.x) };
+  const json = JSON.stringify(patch);
+  const changed = json !== net.lastSentJson;
+  const now = Date.now();
+  // With SSE (local server) inputs are pushed, so idle syncs are only keep-alives.
+  // Without SSE (Vercel) the host must keep polling to receive phone inputs.
+  if (!changed && net.info && net.info.sse && now - net.lastSentAt < CONFIG.SYNC_KEEPALIVE_MS) return;
+
+  net.inFlight = true;
+  const body = { code: state.roomCode, hostToken: net.hostToken };
+  if (changed) {
+    body.seq = ++net.stateSeq;
+    body.statePatch = patch;
+  }
+  try {
+    const res = await apiPost('sync-state', body);
+    if (res.ok) {
+      net.failures = 0;
+      net.lastSentAt = now;
+      if (changed) net.lastSentJson = json;
+      if (res.players) updateLobbyPlayerStatus(res.players);
+      if (Array.isArray(res.inputs)) handleRemoteInputs(res.inputs);
+    } else if (res.status === 403 || res.status === 404) {
+      stopCoop('ห้อง co-op หมดอายุหรือถูกปิดแล้ว — เล่นต่อแบบคนเดียวได้เลย (เปิดห้องใหม่ได้จากหน้าแรก)');
+    } else {
+      net.failures++;
+    }
+  } catch (_) {
+    net.failures++;
+  } finally {
+    net.inFlight = false;
+    updateConnectionBadge();
+  }
+}
+
+function broadcastState() {
+  if (state.role === 'host' && net.hostToken) hostSyncTick();
+}
+
+function updateConnectionBadge() {
+  const badge = document.getElementById('hud-room-badge');
+  if (!badge || !state.roomCode) return;
+  badge.textContent = net.failures >= 4 ? `ห้อง: ${state.roomCode} ⚠️ สัญญาณขาด` : `ห้อง: ${state.roomCode}`;
+}
+
+function handleRemoteInputs(list) {
+  list
+    .filter((inp) => inp && typeof inp.id === 'number')
+    .sort((a, b) => a.id - b.id)
+    .forEach((inp) => {
+      if (inp.id <= net.lastInputId) return; // already handled (SSE + sync drain overlap)
+      net.lastInputId = inp.id;
+      handleIncomingRemoteInput(inp);
+    });
+}
+
+function handleIncomingRemoteInput({ action, value, seq }) {
+  if (state.role !== 'host') return;
+  if (action === 'move') {
+    const s = Number(seq) || 0;
+    if (s < net.lastMoveSeq) return; // out-of-order packet
+    net.lastMoveSeq = s;
+    net.remoteMoving = value !== 0;
+    net.remoteMoveAt = performance.now();
+    if (value === 0) {
+      if (state.moveInput !== 0) setMove(0);
+    } else if (state.moveInput !== value) {
+      setMove(value);
+    }
+    return;
+  }
+  if (action === 'interact') triggerInteract();
   if (action === 'hide') toggleHide();
   if (action === 'flashlight') toggleFlashlight();
-  if (action === 'stun_ghost') {
-    state.ghost.stunTimer = 4.0;
-    playSound('chime');
-    queueDialogue([
-      { speaker: 'ญาณทิพย์ (P2)', text: '🔔 สั่นกระดิ่งอาคม! ตรึงร่างวิญญาณไว้ให้ 4 วินาที รีบหนีหรือซ่อนตัวเร็ว!' }
-    ]);
-  }
+  if (action === 'stun_ghost') useBell('P2');
   if (action === 'sixth_sense_pulse') {
-    state.player.sixthSense = true;
-    document.getElementById('sixth-sense-overlay').classList.remove('hidden');
-    setTimeout(() => {
-      state.player.sixthSense = false;
-      document.getElementById('sixth-sense-overlay').classList.add('hidden');
-    }, 3500);
+    state.revealTimer = CONFIG.PULSE_DURATION;
+    playSound('chime');
+    showToast('👁️ P2 ส่งคลื่นญาณทิพย์ — จุดสำรวจทั้งหมดถูกเปิดเผยชั่วครู่');
+  }
+}
+
+function useBell(source) {
+  if (!state.ghost.active || state.bellCooldown > 0) return false;
+  state.ghost.stunTimer = CONFIG.BELL_STUN;
+  state.bellCooldown = CONFIG.BELL_COOLDOWN;
+  playSound('chime');
+  showToast(`🔔 ${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! วิญญาณถูกตรึง ${CONFIG.BELL_STUN} วินาที`);
+  broadcastState();
+  return true;
+}
+
+// Remote moves can arrive late; if the phone stops refreshing a held move, stop walking.
+function updateRemoteMoveTimeout() {
+  if (net.remoteMoving && performance.now() - net.remoteMoveAt > CONFIG.REMOTE_MOVE_TIMEOUT_MS) {
+    net.remoteMoving = false;
+    if (state.moveInput !== 0) setMove(0);
   }
 }
 
@@ -685,89 +950,226 @@ function updateLobbyPlayerStatus(players) {
   }
 }
 
+// ---- Phone side ----
+function startMobileChannel(info) {
+  openEventStream({ code: state.roomCode, role: state.role, token: net.playerToken }, {
+    state_synced: (room) => applyRoomStateToClient(room)
+  });
+  if (net.pollTimer) clearInterval(net.pollTimer);
+  const interval = info && info.sse ? CONFIG.POLL_LOCAL_MS : CONFIG.POLL_REMOTE_MS;
+  net.pollTimer = setInterval(mobilePollTick, interval);
+  mobilePollTick();
+}
+
+let mobilePollInFlight = false;
+async function mobilePollTick() {
+  if (!state.roomCode || net.closed || mobilePollInFlight) return;
+  mobilePollInFlight = true;
+  try {
+    const qs = new URLSearchParams({ code: state.roomCode, role: state.role, token: net.playerToken || '' });
+    const res = await apiGet(`room-state?${qs}`);
+    if (res.ok && res.room) {
+      net.failures = 0;
+      applyRoomStateToClient(res.room);
+    } else {
+      handleMobileError(res);
+    }
+  } catch (_) {
+    net.failures++;
+    if (net.failures >= 4) setMobileStatus('📶 สัญญาณขาดหาย กำลังเชื่อมต่อใหม่...', 'warn');
+  } finally {
+    mobilePollInFlight = false;
+  }
+}
+
+function handleMobileError(res) {
+  if (res.status === 409) {
+    stopCoop();
+    setMobileStatus('🔁 มีมือถือเครื่องอื่นเข้ามาใช้ตำแหน่งนี้แทนแล้ว — สแกน QR ใหม่เพื่อกลับมาควบคุม', 'warn');
+  } else if (res.status === 404) {
+    stopCoop();
+    setMobileStatus('🚪 ห้องนี้ถูกปิดหรือหมดอายุแล้ว — สแกน QR ใหม่จากจอกลาง', 'warn');
+  } else {
+    net.failures++;
+  }
+}
+
+function setMobileStatus(text, kind = '') {
+  ['p1-status', 'p2-status'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = `mobile-status ${kind}`.trim();
+  });
+}
+
 function applyRoomStateToClient(room) {
   if (!room || state.role === 'host') return;
-  state.scene = room.scene;
-  Object.assign(state.player, room.player);
-  Object.assign(state.inventory, room.inventory);
-  Object.assign(state.flags, room.flags);
-  Object.assign(state.ghost, room.ghost);
+  if (typeof room.scene === 'number') state.scene = room.scene;
+  if (room.player) Object.assign(state.player, room.player);
+  if (room.inventory) Object.assign(state.inventory, room.inventory);
+  if (room.flags) Object.assign(state.flags, room.flags);
+  if (room.ghost) Object.assign(state.ghost, room.ghost);
+  if (room.support) state.remoteBellCooldown = room.support.bellCooldown || 0;
+  state.started = !!room.started;
 
   const p1Off = document.getElementById('p1-inv-offerings');
   const p1Pho = document.getElementById('p1-inv-photos');
   if (p1Off) p1Off.textContent = `${state.inventory.offerings.length}/3`;
   if (p1Pho) p1Pho.textContent = `${state.inventory.photos.length}/3`;
-}
 
-function connectRoomEventStream(code) {
-  if (eventSource) eventSource.close();
-  try {
-    eventSource = new EventSource(`/api/events?code=${encodeURIComponent(code)}`);
-    eventSource.addEventListener('room_updated', (ev) => {
-      const room = JSON.parse(ev.data);
-      updateLobbyPlayerStatus(room.players);
-    });
-    eventSource.addEventListener('remote_input', (ev) => {
-      handleIncomingRemoteInput(JSON.parse(ev.data));
-    });
-    eventSource.addEventListener('state_synced', (ev) => {
-      applyRoomStateToClient(JSON.parse(ev.data));
-    });
-  } catch (_) {}
+  if (net.closed) return;
+  if (room.hostOnline === false) setMobileStatus('⚠️ จอกลางหลุดการเชื่อมต่อ... รอสักครู่', 'warn');
+  else if (state.flags.victory) setMobileStatus('✨ รอดพ้นจากเรือนซ่อนวิญญาณแล้ว! แล้วพบกันที่ Open House BUU', 'good');
+  else if (state.flags.gameOver) setMobileStatus('💀 P1 ถูกวิญญาณจับได้! รอจอกลางกด "ฟื้นสติ"', 'warn');
+  else if (!state.started) setMobileStatus('⏳ เชื่อมต่อแล้ว — รอจอกลางกด "เริ่มเกม"', 'good');
+  else setMobileStatus('');
 
-  // Serverless Polling Fallback (for Vercel deployments where SSE is stateless)
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    if (!state.roomCode) return;
-    if (state.role !== 'host') {
-      try {
-        const r = await fetch(`/api/room-state?code=${encodeURIComponent(state.roomCode)}`);
-        if (r.ok) {
-          const data = await r.json();
-          if (data.room) applyRoomStateToClient(data.room);
-        }
-      } catch (_) {}
-    } else {
-      broadcastState();
-    }
-  }, 320);
+  const bellBtn = document.getElementById('btn-stun-ghost');
+  const bellLabel = document.getElementById('bell-cooldown-label');
+  if (bellBtn && bellLabel) {
+    const cd = state.remoteBellCooldown || 0;
+    bellBtn.disabled = cd > 0 || !state.ghost.active;
+    bellLabel.textContent = cd > 0 ? `(พร้อมในอีก ${cd} วิ)` : (state.ghost.active ? '' : '(ยังไม่มีวิญญาณ)');
+  }
 }
 
 function sendRemoteInput(action, value) {
-  playSound('step');
-  fetch('/api/player-input', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: state.roomCode, role: state.role, action, value })
+  if (!state.roomCode || !net.playerToken || net.closed) return;
+  if (action !== 'move') playSound('step');
+  apiPost('player-input', {
+    code: state.roomCode,
+    role: state.role,
+    playerToken: net.playerToken,
+    action,
+    value,
+    seq: ++net.inputSeq
+  }).then((res) => {
+    if (!res.ok) handleMobileError(res);
   }).catch(() => {});
 }
 
-function broadcastState() {
-  if (!state.roomCode || state.role !== 'host') return;
-  fetch('/api/sync-state', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      code: state.roomCode,
-      statePatch: {
-        scene: state.scene,
-        character: state.character,
-        started: state.started,
-        player: state.player,
-        inventory: state.inventory,
-        flags: state.flags,
-        ghost: state.ghost
-      }
-    })
-  })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data.players) updateLobbyPlayerStatus(data.players);
-      if (Array.isArray(data.inputs)) {
-        data.inputs.forEach((inp) => handleIncomingRemoteInput(inp));
-      }
-    })
-    .catch(() => {});
+// Held move buttons on the P1 phone: repeat the current direction so the host can
+// stop the character on its own if the "release" packet is late or lost.
+function startRemoteMove(dir) {
+  if (net.moveRepeat) clearInterval(net.moveRepeat);
+  sendRemoteInput('move', dir);
+  net.moveRepeat = setInterval(() => sendRemoteInput('move', dir), CONFIG.REMOTE_MOVE_REPEAT_MS);
+}
+
+function stopRemoteMove() {
+  if (!net.moveRepeat) return;
+  clearInterval(net.moveRepeat);
+  net.moveRepeat = null;
+  sendRemoteInput('move', 0);
+}
+
+function bindHoldButton(el, onDown, onUp) {
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    onDown();
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) => el.addEventListener(type, onUp));
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-local-move]').forEach((el) => {
+    const dir = Number(el.dataset.localMove);
+    bindHoldButton(el, () => setMove(dir), () => { if (state.moveInput === dir) setMove(0); });
+  });
+  document.querySelectorAll('[data-remote-move]').forEach((el) => {
+    const dir = Number(el.dataset.remoteMove);
+    bindHoldButton(el, () => startRemoteMove(dir), stopRemoteMove);
+  });
+  const cp = loadCheckpoint();
+  if (cp && !(initialRoomParam && initialRoleParam)) {
+    const btn = document.getElementById('btn-resume');
+    if (btn) {
+      btn.textContent = `⏯ เล่นต่อ (${SCENE_TITLES[cp.scene] || 'จุดที่บันทึกไว้'})`;
+      btn.classList.remove('hidden');
+    }
+  }
+});
+window.addEventListener('blur', () => {
+  stopRemoteMove();
+  if (state.role === 'host' && state.moveInput !== 0) setMove(0);
+});
+
+// ----------------------- Checkpoint (survives a reload of the host tab) -----------------------
+const CHECKPOINT_KEY = 'buu-horror-checkpoint-v1';
+
+function saveCheckpoint() {
+  if (state.role !== 'host' || !state.started || state.flags.victory) return;
+  const flags = { ...state.flags, cutscenePlaying: false, gameOver: false, victory: false };
+  const data = {
+    v: 1,
+    character: state.character,
+    scene: state.scene,
+    x: Math.round(state.player.x),
+    inventory: state.inventory,
+    flags,
+    roomCode: state.roomCode,
+    hostToken: net.hostToken
+  };
+  try { sessionStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data)); } catch (_) {}
+}
+
+function loadCheckpoint() {
+  try {
+    const data = JSON.parse(sessionStorage.getItem(CHECKPOINT_KEY) || 'null');
+    return data && data.v === 1 && data.scene >= 1 && data.scene <= 5 ? data : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearCheckpoint() {
+  try { sessionStorage.removeItem(CHECKPOINT_KEY); } catch (_) {}
+}
+
+async function resumeFromCheckpoint() {
+  const cp = loadCheckpoint();
+  if (!cp) return startSoloGame();
+  initAudio();
+  selectCharacter(cp.character === 'female' ? 'female' : 'male');
+  state.role = 'host';
+  state.started = true;
+  const inv = cp.inventory || {};
+  state.inventory = {
+    offerings: [...(inv.offerings || [])],
+    photos: [...(inv.photos || [])],
+    placedPhotos: [...(inv.placedPhotos || [])]
+  };
+  Object.assign(state.flags, cp.flags || {});
+  switchScreen('game-screen');
+  if (cp.roomCode && cp.hostToken) {
+    await getServerInfo();
+    state.roomCode = cp.roomCode;
+    net.hostToken = cp.hostToken;
+    document.getElementById('hud-room-badge').textContent = `ห้อง: ${state.roomCode}`;
+    document.getElementById('hud-room-badge').classList.remove('hidden');
+    startHostChannel();
+  }
+  enterScene(cp.scene, cp.x);
+  showToast('⏯ กลับมาเล่นต่อจากจุดที่บันทึกไว้');
+}
+
+function restartGame() {
+  clearCheckpoint();
+  window.location.href = window.location.pathname;
+}
+
+// ----------------------- Toast (non-blocking messages) -----------------------
+let toastTimer = null;
+function showToast(text, kind = '', ms = 3200) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `toast ${kind}`.trim();
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 
 // ----------------------- Story & Cutscene Logic -----------------------
@@ -783,10 +1185,31 @@ function startIntroSequence() {
 }
 
 function queueDialogue(lines, onComplete = null) {
+  state.moveInput = 0;
+  if (isDialogueOpen()) {
+    // A conversation is already on screen: append instead of discarding it (and its callback).
+    state.dialogueQueue.push(...lines.map((l) => ({ ...l })));
+    if (onComplete) {
+      const previous = state.dialogueOnComplete;
+      state.dialogueOnComplete = previous ? () => { previous(); onComplete(); } : onComplete;
+    }
+    return;
+  }
   state.dialogueQueue = lines.map((l) => ({ ...l }));
   state.dialogueOnComplete = onComplete;
-  state.moveInput = 0;
   showNextDialogueLine();
+}
+
+function isDialogueOpen() {
+  return !document.getElementById('dialogue-box').classList.contains('hidden');
+}
+
+function isPhotoModalOpen() {
+  return !document.getElementById('photo-modal').classList.contains('hidden');
+}
+
+function isSensing() {
+  return state.player.sixthSense || state.revealTimer > 0;
 }
 
 function showNextDialogueLine() {
@@ -811,19 +1234,17 @@ function advanceDialogue() {
   showNextDialogueLine();
 }
 
-function renderCutsceneFrameDataURL(prefix, idx) {
-  const c = document.createElement('canvas');
-  c.width = 800;
-  c.height = 450;
-  const cx = c.getContext('2d');
+function renderCutsceneFrame(cx, prefix, idx) {
   cx.imageSmoothingEnabled = false;
+  cx.fillStyle = '#050409';
+  cx.fillRect(0, 0, 800, 450);
 
   const studentImg = state.character === 'female' ? IMAGES.femaleWalk0 : IMAGES.maleWalk0;
   const studentWalkImg = state.character === 'female' ? IMAGES[`femaleWalk${idx % 8}`] : IMAGES[`maleWalk${idx % 8}`];
 
   if (prefix === 'cutscene_door') {
     const bg = IMAGES.bg1;
-    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
     cx.fillStyle = 'rgba(4, 6, 12, 0.72)';
     cx.fillRect(0, 0, 800, 450);
 
@@ -832,7 +1253,7 @@ function renderCutsceneFrameDataURL(prefix, idx) {
     cx.fillStyle = '#030408';
     cx.fillRect(400 - gap, 70, gap * 2, 330);
 
-    if (idx >= 3 && IMAGES.dancerAnim1 && IMAGES.dancerAnim1.complete && IMAGES.dancerAnim1.naturalWidth) {
+    if (idx >= 3 && isReady(IMAGES.dancerAnim1)) {
       cx.save();
       cx.globalAlpha = idx === 3 ? 0.85 : 0.45;
       cx.drawImage(IMAGES.dancerAnim1, 345, 130, 110, 220);
@@ -840,7 +1261,7 @@ function renderCutsceneFrameDataURL(prefix, idx) {
     }
 
     const door = IMAGES.door;
-    if (door && door.complete && door.naturalWidth) {
+    if (isReady(door)) {
       const dw = door.naturalWidth;
       const dh = door.naturalHeight;
       // Left leaf
@@ -862,21 +1283,21 @@ function renderCutsceneFrameDataURL(prefix, idx) {
       cx.fill();
     }
 
-    if (studentWalkImg && studentWalkImg.complete && studentWalkImg.naturalWidth) {
+    if (isReady(studentWalkImg)) {
       cx.drawImage(studentWalkImg, 135 + idx * 24, 175, 115, 230);
     }
   } else if (prefix === 'cutscene_sam') {
     const bg = IMAGES.bg3;
-    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
     cx.fillStyle = 'rgba(6, 5, 10, 0.65)';
     cx.fillRect(0, 0, 800, 450);
 
-    if (IMAGES.krathong && IMAGES.krathong.complete && IMAGES.krathong.naturalWidth) {
+    if (isReady(IMAGES.krathong)) {
       cx.drawImage(IMAGES.krathong, 515, 325, 76, 62);
     }
     const samFrameMap = [0, 0, 1, 2, 4, 6];
     const samImg = IMAGES[`samAnim${samFrameMap[idx] || 0}`];
-    if (samImg && samImg.complete && samImg.naturalWidth) {
+    if (isReady(samImg)) {
       const sx = idx === 5 ? 390 : 475;
       const sy = idx >= 4 ? 165 : 195;
       cx.drawImage(samImg, sx, sy, 145, 215);
@@ -893,28 +1314,28 @@ function renderCutsceneFrameDataURL(prefix, idx) {
       cx.closePath();
       cx.fill();
     }
-    if (studentImg && studentImg.complete && studentImg.naturalWidth) {
+    if (isReady(studentImg)) {
       cx.drawImage(studentImg, 130, 175, 115, 230);
     }
   } else {
     const bg = idx < 2 ? IMAGES.bg2 : IMAGES.bg5;
-    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
     if (idx < 2) {
       cx.fillStyle = 'rgba(10, 8, 14, 0.55)';
       cx.fillRect(0, 0, 800, 450);
-      if (IMAGES.frameBroken && IMAGES.frameBroken.complete && IMAGES.frameBroken.naturalWidth) {
+      if (isReady(IMAGES.frameBroken)) {
         cx.drawImage(IMAGES.frameBroken, 290, 75, 220, 270);
       }
       const spread = idx === 0 ? 55 : 0;
-      if (IMAGES.photo1 && IMAGES.photo1.complete) cx.drawImage(IMAGES.photo1, 320 - spread, 110 - spread / 2, 85, 105);
-      if (IMAGES.photo2 && IMAGES.photo2.complete) cx.drawImage(IMAGES.photo2, 395 + spread, 115 - spread / 3, 85, 105);
-      if (IMAGES.photo3 && IMAGES.photo3.complete) cx.drawImage(IMAGES.photo3, 355, 195 + spread, 95, 105);
+      if (isReady(IMAGES.photo1)) cx.drawImage(IMAGES.photo1, 320 - spread, 110 - spread / 2, 85, 105);
+      if (isReady(IMAGES.photo2)) cx.drawImage(IMAGES.photo2, 395 + spread, 115 - spread / 3, 85, 105);
+      if (isReady(IMAGES.photo3)) cx.drawImage(IMAGES.photo3, 355, 195 + spread, 95, 105);
     } else {
       const uncleImg = idx % 2 === 0 ? IMAGES.uncle0 : IMAGES.uncle1;
-      if (uncleImg && uncleImg.complete && uncleImg.naturalWidth) {
+      if (isReady(uncleImg)) {
         cx.drawImage(uncleImg, 495, 165, 118, 235);
       }
-      if (studentWalkImg && studentWalkImg.complete && studentWalkImg.naturalWidth) {
+      if (isReady(studentWalkImg)) {
         cx.drawImage(studentWalkImg, 210 + (idx - 2) * 28, 175, 115, 230);
       }
       if (idx === 5) {
@@ -933,14 +1354,15 @@ function renderCutsceneFrameDataURL(prefix, idx) {
       }
     }
   }
-  return c.toDataURL('image/jpeg', 0.9);
 }
 
 function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComplete) {
   state.flags.cutscenePlaying = true;
   state.moveInput = 0;
   const overlay = document.getElementById('door-cutscene');
-  const frameImg = document.getElementById('cutscene-frame-img');
+  const frameCanvas = document.getElementById('cutscene-canvas');
+  const frameCtx = frameCanvas.getContext('2d');
+  closePhotoPuzzleModal();
   const counterEl = document.getElementById('cutscene-frame-counter');
   const captionEl = document.getElementById('door-caption');
 
@@ -955,7 +1377,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
       if (onComplete) onComplete();
       return;
     }
-    frameImg.src = renderCutsceneFrameDataURL(prefix, idx);
+    renderCutsceneFrame(frameCtx, prefix, idx);
     counterEl.textContent = `FRAME ${idx + 1} / ${total}`;
     captionEl.textContent = frameCaptions[idx];
     if (idx === 0) playSound('creak');
@@ -984,6 +1406,8 @@ function enterScene(sceneNum, startX) {
   state.scene = sceneNum;
   state.player.x = startX;
   state.player.hidden = false;
+  state.unhideGrace = 0;
+  resetGhost(startX < 640 ? 980 : -CONFIG.GHOST_REENTER_MARGIN);
   updateHud();
 
   if (sceneNum === 2 && !state.flags.visited2) {
@@ -1002,12 +1426,10 @@ function enterScene(sceneNum, startX) {
       ]);
     } else {
       state.ghost.active = true;
-      state.ghost.x = 920;
     }
   } else if (sceneNum === 4) {
     state.ghost.type = 'dancer';
     state.ghost.active = !state.flags.offeringsPlaced || !state.flags.photosRestored;
-    state.ghost.x = 980;
     playSound('chime');
     if (!state.flags.visited4) {
       state.flags.visited4 = true;
@@ -1023,6 +1445,36 @@ function enterScene(sceneNum, startX) {
       { speaker: getPlayerName(), text: 'แฮ่ก... แฮ่ก... ออกมาจากเรือนไทยนั่นได้สักที! ข้างนอกหมอกลงจางๆ... เอ๊ะ นั่นคุณลุงยืนอยู่ตรงนั้นนี่นา!' }
     ]);
   }
+  saveCheckpoint();
+  broadcastState();
+}
+
+function resetGhost(x) {
+  const g = state.ghost;
+  g.x = x;
+  g.phase = 'chase';
+  g.alpha = 1;
+  g.timer = 0;
+  g.stunTimer = 0;
+}
+
+// Off-screen spot where a ghost that lost the player re-forms: behind the player
+// (left side) whenever there is room, so hiding always opens a way forward.
+function placeGhostAwayFromPlayer() {
+  const m = CONFIG.GHOST_REENTER_MARGIN;
+  state.ghost.x = state.player.x + m >= 300 ? -m : 1280 + m;
+}
+
+// Both rituals done in scene 4 -> the dancer is appeased and leaves for good.
+function checkRitualComplete() {
+  if (state.scene !== 4 || !state.flags.offeringsPlaced || !state.flags.photosRestored || !state.ghost.active) return;
+  state.ghost.active = false;
+  document.getElementById('danger-overlay').classList.add('hidden');
+  playSound('chime');
+  queueDialogue([
+    { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... (เสียงกระพรวนค่อยๆ เงียบหายไป เงาผีนางรำสลายไปกับควันธูป)' },
+    { speaker: getPlayerName(), text: 'วิญญาณสงบลงแล้ว... ประตูหลังเรือนทางขวาน่าจะเปิดออกได้แล้ว!' }
+  ]);
   broadcastState();
 }
 
@@ -1041,7 +1493,8 @@ function triggerSamphawesiEncounter() {
   playFrameByFrameCutscene('cutscene_sam', samCaptions, 680, () => {
     state.ghost.type = 'samphawesi';
     state.ghost.active = true;
-    state.ghost.x = 780;
+    resetGhost(780);
+    state.ghost.stunTimer = 1.5; // it is still rising: give the player a moment to run
     broadcastState();
   });
 }
@@ -1065,6 +1518,7 @@ function triggerEndingDialogue() {
     ];
     playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => {
       state.flags.victory = true;
+      clearCheckpoint();
       playSound('chime');
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
@@ -1089,6 +1543,7 @@ function showPhotoPuzzleModal() {
   } else {
     status.textContent = `แตะที่ชิ้นส่วนรูปภาพที่เก็บมาได้เพื่อวางลงในกรอบ (${state.inventory.placedPhotos.length}/3)`;
   }
+  state.moveInput = 0;
   modal.classList.remove('hidden');
 }
 
@@ -1098,7 +1553,7 @@ function closePhotoPuzzleModal() {
 
 function placePhotoPiece(num) {
   if (!state.inventory.photos.includes(num)) {
-    alert(`คุณยังไม่ได้เก็บเศษรูปภาพชิ้นที่ ${num} ในเรือนไทยครับ!`);
+    showToast(`คุณยังไม่ได้เก็บเศษรูปภาพชิ้นที่ ${num} ในเรือนไทยครับ!`, 'warn');
     return;
   }
   if (!state.inventory.placedPhotos.includes(num)) {
@@ -1113,8 +1568,10 @@ function placePhotoPiece(num) {
     queueDialogue([
       { speaker: getPlayerName(), text: 'เศษรูปภาพทั้ง 3 ชิ้นต่อกันสมบูรณ์แล้ว... เดี๋ยวนะ คนในรูปที่ซ้อนอยู่ข้างหลังนั่นมัน... ตัวเราเอง?!' },
       { speaker: getPlayerName(), text: 'จริงด้วย... เรามีสัมผัสพิเศษ และกำลังนอนไม่ได้สติอยู่ระหว่างความเป็นความตายจากอุบัติเหตุรถคว่ำ!' },
-      { speaker: getPlayerName(), text: 'ตอนนี้รู้ความจริงแล้ว ถ้านำของเซ่นไหว้ไปวางครบ 3 ชิ้น ประตูหลังเรือนในฉากที่ 4 จะเปิดออกทันที!' }
-    ]);
+      state.flags.offeringsPlaced
+        ? { speaker: getPlayerName(), text: 'ตอนนี้รู้ความจริงแล้ว และของเซ่นไหว้ก็ถวายครบแล้ว... ประตูหลังเรือนต้องเปิดได้แน่!' }
+        : { speaker: getPlayerName(), text: 'ตอนนี้รู้ความจริงแล้ว ถ้านำของเซ่นไหว้ไปวางครบ 3 ชิ้น ประตูหลังเรือนในฉากที่ 4 จะเปิดออกทันที!' }
+    ], checkRitualComplete);
   } else {
     showPhotoPuzzleModal();
   }
@@ -1123,17 +1580,20 @@ function placePhotoPiece(num) {
 
 // ----------------------- Controls & Actions -----------------------
 function setMove(dir) {
-  if (state.flags.cutscenePlaying || state.flags.gameOver) return;
-  if (!document.getElementById('dialogue-box').classList.contains('hidden')) return;
-  if (state.player.hidden && dir !== 0) {
-    state.player.hidden = false; // stepping out of hiding
-  }
+  // Stopping is always allowed; starting to walk is not while something is on screen.
+  if (dir !== 0 && (state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen())) return;
+  if (state.player.hidden && dir !== 0) leaveHiding(); // stepping out of hiding
   state.moveInput = dir;
   if (dir !== 0) state.player.dir = dir;
 }
 
+function leaveHiding() {
+  state.player.hidden = false;
+  state.unhideGrace = CONFIG.UNHIDE_GRACE;
+}
+
 function triggerInteract() {
-  if (state.flags.cutscenePlaying || state.flags.gameOver) return;
+  if (state.flags.cutscenePlaying || state.flags.gameOver || isPhotoModalOpen()) return;
   if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
     advanceDialogue();
     return;
@@ -1145,19 +1605,22 @@ function triggerInteract() {
 }
 
 function toggleHide() {
+  if (state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen()) return;
   const spot = getActiveHotspot();
   if (state.player.hidden) {
-    state.player.hidden = false;
+    leaveHiding();
     playSound('step');
   } else if (spot && spot.isHidingSpot) {
     state.player.hidden = true;
     state.player.flashlight = false;
     state.moveInput = 0;
     playSound('step');
+    if (state.ghost.active && !state.flags.hideHintShown) {
+      state.flags.hideHintShown = true;
+      showToast('🤫 กลั้นหายใจ... ห้ามเปิดไฟฉาย แล้ววิญญาณจะหาคุณไม่เจอจนหายไปในความมืด', '', 5500);
+    }
   } else {
-    queueDialogue([
-      { speaker: getPlayerName(), text: 'ต้องเดินไปยืนหน้า "ตู้ไม้สัก" หรือ "ตุ่มน้ำ" ก่อนครับ ถึงจะกดมุดซ่อนตัวได้!' }
-    ]);
+    showToast('ต้องเดินไปยืนหน้า "ตู้ไม้สัก" หรือ "ตุ่มน้ำ" ก่อน ถึงจะมุดซ่อนตัวได้!');
   }
   broadcastState();
 }
@@ -1176,8 +1639,16 @@ function toggleSixthSense() {
 }
 
 function getActiveHotspot() {
-  const spots = getSceneHotspots(state.scene);
-  return spots.find((s) => Math.abs(state.player.x - s.x) <= s.width / 2 + 24) || null;
+  let best = null;
+  let bestDist = Infinity;
+  getSceneHotspots(state.scene).forEach((s) => {
+    const d = Math.abs(state.player.x - s.x);
+    if (d <= s.width / 2 + 24 && d < bestDist) {
+      best = s;
+      bestDist = d;
+    }
+  });
+  return best;
 }
 
 function retryFromCheckpoint() {
@@ -1186,7 +1657,10 @@ function retryFromCheckpoint() {
   document.getElementById('danger-overlay').classList.add('hidden');
   state.player.x = 180;
   state.player.hidden = false;
-  state.ghost.x = 1020;
+  state.moveInput = 0;
+  state.unhideGrace = CONFIG.UNHIDE_GRACE;
+  net.remoteMoving = false;
+  resetGhost(-CONFIG.GHOST_REENTER_MARGIN); // re-forms behind you
   state.ghost.stunTimer = 2.0;
   broadcastState();
 }
@@ -1197,14 +1671,21 @@ function updateHud() {
   document.getElementById('hud-photos').textContent = `${state.inventory.photos.length}/3`;
   document.getElementById('hud-offerings-placed').classList.toggle('hidden', !state.flags.offeringsPlaced);
   document.getElementById('hud-photos-placed').classList.toggle('hidden', !state.flags.photosRestored);
+  saveCheckpoint();
 }
 
 // Keyboard listeners
 window.addEventListener('keydown', (e) => {
   if (state.role !== 'host' || !state.started) return;
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
   const k = e.key.toLowerCase();
   if (k === 'a' || e.key === 'ArrowLeft') setMove(-1);
   if (k === 'd' || e.key === 'ArrowRight') setMove(1);
+  if (e.repeat) {
+    if (e.code === 'Space') e.preventDefault();
+    return; // held keys must not spam actions or skip whole conversations
+  }
+  if (e.key === 'Escape' && isPhotoModalOpen()) closePhotoPuzzleModal();
   if (k === 'e' || e.key === 'Enter') triggerInteract();
   if (k === 'q') toggleHide();
   if (k === 'f') toggleFlashlight();
@@ -1234,23 +1715,35 @@ function gameLoop(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
 
-  if (state.role === 'host' && state.started) {
-    updateGame(dt);
-    renderGame();
+  try {
+    if (state.role === 'host' && state.started) {
+      updateGame(dt);
+      renderGame();
+    }
+  } catch (err) {
+    console.error('[gameLoop]', err); // never let one bad frame freeze the game
   }
   requestAnimationFrame(gameLoop);
 }
 requestAnimationFrame(gameLoop);
 
 function updateGame(dt) {
+  updateRemoteMoveTimeout();
   if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory) return;
 
-  const dialogueOpen = !document.getElementById('dialogue-box').classList.contains('hidden');
+  const dialogueOpen = isDialogueOpen();
+  const paused = dialogueOpen || isPhotoModalOpen(); // conversations and the photo puzzle freeze the world
+
+  if (!paused) {
+    state.bellCooldown = Math.max(0, state.bellCooldown - dt);
+    state.revealTimer = Math.max(0, state.revealTimer - dt);
+    state.unhideGrace = Math.max(0, state.unhideGrace - dt);
+  }
+  document.getElementById('sixth-sense-overlay').classList.toggle('hidden', !isSensing());
 
   // Player movement (8-frame walk cycle)
-  if (!dialogueOpen && state.moveInput !== 0 && !state.player.hidden) {
-    const speed = 230;
-    state.player.x = Math.max(80, Math.min(1200, state.player.x + state.moveInput * speed * dt));
+  if (!paused && state.moveInput !== 0 && !state.player.hidden) {
+    state.player.x = Math.max(80, Math.min(1200, state.player.x + state.moveInput * CONFIG.PLAYER_SPEED * dt));
     state.stepTimer += dt;
     if (state.stepTimer >= 0.11) {
       state.stepTimer = 0;
@@ -1269,7 +1762,7 @@ function updateGame(dt) {
   // Hotspot prompt
   const spot = getActiveHotspot();
   const promptEl = document.getElementById('interact-prompt');
-  if (spot && !dialogueOpen) {
+  if (spot && !paused) {
     promptEl.innerHTML = `กด <strong>[E]</strong> : ${spot.label}`;
     promptEl.classList.remove('hidden');
   } else {
@@ -1277,59 +1770,88 @@ function updateGame(dt) {
   }
 
   // Ghost AI (Scenes 3 & 4)
-  if (state.ghost.active && !dialogueOpen) {
-    if (state.ghost.stunTimer > 0) {
-      state.ghost.stunTimer = Math.max(0, state.ghost.stunTimer - dt);
-    } else {
-      const dist = state.player.x - state.ghost.x;
-      state.ghost.dir = dist >= 0 ? 1 : -1;
-
-      // If player is hidden and flashlight off, ghost patrols away slowly
-      let ghostSpeed = state.ghost.type === 'dancer' ? 115 : 95;
-      if (state.player.sixthSense) ghostSpeed *= 1.35; // Sixth sense attracts ghost faster
-
-      if (state.player.hidden && !state.player.flashlight) {
-        // Patrol back and forth
-        state.ghost.x += (Math.sin(performance.now() / 900) > 0 ? 1 : -1) * 65 * dt;
-      } else {
-        state.ghost.x += Math.sign(dist) * ghostSpeed * dt;
-      }
-
-      // Check capture collision
-      const absDist = Math.abs(state.player.x - state.ghost.x);
-      state.ghost.alertLevel = Math.max(8, Math.min(100, Math.round(100 - absDist / 9)));
-
-      document.getElementById('danger-overlay').classList.toggle('hidden', absDist > 260 || state.player.hidden);
-
-      if (absDist < 58 && !state.player.hidden) {
-        triggerGameOver();
-      }
-    }
-
-    state.ghost.animTimer += dt;
-    if (state.ghost.animTimer >= 0.16) {
-      state.ghost.animTimer = 0;
-      state.ghost.frame = (state.ghost.frame + 1) % 8;
-      if (state.ghost.frame === 0 && Math.random() < 0.45) {
-        playSound(state.ghost.type === 'dancer' ? 'chime' : 'rustle');
-      }
-    }
+  if (state.ghost.active) {
+    if (!paused && !state.flags.cutscenePlaying) updateGhost(dt);
   } else {
     state.ghost.alertLevel = 5;
     document.getElementById('danger-overlay').classList.add('hidden');
   }
+}
 
-  // Periodic sync to mobile P1/P2
-  state.ambientTimer += dt;
-  if (state.ambientTimer >= 0.12) {
-    state.ambientTimer = 0;
-    broadcastState();
+function updateGhost(dt) {
+  const g = state.ghost;
+  const p = state.player;
+  const hiddenSafe = p.hidden && !p.flashlight;
+  let speed = CONFIG.GHOST_SPEED[g.type] || 100;
+  if (p.sixthSense) speed *= CONFIG.SIXTH_SENSE_GHOST_MULT;
+
+  if (g.stunTimer > 0) {
+    g.stunTimer = Math.max(0, g.stunTimer - dt);
+  } else if (hiddenSafe) {
+    // The ghost lost you: it searches where you vanished, lingers, fades away and
+    // re-forms off-screen behind you, so waiting in a hiding spot opens a way forward.
+    if (g.phase === 'chase') {
+      g.phase = 'search';
+      // Close by: it creeps to where you vanished. Far away: it just stops and listens.
+      g.searchX = Math.abs(p.x - g.x) > 350 ? g.x : p.x;
+      g.timer = CONFIG.GHOST_SEARCH_LINGER;
+    }
+    if (g.phase === 'search') {
+      const dx = g.searchX - g.x;
+      if (Math.abs(dx) > 6) {
+        g.dir = Math.sign(dx);
+        g.x += Math.sign(dx) * Math.min(Math.abs(dx), speed * 0.8 * dt);
+      } else {
+        g.timer -= dt;
+        if (g.timer <= 0) {
+          g.phase = 'vanish';
+          g.timer = CONFIG.GHOST_VANISH_TIME;
+        }
+      }
+    } else if (g.phase === 'vanish') {
+      g.timer -= dt;
+      g.alpha = Math.max(0, g.timer / CONFIG.GHOST_VANISH_TIME);
+      if (g.timer <= 0) {
+        placeGhostAwayFromPlayer();
+        g.alpha = 0;
+        g.phase = 'lurk';
+      }
+    }
+  } else {
+    g.phase = 'chase'; // spotted you (or you came out): resume the hunt
+    const dist = p.x - g.x;
+    g.dir = dist >= 0 ? 1 : -1;
+    g.x += Math.sign(dist) * speed * dt;
+  }
+  if (g.phase === 'chase' || g.phase === 'lurk') g.alpha = Math.min(1, g.alpha + dt / CONFIG.GHOST_FADE_IN_TIME);
+
+  const absDist = Math.abs(p.x - g.x);
+  const solid = g.alpha > 0.5;
+  g.alertLevel = solid ? Math.max(8, Math.min(100, Math.round(100 - absDist / 9))) : 8;
+  document.getElementById('danger-overlay').classList.toggle('hidden', absDist > 260 || hiddenSafe || !solid);
+
+  // Hidden with the flashlight on gives you away; stepping out gives a short grace period.
+  const exposed = !p.hidden || p.flashlight;
+  if (g.stunTimer <= 0 && exposed && solid && state.unhideGrace <= 0 && absDist < CONFIG.CATCH_DIST) {
+    triggerGameOver();
+    return;
+  }
+
+  g.animTimer += dt;
+  if (g.animTimer >= 0.16) {
+    g.animTimer = 0;
+    g.frame = (g.frame + 1) % 8;
+    if (g.frame === 0 && solid && Math.random() < 0.45) {
+      playSound(g.type === 'dancer' ? 'chime' : 'rustle');
+    }
   }
 }
 
 function triggerGameOver() {
   state.flags.gameOver = true;
   state.moveInput = 0;
+  net.remoteMoving = false;
+  closePhotoPuzzleModal();
   playSound('scare');
   const scareImg = document.getElementById('jumpscare-img');
   scareImg.src = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
@@ -1366,12 +1888,13 @@ function drawGroundShadow(cx, cy, rx, ry = 12, alpha = 0.55) {
   ctx.restore();
 }
 
-function drawSpriteProportional(img, bottomCenterX, bottomY, targetHeight, flipX = false, extraFilter = null) {
-  if (!img || !img.complete || !img.naturalHeight) return { w: 100, h: targetHeight };
+function drawSpriteProportional(img, bottomCenterX, bottomY, targetHeight, flipX = false, extraFilter = null, alpha = 1) {
+  if (!isReady(img) || alpha <= 0) return { w: 100, h: targetHeight };
   const aspect = img.naturalWidth / img.naturalHeight;
   const targetWidth = targetHeight * aspect;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = alpha;
   ctx.translate(bottomCenterX, bottomY);
   if (flipX) ctx.scale(-1, 1);
   if (extraFilter) ctx.filter = extraFilter;
@@ -1392,8 +1915,11 @@ function renderGame() {
   if (state.scene === 4) bgImg = IMAGES.bg4;
   if (state.scene === 5) bgImg = IMAGES.bg5;
 
-  if (bgImg && bgImg.complete) {
+  if (isReady(bgImg)) {
     ctx.drawImage(bgImg, 0, 0, 1280, 720);
+  } else {
+    ctx.fillStyle = '#07060b';
+    ctx.fillRect(0, 0, 1280, 720);
   }
 
   // 2. Draw Interactive Props per Scene (with proportional scaling & floor shadows)
@@ -1403,14 +1929,14 @@ function renderGame() {
   if (state.scene === 3 && !state.flags.samphawesiTriggered) {
     drawGroundShadow(765, 608, 70, 14, 0.65);
     const idleIdx = Math.floor(performance.now() / 320) % 3;
-    drawSpriteProportional(IMAGES[`samAnim${idleIdx}`] || IMAGES.sam0, 765, 610, 195, false);
+    drawSpriteProportional(IMAGES[`samAnim${idleIdx}`], 765, 610, 195, false);
   } else if (state.ghost.active && (state.scene === 3 || state.scene === 4)) {
     const gKey = state.ghost.type === 'dancer' ? `dancerAnim${state.ghost.frame}` : `samAnim${state.ghost.frame}`;
-    const gImg = IMAGES[gKey] || IMAGES.dancer0;
+    const gImg = IMAGES[gKey] || IMAGES.dancerAnim0;
     const bob = state.ghost.type === 'dancer' ? Math.sin(performance.now() / 190) * 8 : 0;
     const filter = state.ghost.stunTimer > 0 ? 'brightness(1.7) hue-rotate(120deg)' : null;
-    drawGroundShadow(state.ghost.x, 610, 68, 14, 0.6);
-    drawSpriteProportional(gImg, state.ghost.x, 612 + bob, 245, state.ghost.dir === 1, filter);
+    if (state.ghost.alpha > 0.05) drawGroundShadow(state.ghost.x, 610, 68, 14, 0.6 * state.ghost.alpha);
+    drawSpriteProportional(gImg, state.ghost.x, 612 + bob, 245, state.ghost.dir === 1, filter, state.ghost.alpha);
   } else if (state.scene === 5) {
     drawGroundShadow(835, 612, 52, 12, 0.5);
     drawSpriteProportional(IMAGES.uncle0, 835, 614, 240, false);
@@ -1419,14 +1945,14 @@ function renderGame() {
   // 4. Draw Player (8-frame articulated walk cycle!)
   if (!state.player.hidden) {
     const prefix = state.character === 'female' ? 'femaleWalk' : 'maleWalk';
-    const sprite = IMAGES[`${prefix}${state.player.frame}`] || IMAGES.male0;
+    const sprite = IMAGES[`${prefix}${state.player.frame}`] || IMAGES[`${prefix}0`];
     drawGroundShadow(state.player.x, 614, 48, 12, 0.65);
     drawSpriteProportional(sprite, state.player.x, 616, 238, state.player.dir === -1);
   } else {
     ctx.fillStyle = '#8cf5d9';
     ctx.font = 'bold 16px Sarabun';
     ctx.textAlign = 'center';
-    ctx.fillText('🏺 [กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]', state.player.x, 340);
+    ctx.fillText(state.player.flashlight ? '⚠️ [ไฟฉายเปิดอยู่! วิญญาณมองเห็นแสง]' : '🏺 [กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]', state.player.x, 340);
   }
 
   // 5. Dynamic Darkness, Warm Volumetric Flashlight & Environmental Lights (Scenes 1..4)
@@ -1483,7 +2009,7 @@ function renderDarknessAndFlashlight() {
   const dctx = lightCanvas.getContext('2d');
   dctx.clearRect(0, 0, 1280, 720);
 
-  const baseAlpha = state.player.sixthSense ? 0.48 : (state.scene === 1 ? 0.58 : 0.76);
+  const baseAlpha = isSensing() ? 0.48 : (state.scene === 1 ? 0.58 : 0.76);
   dctx.fillStyle = `rgba(5, 6, 12, ${baseAlpha})`;
   dctx.fillRect(0, 0, 1280, 720);
 
@@ -1609,7 +2135,7 @@ function renderHotspotIndicators() {
   const spots = getSceneHotspots(state.scene);
   spots.forEach((s) => {
     const dist = Math.abs(state.player.x - s.x);
-    if (state.player.sixthSense || dist < 150) {
+    if (isSensing() || dist < 150) {
       ctx.save();
       ctx.fillStyle = s.isHiddenClue ? '#59dfb7' : 'rgba(235, 185, 99, 0.85)';
       ctx.beginPath();
@@ -1621,8 +2147,18 @@ function renderHotspotIndicators() {
 }
 
 // ----------------------- Mobile P2 Sixth-Sense Radar Renderer -----------------------
-function renderP2RadarLoop() {
-  if (state.role !== 'p2') return;
+let lastRadarDraw = 0;
+function renderP2RadarLoop(now = performance.now()) {
+  if (state.role !== 'p2') {
+    net.radarRunning = false;
+    return;
+  }
+  // Data only changes a few times per second: ~20 fps is plenty and saves battery.
+  if (now - lastRadarDraw < 50) {
+    requestAnimationFrame(renderP2RadarLoop);
+    return;
+  }
+  lastRadarDraw = now;
   const rCanvas = document.getElementById('p2-radar-canvas');
   if (rCanvas) {
     const rctx = rCanvas.getContext('2d');
@@ -1670,13 +2206,15 @@ function renderP2RadarLoop() {
 
     // Ghost position (Pulsing Red Skull/Dot)
     if (state.ghost.active) {
-      const gx = (state.ghost.x / 1280) * 560 + 20;
+      const gx = Math.max(20, Math.min(580, (state.ghost.x / 1280) * 560 + 20));
+      rctx.globalAlpha = Math.max(0.25, state.ghost.alpha == null ? 1 : state.ghost.alpha);
       rctx.fillStyle = '#ff3b3b';
       rctx.beginPath();
       rctx.arc(gx, 170, 13 + Math.sin(performance.now() / 120) * 3, 0, Math.PI * 2);
       rctx.fill();
       rctx.fillStyle = '#fff';
       rctx.fillText(state.ghost.type === 'dancer' ? 'ผีนางรำ!' : 'สัมภเวสี!', gx - 22, 145);
+      rctx.globalAlpha = 1;
     }
 
     // Update EMF meter & Clue text

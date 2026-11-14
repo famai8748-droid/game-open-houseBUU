@@ -3,8 +3,11 @@ import shutil
 from PIL import Image, ImageFilter, ImageEnhance
 from collections import deque
 
-BRAIN_DIR = r"C:\Users\informatics\.gemini\antigravity\brain\fee0325a-3181-42ab-a76f-7ae9be66bfff"
-OUT_DIR = r"C:\Users\informatics\.gemini\antigravity\scratch\thai-horror-buu\public\assets"
+# Paths are relative to the repository. The original source art (not stored in git)
+# is read from ASSET_SOURCE_DIR, e.g.  ASSET_SOURCE_DIR=path/to/art python tools/process_assets.py
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT_DIR = os.path.join(REPO_ROOT, "public", "assets")
+BRAIN_DIR = os.environ.get("ASSET_SOURCE_DIR", os.path.join(REPO_ROOT, "art-source"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 def remove_bg_border_only(img, tolerance=19, strip_flashlight_cone=False):

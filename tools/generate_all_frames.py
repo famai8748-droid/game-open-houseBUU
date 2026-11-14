@@ -2,8 +2,11 @@ import os
 import math
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance, ImageFilter
 
-ASSETS_DIR = r"C:\Users\informatics\.gemini\antigravity\scratch\thai-horror-buu\public\assets"
-BRAIN_DIR = r"C:\Users\informatics\.gemini\antigravity\brain\fee0325a-3181-42ab-a76f-7ae9be66bfff"
+# Paths are relative to the repository. The original source art (not stored in git)
+# is read from ASSET_SOURCE_DIR, e.g.  ASSET_SOURCE_DIR=path/to/art python tools/generate_all_frames.py
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ASSETS_DIR = os.path.join(REPO_ROOT, "public", "assets")
+BRAIN_DIR = os.environ.get("ASSET_SOURCE_DIR", os.path.join(REPO_ROOT, "art-source"))
 os.makedirs( os.path.join(ASSETS_DIR, "frames"), exist_ok=True)
 
 def make_8frame_student_walk(prefix):

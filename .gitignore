@@ -2,3 +2,4 @@ node_modules/
 .vercel/
 public_url.txt
 *.log
+art-source/

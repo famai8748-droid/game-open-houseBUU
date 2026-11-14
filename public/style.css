@@ -889,3 +889,72 @@ body {
   border-color: #b89860;
   color: #f0dec0;
 }
+
+/* ======================== Added: toast, mobile status, touch handling ======================== */
+button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ctrl-btn,
+.big-pad-btn,
+.big-action-btn,
+.btn-occult {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.toast {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  max-width: min(92vw, 640px);
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: rgba(16, 13, 22, 0.94);
+  border: 1px solid rgba(217, 184, 130, 0.55);
+  color: #f6ead2;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.toast.warn {
+  border-color: #e06666;
+}
+
+.mobile-status {
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f3e5c8;
+  font-size: 14px;
+  text-align: center;
+}
+
+.mobile-status:empty {
+  display: none;
+}
+
+.mobile-status.warn {
+  background: rgba(124, 36, 36, 0.35);
+  border-color: #d45b5b;
+}
+
+.mobile-status.good {
+  background: rgba(23, 54, 48, 0.55);
+  border-color: #4dc4a6;
+}

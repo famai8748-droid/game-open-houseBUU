@@ -45,7 +45,7 @@ function rsEncode(data, ecLen) {
   return msg.slice(data.length);
 }
 
-// Version table (1..6, ECC Level L: [totalDataBytes, ecBytesPerBlock, numBlocks, alignCenters])
+// Version table (1..5 used, ECC Level L, single block: data codewords, EC codewords, alignment centers)
 const VERSION_TABLE = [
   null,
   { dataBytes: 19, ecBytes: 7, align: [] },
@@ -56,11 +56,16 @@ const VERSION_TABLE = [
   { dataBytes: 136, ecBytes: 18, blocks: 2, align: [6, 34] }
 ];
 
-function generateQrSvgDataUrl(text) {
+// Max payload for Version 5-L in byte mode: 108 data codewords - 2 (mode + length header).
+const MAX_BYTES = VERSION_TABLE[5].dataBytes - 2;
+
+function generateQrMatrix(text) {
   const bytes = Array.from(Buffer.from(String(text), 'utf8'));
+  if (bytes.length > MAX_BYTES) {
+    throw new RangeError(`QR payload too long (${bytes.length} bytes, max ${MAX_BYTES})`);
+  }
   let ver = 1;
-  while (ver <= 5 && bytes.length + 2 > VERSION_TABLE[ver].dataBytes) ver++;
-  if (ver > 5) ver = 5;
+  while (bytes.length + 2 > VERSION_TABLE[ver].dataBytes) ver++;
   const vInfo = VERSION_TABLE[ver];
   const size = 17 + ver * 4;
 
@@ -168,14 +173,23 @@ function generateQrSvgDataUrl(text) {
     [8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],
     [7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]
   ];
-  fmtCoords1.forEach(([r, c], i) => {
+  // Copy 1 around the top-left finder: bits 0-5 down column 8, bits 6-8 at the
+  // corner, bits 9-14 along row 8 (listed above as [col, row] pairs).
+  fmtCoords1.forEach(([c, r], i) => {
     grid[r][c] = (fmt >> i) & 1;
   });
-  for (let i = 0; i < 7; i++) grid[size - 1 - i][8] = (fmt >> i) & 1;
-  for (let i = 7; i < 15; i++) grid[8][size - 15 + i] = (fmt >> i) & 1;
+  // Copy 2: bits 0-7 along row 8 from the right edge, bits 8-14 up column 8 from the bottom.
+  for (let i = 0; i < 8; i++) grid[8][size - 1 - i] = (fmt >> i) & 1;
+  for (let i = 8; i < 15; i++) grid[size - 15 + i][8] = (fmt >> i) & 1;
+
+  return { size, version: ver, grid };
+}
+
+function generateQrSvgDataUrl(text) {
+  const { size, grid } = generateQrMatrix(text);
 
   const scale = 6;
-  const margin = 2;
+  const margin = 4; // ISO quiet zone
   const dim = (size + margin * 2) * scale;
   let paths = '';
   for (let r = 0; r < size; r++) {
@@ -185,8 +199,8 @@ function generateQrSvgDataUrl(text) {
       }
     }
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" width="${dim}" height="${dim}"><rect width="100%" height="100%" fill="#121116"/><path d="${paths}" fill="#e6dcc8"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" width="${dim}" height="${dim}"><rect width="100%" height="100%" fill="#f4ecdc"/><path d="${paths}" fill="#121116"/></svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
 
-module.exports = { generateQrSvgDataUrl };
+module.exports = { generateQrSvgDataUrl, generateQrMatrix, MAX_BYTES };
