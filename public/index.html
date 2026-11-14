@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>เรือนซ่อนวิญญาณ | The Veiled Thai House (BUU Open House)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Chakra+Petch:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- ======================== TITLE / LOBBY MODAL ======================== -->
+  <div id="title-screen" class="screen active">
+    <div class="title-backdrop"></div>
+    <div class="title-container">
+      <div class="badge-horror">THAI PIXEL HORROR • CO-OP &amp; SOLO</div>
+      <h1 class="game-title">เรือนซ่อนวิญญาณ</h1>
+      <p class="game-subtitle">ท่ามกลางความมืดหลังอุบัติเหตุ... เสียงกุกกักในเรือนไทยเก่ากำลังเรียกหาคุณ</p>
+
+      <!-- Character Selection -->
+      <div class="section-card">
+        <h3>1. เลือกตัวละครผู้เล่น (ชุดนักเรียน)</h3>
+        <div class="char-select-grid">
+          <button id="select-male" class="char-card selected" onclick="selectCharacter('male')">
+            <div class="char-sprite-wrap">
+              <img src="assets/student_male_0.png" alt="นักเรียนชาย" class="pixel-img" />
+            </div>
+            <div class="char-name">นักเรียนชาย (นนท์)</div>
+            <div class="char-desc">ผู้รอดชีวิตจากอุบัติเหตุ มีสัมผัสพิเศษ</div>
+          </button>
+          <button id="select-female" class="char-card" onclick="selectCharacter('female')">
+            <div class="char-sprite-wrap">
+              <img src="assets/student_female_0.png" alt="นักเรียนหญิง" class="pixel-img" />
+            </div>
+            <div class="char-name">นักเรียนหญิง (ริน)</div>
+            <div class="char-desc">ผู้รอดชีวิตจากอุบัติเหตุ มีสัมผัสพิเศษ</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode Selection -->
+      <div class="section-card">
+        <h3>2. เลือกรูปแบบการเล่น</h3>
+        <div class="mode-buttons">
+          <button class="btn-primary" onclick="startSoloGame()">
+            ▶ เล่นคนเดียวทันที (บนคอม / มือถือเครื่องเดียว)
+          </button>
+          <button class="btn-secondary" onclick="openCoopLobby()">
+            📱 เปิดห้องสแกน QR Code / เล่น 2 คน (จอกลาง + มือถือ / ระยะไกล)
+          </button>
+        </div>
+        <div class="join-remote-bar">
+          <span>หรือกรอกรหัสห้องเพื่อน (ระยะไกล):</span>
+          <input id="join-code-input" type="text" maxlength="4" placeholder="รหัส 4 หลัก" />
+          <button class="btn-small" onclick="joinRoomByCode('p2')">เข้าเป็น P2 (ญาณทิพย์)</button>
+          <button class="btn-small" onclick="joinRoomByCode('p1')">เข้าเป็น P1 (จอยเดิน)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== QR CO-OP LOBBY MODAL ======================== -->
+  <div id="coop-modal" class="modal hidden">
+    <div class="modal-box">
+      <h2>เชื่อมต่อผู้เล่นผ่าน QR Code หรือรหัสห้อง</h2>
+      <p class="modal-sub">สแกนผ่านหน้าจอด้วยกล้องมือถือ หรือส่งรหัสห้องให้เพื่อนที่อยู่ระยะไกล</p>
+      <div class="room-code-banner">
+        รหัสห้อง: <span id="lobby-room-code">----</span>
+      </div>
+      <div class="qr-grid">
+        <div class="qr-card">
+          <h4>มือถือเครื่องที่ 1: P1 (คนเดินสำรวจ)</h4>
+          <img id="qr-p1-img" alt="QR P1" class="qr-img" />
+          <div id="status-p1" class="player-status">⚪ รอเชื่อมต่อ (หรือบังคับบนคีย์บอร์ดคอมได้)</div>
+        </div>
+        <div class="qr-card">
+          <h4>มือถือเครื่องที่ 2: P2 (ผู้มีสัมผัสพิเศษ)</h4>
+          <img id="qr-p2-img" alt="QR P2" class="qr-img" />
+          <div id="status-p2" class="player-status">⚪ รอเชื่อมต่อ...</div>
+        </div>
+      </div>
+      <p id="lobby-url-hint" class="url-hint"></p>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="startFromLobby()">เริ่มเกมเลย!</button>
+        <button class="btn-secondary" onclick="closeCoopLobby()">ย้อนกลับ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MAIN GAME SCREEN (HOST / SOLO) ======================== -->
+  <div id="game-screen" class="screen">
+    <!-- Top HUD -->
+    <div class="hud-bar">
+      <div class="hud-left">
+        <span class="rec-dot">●</span>
+        <span id="hud-scene-title">ฉากที่ 1: ป่ามืดหลังอุบัติเหตุ</span>
+        <span id="hud-room-badge" class="room-badge hidden">ห้อง: ----</span>
+      </div>
+      <div class="hud-center">
+        <div class="objective-pill">
+          🕯️ ของเซ่นไหว้: <strong id="hud-offerings">0/3</strong>
+          <span id="hud-offerings-placed" class="tag-done hidden">(ถวายแล้ว!)</span>
+        </div>
+        <div class="objective-pill">
+          🖼️ เศษรูปภาพ: <strong id="hud-photos">0/3</strong>
+          <span id="hud-photos-placed" class="tag-done hidden">(ต่อครบแล้ว!)</span>
+        </div>
+      </div>
+      <div class="hud-right">
+        <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute">🔊 เสียง: เปิด</button>
+        <button class="btn-hud" onclick="showPhotoPuzzleModal()">🖼️ ดูกรอบรูป</button>
+      </div>
+    </div>
+
+    <!-- Canvas Viewport -->
+    <div class="viewport-wrap">
+      <canvas id="game-canvas" width="1280" height="720"></canvas>
+
+      <!-- CRT / Vignette / Horror Overlays -->
+      <div class="vignette-overlay"></div>
+      <div id="sixth-sense-overlay" class="sixth-sense-overlay hidden">
+        <div class="sixth-sense-label">👁️ โหมดสัมผัสพิเศษ (ระวัง! ผีจะรับรู้ถึงตัวคุณเร็วขึ้น)</div>
+      </div>
+      <div id="danger-overlay" class="danger-overlay hidden"></div>
+
+      <!-- Prompt Floating Pill -->
+      <div id="interact-prompt" class="interact-prompt hidden">
+        กด <strong>[E]</strong> หรือปุ่ม <strong>สำรวจ</strong>
+      </div>
+
+      <!-- Dialogue Box -->
+      <div id="dialogue-box" class="dialogue-box hidden" onclick="advanceDialogue()">
+        <div class="dialogue-speaker" id="dialogue-speaker">ตัวเอก</div>
+        <div class="dialogue-text" id="dialogue-text">...</div>
+        <div class="dialogue-next">คลิกหรือกด [Space / E] เพื่อไปต่อ ▶</div>
+      </div>
+
+      <!-- FRAME-BY-FRAME PIXEL CUTSCENE OVERLAY -->
+      <div id="door-cutscene" class="door-cutscene hidden">
+        <div class="cutscene-frame-viewer">
+          <img id="cutscene-frame-img" src="assets/frames/cutscene_door_0.jpg" class="cutscene-frame-img pixel-img" alt="Cutscene Frame" />
+          <div id="cutscene-frame-counter" class="cutscene-frame-counter">FRAME 1 / 6</div>
+        </div>
+        <div class="door-caption" id="door-caption">แอ๊ดดดดด...</div>
+      </div>
+
+      <!-- PHOTO PUZZLE MODAL -->
+      <div id="photo-modal" class="modal hidden">
+        <div class="modal-box photo-puzzle-box">
+          <h3>🖼️ กรอบรูปปริศนาประจำเรือนไทย</h3>
+          <p class="modal-sub">รวบรวมเศษรูปถ่ายที่ขาดหายไปทั้ง 3 ชิ้นจากในเรือน เพื่อคลายความทรงจำ</p>
+          <div class="photo-frame-stage">
+            <img src="assets/photo_frame_broken.png" class="frame-bg pixel-img" alt="Frame" />
+            <div class="photo-slots">
+              <div id="slot-photo-1" class="photo-slot" onclick="placePhotoPiece(1)">
+                <img src="assets/photo_piece_1.png" class="pixel-img" alt="Piece 1" />
+                <span>ชิ้นที่ 1</span>
+              </div>
+              <div id="slot-photo-2" class="photo-slot" onclick="placePhotoPiece(2)">
+                <img src="assets/photo_piece_2.png" class="pixel-img" alt="Piece 2" />
+                <span>ชิ้นที่ 2</span>
+              </div>
+              <div id="slot-photo-3" class="photo-slot" onclick="placePhotoPiece(3)">
+                <img src="assets/photo_piece_3.png" class="pixel-img" alt="Piece 3" />
+                <span>ชิ้นที่ 3</span>
+              </div>
+            </div>
+          </div>
+          <p id="photo-puzzle-status" class="puzzle-status">ยังเก็บเศษรูปไม่ครบ</p>
+          <button class="btn-secondary" onclick="closePhotoPuzzleModal()">ปิดหน้าต่าง</button>
+        </div>
+      </div>
+
+      <!-- ENDING / BUU OPEN HOUSE MODAL -->
+      <div id="ending-modal" class="modal hidden">
+        <div class="modal-box ending-box">
+          <div class="badge-horror">รอดพ้นจากเรือนซ่อนวิญญาณ</div>
+          <h2>"อย่าลืมสัญญาของเราล่ะ..."</h2>
+          <p class="ending-desc">
+            คุณลุงชุดราชปะแตนได้นำทางดวงจิตของคุณกลับคืนสู่ร่างที่โรงพยาบาลอย่างปลอดภัย<br/>
+            แต่คำสัญญาที่ได้ให้ไว้หน้าประตูเรือนไทยยังคงก้องอยู่ในความทรงจำ...
+          </p>
+          <div class="buu-banner">
+            <div class="buu-title">✨ OPEN HOUSE BUU ✨</div>
+            <div class="buu-date">วันที่ 20 – 21 นี้</div>
+            <div class="buu-sub">แล้วพบกันที่มหาวิทยาลัยบูรพา! (ไม่งั้นระวังจะถูกดึงกลับมาที่เรือนนี้อีกนะ...)</div>
+          </div>
+          <button class="btn-primary" onclick="location.reload()">🔄 เล่นใหม่อีกครั้ง</button>
+        </div>
+      </div>
+
+      <!-- JUMPSCARE / GAME OVER MODAL -->
+      <div id="gameover-modal" class="modal hidden">
+        <div class="modal-box gameover-box">
+          <img id="jumpscare-img" src="assets/ghost_dancer_2.png" class="jumpscare-sprite pixel-img" alt="Ghost" />
+          <h2 class="gameover-title">คุณถูกวิญญาณจับตัวได้!</h2>
+          <p>เมื่อได้ยินเสียงฝีเท้าหรือเสียงกระพรวน ให้รีบกด <strong>ซ่อนตัว</strong> ตามตู้ไม้หรือตุ่มน้ำ และปิดไฟฉาย!</p>
+          <button class="btn-primary" onclick="retryFromCheckpoint()">🕯️ ฟื้นสติและลองใหม่ในฉากนี้</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- On-Screen Touch / Mouse Controls (works on both PC & Mobile Solo) -->
+    <div class="controls-bar">
+      <div class="dpad-group">
+        <button class="ctrl-btn" id="btn-left"
+          onmousedown="setMove(-1)" onmouseup="setMove(0)" onmouseleave="setMove(0)"
+          ontouchstart="setMove(-1); event.preventDefault();" ontouchend="setMove(0); event.preventDefault();">
+          ◀ เดินซ้าย [A]
+        </button>
+        <button class="ctrl-btn" id="btn-right"
+          onmousedown="setMove(1)" onmouseup="setMove(0)" onmouseleave="setMove(0)"
+          ontouchstart="setMove(1); event.preventDefault();" ontouchend="setMove(0); event.preventDefault();">
+          เดินขวา [D] ▶
+        </button>
+      </div>
+      <div class="action-group">
+        <button class="ctrl-btn action-primary" onclick="triggerInteract()">
+          🔍 สำรวจ / เปิดประตู [E]
+        </button>
+        <button class="ctrl-btn" id="btn-hide" onclick="toggleHide()">
+          🏺 ซ่อนตัว [Q]
+        </button>
+        <button class="ctrl-btn" id="btn-flashlight" onclick="toggleFlashlight()">
+          🔦 ไฟฉาย [F]
+        </button>
+        <button class="ctrl-btn spiritual-btn" id="btn-sixthsense" onclick="toggleSixthSense()">
+          👁️ สัมผัสพิเศษ [Space]
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== MOBILE PLAYER 1 CONTROLLER SCREEN ======================== -->
+  <div id="p1-screen" class="screen mobile-controller-screen">
+    <div class="mobile-header">
+      <span>🎮 P1: ผู้หลงในเรือนไทย</span>
+      <span id="p1-room-label">ห้อง ----</span>
+    </div>
+    <div class="p1-pad-layout">
+      <div class="p1-dpad">
+        <button class="big-pad-btn"
+          ontouchstart="sendRemoteInput('move', -1); event.preventDefault();"
+          ontouchend="sendRemoteInput('move', 0); event.preventDefault();"
+          onmousedown="sendRemoteInput('move', -1)"
+          onmouseup="sendRemoteInput('move', 0)">◀ ซ้าย</button>
+        <button class="big-pad-btn"
+          ontouchstart="sendRemoteInput('move', 1); event.preventDefault();"
+          ontouchend="sendRemoteInput('move', 0); event.preventDefault();"
+          onmousedown="sendRemoteInput('move', 1)"
+          onmouseup="sendRemoteInput('move', 0)">ขวา ▶</button>
+      </div>
+      <div class="p1-actions">
+        <button class="big-action-btn interact" onclick="sendRemoteInput('interact', true)">🔍 สำรวจ / เปิดประตู / ต่อรูป</button>
+        <button class="big-action-btn hide" onclick="sendRemoteInput('hide', true)">🏺 ซ่อนตัวในตู้/ตุ่ม</button>
+        <button class="big-action-btn light" onclick="sendRemoteInput('flashlight', true)">🔦 เปิด / ปิดไฟฉาย</button>
+      </div>
+    </div>
+    <div class="p1-inventory-strip">
+      <div>🕯️ ของเซ่นไหว้: <strong id="p1-inv-offerings">0/3</strong></div>
+      <div>🖼️ เศษรูปภาพ: <strong id="p1-inv-photos">0/3</strong></div>
+    </div>
+  </div>
+
+  <!-- ======================== MOBILE PLAYER 2 SIXTH SENSE SCREEN ======================== -->
+  <div id="p2-screen" class="screen mobile-psychic-screen">
+    <div class="mobile-header psychic-header">
+      <span>👁️ P2: สมุดข่อยญาณทิพย์ (ผู้มีสัมผัสพิเศษ)</span>
+      <span id="p2-room-label">ห้อง ----</span>
+    </div>
+
+    <!-- EMF / Spirit Candle Meter -->
+    <div class="psychic-meter-card">
+      <div class="meter-header">
+        <span>🕯️ เปลวเทียนอาคมตรวจจับวิญญาณ</span>
+        <span id="p2-danger-text" class="safe-text">สงบนิ่ง (ปลอดภัย)</span>
+      </div>
+      <div class="emf-bar-bg">
+        <div id="p2-emf-fill" class="emf-bar-fill" style="width: 8%;"></div>
+      </div>
+    </div>
+
+    <!-- Spirit Map Blueprint -->
+    <div class="psychic-map-card">
+      <h4>📜 แผนผังนิมิตเรือนไทย (เห็นสิ่งที่ P1 มองไม่เห็น!)</h4>
+      <canvas id="p2-radar-canvas" width="600" height="250"></canvas>
+      <p id="p2-clue-text" class="psychic-clue">
+        บอกทาง P1: ให้เดินไปทางขวาเพื่อสำรวจประตูหน้าเรือนไทย
+      </p>
+    </div>
+
+    <!-- P2 Active Support Skills -->
+    <div class="psychic-actions">
+      <button id="btn-stun-ghost" class="btn-occult" onclick="sendRemoteInput('stun_ghost', true)">
+        🔔 สั่นกระดิ่งอาคม (ตรึงผีช่วย P1 4 วินาที)
+      </button>
+      <button class="btn-occult secondary" onclick="sendRemoteInput('sixth_sense_pulse', true)">
+        👁️ ส่งคลื่นญาณทิพย์ส่องของซ่อนบนจอกลาง
+      </button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

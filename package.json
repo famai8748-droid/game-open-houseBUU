@@ -1,0 +1,9 @@
+{
+  "name": "thai-horror-buu",
+  "version": "1.0.0",
+  "description": "เรือนซ่อนวิญญาณ (The Veiled Thai House) - 2D Pixel Art Thai Horror Game (Solo & 2-Player QR Co-op)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
