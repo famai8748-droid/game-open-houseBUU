@@ -259,8 +259,8 @@
         <button class="big-pad-btn" data-remote-move="1">ขวา ▶</button>
       </div>
       <div class="p1-actions">
-        <button class="big-action-btn interact" onclick="sendRemoteInput('interact', true)">🔍 สำรวจ / เปิดประตู / ต่อรูป</button>
-        <button class="big-action-btn hide" onclick="sendRemoteInput('hide', true)">🏺 ซ่อนตัวในตู้/ตุ่ม</button>
+        <button id="p1-btn-interact" class="big-action-btn interact" onclick="sendRemoteInput('interact', true)">🔍 สำรวจ / เปิดประตู / ต่อรูป</button>
+        <button id="p1-btn-hide" class="big-action-btn hide" onclick="sendRemoteInput('hide', true)">🏺 ซ่อนตัวในตู้/ตุ่ม</button>
         <button class="big-action-btn light" onclick="sendRemoteInput('flashlight', true)">🔦 เปิด / ปิดไฟฉาย</button>
       </div>
     </div>
@@ -273,7 +273,7 @@
   <!-- ======================== MOBILE PLAYER 2 SIXTH SENSE SCREEN ======================== -->
   <div id="p2-screen" class="screen mobile-psychic-screen">
     <div class="mobile-header psychic-header">
-      <span>👁️ P2: สมุดข่อยญาณทิพย์ (ผู้มีสัมผัสพิเศษ)</span>
+      <span>👁️ P2: ญาณทิพย์</span>
       <span id="p2-room-label">ห้อง ----</span>
     </div>
     <div id="p2-status" class="mobile-status">⏳ กำลังเชื่อมต่อ...</div>

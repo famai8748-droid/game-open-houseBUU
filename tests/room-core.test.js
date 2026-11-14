@@ -164,6 +164,16 @@ test('sanitizePatch drops unknown keys and clamps values', () => {
   assert.equal({}.polluted, undefined);
 });
 
+test('sanitizePatch keeps the phone context fields and strips control characters', () => {
+  const out = sanitizePatch({ support: { context: 'puzzle', prompt: 'ตู้ไม้สัก\u0000\n' + 'x'.repeat(200), bellCooldown: 3, evil: 1 } });
+  assert.equal(out.support.context, 'puzzle');
+  assert.equal(out.support.bellCooldown, 3);
+  assert.equal(out.support.evil, undefined);
+  assert.ok(!/[\u0000-\u001f]/.test(out.support.prompt));
+  assert.equal(out.support.prompt.length, 80);
+  assert.equal(sanitizePatch({ support: { context: 'hacked' } }).support.context, undefined);
+});
+
 test('rate limiter', () => {
   const clock = makeClock();
   const allow = createRateLimiter({ limit: 2, windowMs: 1000, now: clock.now });

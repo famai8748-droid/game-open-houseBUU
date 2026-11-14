@@ -48,7 +48,7 @@ function createInitialState() {
     inventory: { offerings: [], photos: [], placedPhotos: [] },
     flags: Object.fromEntries(FLAG_KEYS.map((k) => [k, false])),
     ghost: { active: false, type: 'samphawesi', x: 780, dir: -1, frame: 0, stunTimer: 0, alertLevel: 5, alpha: 1 },
-    support: { bellCooldown: 0 }
+    support: { bellCooldown: 0, context: 'title', prompt: '' }
   };
 }
 
@@ -58,6 +58,8 @@ function createInitialState() {
 const num = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : undefined);
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
 const oneOf = (v, list) => (list.includes(v) ? v : undefined);
+const shortText = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, max) : undefined);
+const CONTEXTS = ['title', 'play', 'dialogue', 'cutscene', 'puzzle', 'gameover', 'victory'];
 const uniqList = (v, allowed) => (Array.isArray(v) ? [...new Set(v.filter((x) => allowed.includes(x)))] : undefined);
 
 function pick(src, schema) {
@@ -91,7 +93,12 @@ const PATCH_SCHEMA = {
     dir: (n) => oneOf(n, [-1, 1]), frame: (n) => num(n, 0, 7), stunTimer: (n) => num(n, 0, 10),
     alertLevel: (n) => num(n, 0, 100), alpha: (n) => num(n, 0, 1)
   }),
-  support: (v) => pick(v, { bellCooldown: (n) => num(n, 0, 60) })
+  // what the host screen is showing right now, so the phones can label their buttons
+  support: (v) => pick(v, {
+    bellCooldown: (n) => num(n, 0, 60),
+    context: (c) => oneOf(c, CONTEXTS),
+    prompt: (t) => shortText(t, 80)
+  })
 };
 
 function sanitizePatch(patch) {

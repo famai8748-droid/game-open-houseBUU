@@ -1142,8 +1142,23 @@ function buildStatePatch() {
       alertLevel: state.ghost.alertLevel,
       alpha: Math.round(state.ghost.alpha * 10) / 10
     },
-    support: { bellCooldown: Math.ceil(state.bellCooldown) }
+    support: {
+      bellCooldown: Math.ceil(state.bellCooldown),
+      context: hostContext(),
+      prompt: (state.started && !state.flags.cutscenePlaying && getActiveHotspot()) ? getActiveHotspot().label : ''
+    }
   };
+}
+
+// What the main screen is showing; the P1 phone relabels its big button from this.
+function hostContext() {
+  if (!state.started) return 'title';
+  if (state.flags.victory) return 'victory';
+  if (state.flags.gameOver) return 'gameover';
+  if (state.flags.cutscenePlaying) return 'cutscene';
+  if (isPhotoModalOpen()) return 'puzzle';
+  if (isDialogueOpen()) return 'dialogue';
+  return 'play';
 }
 
 async function hostSyncTick() {
@@ -1334,9 +1349,12 @@ function applyRoomStateToClient(room) {
   if (net.closed) return;
   if (room.hostOnline === false) setMobileStatus('⚠️ จอกลางหลุดการเชื่อมต่อ... รอสักครู่', 'warn');
   else if (state.flags.victory) setMobileStatus('✨ รอดพ้นจากเรือนซ่อนวิญญาณแล้ว! แล้วพบกันที่ Open House BUU', 'good');
-  else if (state.flags.gameOver) setMobileStatus('💀 P1 ถูกวิญญาณจับได้! รอจอกลางกด "ฟื้นสติ"', 'warn');
+  else if (state.flags.gameOver) setMobileStatus(state.role === 'p1' ? '💀 ถูกวิญญาณจับได้! กดปุ่ม "ฟื้นสติ" เพื่อเล่นต่อ' : '💀 P1 ถูกวิญญาณจับได้! รอ P1 ฟื้นสติ', 'warn');
   else if (!state.started) setMobileStatus('⏳ เชื่อมต่อแล้ว — รอจอกลางกด "เริ่มเกม"', 'good');
   else setMobileStatus('');
+
+  updatePhoneButtons(room);
+  phoneHaptics();
 
   const bellBtn = document.getElementById('btn-stun-ghost');
   const bellLabel = document.getElementById('bell-cooldown-label');
@@ -1347,9 +1365,50 @@ function applyRoomStateToClient(room) {
   }
 }
 
+// The P1 phone's big button says what pressing it will do right now on the main screen.
+function updatePhoneButtons(room) {
+  if (state.role !== 'p1') return;
+  const support = room.support || {};
+  const prompt = String(support.prompt || '').replace(/\s*\[[^\]]*\]/g, '').trim();
+  const labels = {
+    title: '⏳ รอจอกลางเริ่มเกม',
+    dialogue: '▶ ไปต่อ (อ่านบทพูดบนจอกลาง)',
+    cutscene: '⏭ ข้ามฉาก',
+    puzzle: '🖼️ วางเศษรูปลงกรอบ',
+    gameover: '🕯️ ฟื้นสติ ลองใหม่',
+    victory: '✨ รอดแล้ว!',
+    play: prompt ? `🔍 ${prompt}` : '🔍 สำรวจ (ยังไม่มีอะไรใกล้ๆ)'
+  };
+  const ib = document.getElementById('p1-btn-interact');
+  if (ib) ib.textContent = labels[support.context] || labels.play;
+  const hb = document.getElementById('p1-btn-hide');
+  if (hb) hb.textContent = state.player.hidden ? '🚪 ออกจากที่ซ่อน' : '🏺 ซ่อนตัวในตู้/ตุ่ม';
+}
+
+// Phones buzz (Android; iPhone browsers ignore vibration): P2 feels the ghost close by,
+// both feel being caught.
+let lastBuzzAt = 0;
+let wasGameOver = false;
+function vibrate(pattern) {
+  try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (_) {}
+}
+function phoneHaptics() {
+  if (state.flags.gameOver && !wasGameOver) vibrate([220, 90, 220]);
+  wasGameOver = !!state.flags.gameOver;
+  const now = performance.now();
+  if (state.role === 'p2' && state.started && state.ghost.active && !state.flags.gameOver &&
+      (state.ghost.alertLevel || 0) > 70 && now - lastBuzzAt > 900) {
+    lastBuzzAt = now;
+    vibrate(40);
+  }
+}
+
 function sendRemoteInput(action, value) {
   if (!state.roomCode || !net.playerToken || net.closed) return;
-  if (action !== 'move') playSound('step');
+  if (action !== 'move') {
+    playSound('step');
+    vibrate(12);
+  }
   apiPost('player-input', {
     code: state.roomCode,
     role: state.role,
@@ -1963,6 +2022,17 @@ function showPhotoPuzzleModal() {
   modal.classList.remove('hidden');
 }
 
+// Place the next collected piece (used by the phone / keyboard instead of clicking a slot).
+function placeNextPhotoPiece() {
+  const next = [1, 2, 3].find((n) => state.inventory.photos.includes(n) && !state.inventory.placedPhotos.includes(n));
+  if (next) {
+    placePhotoPiece(next);
+  } else {
+    closePhotoPuzzleModal();
+    showToast(state.flags.photosRestored ? 'รูปภาพต่อครบแล้ว' : 'ยังไม่มีเศษรูปที่เก็บมาเพิ่ม — ออกไปตามหาต่อในเรือน');
+  }
+}
+
 function closePhotoPuzzleModal() {
   document.getElementById('photo-modal').classList.add('hidden');
 }
@@ -2010,7 +2080,13 @@ function leaveHiding() {
 
 function triggerInteract() {
   if (state.flags.cutscenePlaying) return skipCutscene();
-  if (state.flags.gameOver || isPhotoModalOpen()) return;
+  if (state.flags.victory) return;
+  // P1 on a phone (or E on the keyboard) can continue without touching the main screen:
+  if (state.flags.gameOver) {
+    if (performance.now() - (state.gameOverAt || 0) > 1200) retryFromCheckpoint(); // ignore panic-mashing
+    return;
+  }
+  if (isPhotoModalOpen()) return placeNextPhotoPiece();
   if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
     advanceDialogue();
     return;
@@ -2279,6 +2355,7 @@ function updateGhost(dt) {
 
 function triggerGameOver() {
   state.flags.gameOver = true;
+  state.gameOverAt = performance.now();
   state.moveInput = 0;
   net.remoteMoving = false;
   closePhotoPuzzleModal();
@@ -2582,19 +2659,41 @@ function renderHotspotIndicators() {
   const spots = getSceneHotspots(state.scene);
   spots.forEach((s) => {
     const dist = Math.abs(state.player.x - s.x);
-    if (isSensing() || dist < 150) {
-      ctx.save();
-      ctx.fillStyle = s.isHiddenClue ? '#59dfb7' : 'rgba(235, 185, 99, 0.85)';
-      ctx.beginPath();
-      ctx.arc(s.x, 370 + Math.sin(performance.now() / 250) * 5, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    const near = isSensing() || dist < 150;
+    // far spots stay as faint embers so the dark rooms never hide where to go
+    ctx.save();
+    ctx.globalAlpha = near ? 1 : 0.32;
+    ctx.fillStyle = s.isHiddenClue ? '#59dfb7' : 'rgba(235, 185, 99, 0.85)';
+    ctx.beginPath();
+    ctx.arc(s.x, 370 + Math.sin(performance.now() / 250 + s.x) * 5, near ? 7 : 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   });
 }
 
 // ----------------------- Mobile P2 Sixth-Sense Radar Renderer -----------------------
 let lastRadarDraw = 0;
+// Names on P2's map, and when each spot is finished (shown greyed with ✓).
+const RADAR_INFO = {
+  forest_sign: { label: 'เสาไฟ' },
+  mansion_front_door: { label: 'ประตูเรือน →' },
+  dust_floor: { label: 'กองฝุ่น', done: () => state.flags.inspectedDust },
+  portrait_wall: { label: 'กรอบรูป', done: () => state.flags.photosRestored },
+  hiding_cabinet_2: { label: 'ตู้ · เศษรูป 1', done: () => state.inventory.photos.includes(1) },
+  table_offering_1: { label: 'โต๊ะ · พวงมาลัย', done: () => state.inventory.offerings.includes('garland') },
+  door_to_scene3: { label: 'ประตู →' },
+  door_back_scene2: { label: '← ประตู' },
+  hiding_jar_3: { label: 'ตุ่ม · ธูปเทียน', done: () => state.inventory.offerings.includes('incense') },
+  samphawesi_offering_spot: { label: 'กระทง', done: () => state.flags.samphawesiTriggered },
+  photo_piece_2_spot: { label: 'โต๊ะ · เศษรูป 2', done: () => state.inventory.photos.includes(2) },
+  door_to_scene4: { label: 'ประตู →' },
+  door_back_scene3: { label: '← ประตู' },
+  hiding_cabinet_4: { label: 'ตู้ · ขนม', done: () => state.inventory.offerings.includes('dessert') },
+  shrine_altar_spot: { label: 'หิ้ง · เศษรูป 3', done: () => state.flags.offeringsPlaced && state.flags.photosRestored },
+  back_exit_door: { label: 'ทางออก →' },
+  uncle_raj_pattern: { label: 'คุณลุง' }
+};
+
 function renderP2RadarLoop(now = performance.now()) {
   if (state.role !== 'p2') {
     net.radarRunning = false;
@@ -2622,8 +2721,8 @@ function renderP2RadarLoop(now = performance.now()) {
 
     // Scene title on blueprint
     rctx.fillStyle = '#84f2d4';
-    rctx.font = 'bold 14px Sarabun';
-    rctx.fillText(SCENE_TITLES[state.scene] || 'เรือนไทย', 14, 24);
+    rctx.font = 'bold 20px Sarabun';
+    rctx.fillText(SCENE_TITLES[state.scene] || 'เรือนไทย', 14, 30);
 
     // Floor line
     rctx.strokeStyle = '#59dfb7';
@@ -2635,13 +2734,21 @@ function renderP2RadarLoop(now = performance.now()) {
 
     // Hidden Clues & Hiding Spots on P2 Radar
     const spots = getSceneHotspots(state.scene);
-    spots.forEach((s) => {
+    rctx.textAlign = 'center';
+    spots.forEach((s, i) => {
       const rx = (s.x / 1280) * 560 + 20;
-      rctx.fillStyle = s.isHidingSpot ? '#4da6ff' : '#ffd166';
+      const info = RADAR_INFO[s.id] || { label: s.isHidingSpot ? 'ที่ซ่อน' : 'จุดสำรวจ' };
+      const done = info.done ? info.done() : false;
+      rctx.fillStyle = done ? '#4a5652' : (s.isHidingSpot ? '#4da6ff' : '#ffd166');
       rctx.fillRect(rx - 8, 165, 16, 26);
-      rctx.font = '11px Sarabun';
-      rctx.fillText(s.isHidingSpot ? 'ที่ซ่อน' : 'จุดสำรวจ', rx - 18, 158);
+      // The canvas is shown at ~55% on phones, so text is drawn large and kept inside the edges.
+      rctx.font = '600 19px Sarabun';
+      rctx.fillStyle = done ? '#7d8a85' : '#f3e5c8';
+      const text = (done ? '✓ ' : '') + info.label;
+      const half = rctx.measureText(text).width / 2;
+      rctx.fillText(text, Math.max(half + 4, Math.min(600 - half - 4, rx)), i % 2 ? 156 : 128); // staggered rows
     });
+    rctx.textAlign = 'left';
 
     // Player P1 position (Cyan circle)
     const p1x = (state.player.x / 1280) * 560 + 20;
@@ -2649,7 +2756,8 @@ function renderP2RadarLoop(now = performance.now()) {
     rctx.beginPath();
     rctx.arc(p1x, 175, 10, 0, Math.PI * 2);
     rctx.fill();
-    rctx.fillText('P1', p1x - 7, 155);
+    rctx.font = 'bold 18px Sarabun';
+    rctx.fillText(state.player.hidden ? 'P1 (ซ่อน)' : 'P1', Math.min(p1x - 10, 500), 96);
 
     // Ghost position (Pulsing Red Skull/Dot)
     if (state.ghost.active) {
@@ -2660,7 +2768,9 @@ function renderP2RadarLoop(now = performance.now()) {
       rctx.arc(gx, 170, 13 + Math.sin(performance.now() / 120) * 3, 0, Math.PI * 2);
       rctx.fill();
       rctx.fillStyle = '#fff';
-      rctx.fillText(state.ghost.type === 'dancer' ? 'ผีนางรำ!' : 'สัมภเวสี!', gx - 22, 145);
+      const faded = state.ghost.alpha != null && state.ghost.alpha < 0.4;
+      rctx.font = 'bold 18px Sarabun';
+      rctx.fillText(faded ? 'หายไปในความมืด…' : (state.ghost.type === 'dancer' ? 'ผีนางรำ!' : 'สัมภเวสี!'), Math.max(4, Math.min(gx - 30, 450)), 70);
       rctx.globalAlpha = 1;
     }
 
