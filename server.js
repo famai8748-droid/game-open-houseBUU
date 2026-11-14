@@ -2,11 +2,38 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { spawn } = require('child_process');
 const { URL } = require('url');
 const { generateQrSvgDataUrl } = require('./qr');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
+let currentPublicUrl = null;
+
+function startPublicTunnel() {
+  try {
+    const ssh = spawn('ssh', [
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'ServerAliveInterval=30',
+      '-R', `80:localhost:${PORT}`,
+      'nokey@localhost.run'
+    ]);
+    const onData = (buf) => {
+      const text = buf.toString('utf8');
+      const m = text.match(/https:\/\/[a-z0-9\-]+\.app\.lhr\.life/i) || text.match(/https:\/\/[a-z0-9\-]+\.lhr\.life/i);
+      if (m && m[0] !== currentPublicUrl) {
+        currentPublicUrl = m[0];
+        try { fs.writeFileSync(path.join(__dirname, 'public_url.txt'), currentPublicUrl, 'utf8'); } catch (_) {}
+        console.log(`PUBLIC HTTPS URL: ${currentPublicUrl}`);
+      }
+    };
+    ssh.stdout.on('data', onData);
+    ssh.stderr.on('data', onData);
+    ssh.on('close', () => {
+      setTimeout(startPublicTunnel, 3000);
+    });
+  } catch (_) {}
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -126,8 +153,17 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({
       lanIp: getLocalLanIp(),
       port: PORT,
+      publicUrl: currentPublicUrl,
       activeRooms: Array.from(rooms.keys())
     }));
+  }
+
+  // API: Room State (Polling fallback)
+  if (pathname === '/api/room-state') {
+    const code = String(parsedUrl.searchParams.get('code') || '');
+    const room = rooms.get(code) || null;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ ok: !!room, room }));
   }
 
   // API: QR Code SVG Data URL
@@ -240,4 +276,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Thai Horror Game Server running at http://localhost:${PORT} (LAN: http://${getLocalLanIp()}:${PORT})`);
+  startPublicTunnel();
 });

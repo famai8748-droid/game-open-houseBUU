@@ -122,23 +122,8 @@ const ASSET_LIST = {
   bg1: 'assets/bg_scene1_forest.jpg',
   bg2: 'assets/bg_scene2_hallway.jpg',
   bg3: 'assets/bg_scene3_room.jpg',
-  bg3Cutscene: 'assets/bg_scene3_cutscene.jpg',
   bg4: 'assets/bg_scene4_room.jpg',
   bg5: 'assets/bg_scene5_dawn.jpg',
-  male0: 'assets/student_male_0.png',
-  male1: 'assets/student_male_1.png',
-  male2: 'assets/student_male_2.png',
-  male3: 'assets/student_male_3.png',
-  female0: 'assets/student_female_0.png',
-  female1: 'assets/student_female_1.png',
-  female2: 'assets/student_female_2.png',
-  female3: 'assets/student_female_3.png',
-  dancer0: 'assets/ghost_dancer_0.png',
-  dancer1: 'assets/ghost_dancer_1.png',
-  dancer2: 'assets/ghost_dancer_2.png',
-  sam0: 'assets/ghost_samphawesi_0.png',
-  sam1: 'assets/ghost_samphawesi_1.png',
-  sam2: 'assets/ghost_samphawesi_2.png',
   uncle0: 'assets/uncle_0.png',
   uncle1: 'assets/uncle_1.png',
   krathong: 'assets/offering_krathong.png',
@@ -163,17 +148,12 @@ function preloadAssets() {
     img.src = src;
     IMAGES[key] = img;
   });
-  // Preload 8-frame articulated walk cycles & ghost animations + 6-frame cutscenes
+  // Preload 8-frame articulated walk cycles & ghost animations
   for (let i = 0; i < 8; i++) {
     const m = new Image(); m.src = `assets/frames/student_male_walk_${i}.png`; IMAGES[`maleWalk${i}`] = m;
     const f = new Image(); f.src = `assets/frames/student_female_walk_${i}.png`; IMAGES[`femaleWalk${i}`] = f;
     const d = new Image(); d.src = `assets/frames/dancer_anim_${i}.png`; IMAGES[`dancerAnim${i}`] = d;
     const s = new Image(); s.src = `assets/frames/sam_anim_${i}.png`; IMAGES[`samAnim${i}`] = s;
-  }
-  for (let i = 0; i < 6; i++) {
-    const cd = new Image(); cd.src = `assets/frames/cutscene_door_${i}.jpg`; IMAGES[`cutDoor${i}`] = cd;
-    const cs = new Image(); cs.src = `assets/frames/cutscene_sam_${i}.jpg`; IMAGES[`cutSam${i}`] = cs;
-    const ce = new Image(); ce.src = `assets/frames/cutscene_end_${i}.jpg`; IMAGES[`cutEnd${i}`] = ce;
   }
 }
 preloadAssets();
@@ -578,9 +558,9 @@ async function openCoopLobby() {
   initAudio();
   const infoRes = await fetch('/api/server-info');
   const info = await infoRes.json();
-  const hostOrigin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? `http://${info.lanIp}:${info.port}`
-    : window.location.origin;
+  const hostOrigin = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+    ? window.location.origin
+    : (info.publicUrl || `http://${info.lanIp}:${info.port}`);
 
   const createRes = await fetch('/api/create-room', {
     method: 'POST',
@@ -831,6 +811,131 @@ function advanceDialogue() {
   showNextDialogueLine();
 }
 
+function renderCutsceneFrameDataURL(prefix, idx) {
+  const c = document.createElement('canvas');
+  c.width = 800;
+  c.height = 450;
+  const cx = c.getContext('2d');
+  cx.imageSmoothingEnabled = false;
+
+  const studentImg = state.character === 'female' ? IMAGES.femaleWalk0 : IMAGES.maleWalk0;
+  const studentWalkImg = state.character === 'female' ? IMAGES[`femaleWalk${idx % 8}`] : IMAGES[`maleWalk${idx % 8}`];
+
+  if (prefix === 'cutscene_door') {
+    const bg = IMAGES.bg1;
+    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    cx.fillStyle = 'rgba(4, 6, 12, 0.72)';
+    cx.fillRect(0, 0, 800, 450);
+
+    // Dark interior cavity behind the double doors
+    const gap = [0, 8, 28, 64, 110, 148][idx] || 0;
+    cx.fillStyle = '#030408';
+    cx.fillRect(400 - gap, 70, gap * 2, 330);
+
+    if (idx >= 3 && IMAGES.dancerAnim1 && IMAGES.dancerAnim1.complete && IMAGES.dancerAnim1.naturalWidth) {
+      cx.save();
+      cx.globalAlpha = idx === 3 ? 0.85 : 0.45;
+      cx.drawImage(IMAGES.dancerAnim1, 345, 130, 110, 220);
+      cx.restore();
+    }
+
+    const door = IMAGES.door;
+    if (door && door.complete && door.naturalWidth) {
+      const dw = door.naturalWidth;
+      const dh = door.naturalHeight;
+      // Left leaf
+      cx.drawImage(door, 0, 0, dw / 2, dh, 270 - gap, 65, 130, 335);
+      // Right leaf
+      cx.drawImage(door, dw / 2, 0, dw / 2, dh, 400 + gap, 65, 130, 335);
+    }
+
+    if (idx >= 4) {
+      const grad = cx.createRadialGradient(260, 260, 10, 420, 235, 290);
+      grad.addColorStop(0, 'rgba(255, 225, 130, 0.55)');
+      grad.addColorStop(1, 'rgba(255, 225, 130, 0)');
+      cx.fillStyle = grad;
+      cx.beginPath();
+      cx.moveTo(235, 255);
+      cx.lineTo(580, 110);
+      cx.lineTo(580, 385);
+      cx.closePath();
+      cx.fill();
+    }
+
+    if (studentWalkImg && studentWalkImg.complete && studentWalkImg.naturalWidth) {
+      cx.drawImage(studentWalkImg, 135 + idx * 24, 175, 115, 230);
+    }
+  } else if (prefix === 'cutscene_sam') {
+    const bg = IMAGES.bg3;
+    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    cx.fillStyle = 'rgba(6, 5, 10, 0.65)';
+    cx.fillRect(0, 0, 800, 450);
+
+    if (IMAGES.krathong && IMAGES.krathong.complete && IMAGES.krathong.naturalWidth) {
+      cx.drawImage(IMAGES.krathong, 515, 325, 76, 62);
+    }
+    const samFrameMap = [0, 0, 1, 2, 4, 6];
+    const samImg = IMAGES[`samAnim${samFrameMap[idx] || 0}`];
+    if (samImg && samImg.complete && samImg.naturalWidth) {
+      const sx = idx === 5 ? 390 : 475;
+      const sy = idx >= 4 ? 165 : 195;
+      cx.drawImage(samImg, sx, sy, 145, 215);
+    }
+    if (idx >= 2) {
+      const grad = cx.createRadialGradient(250, 255, 10, 500, 260, 320);
+      grad.addColorStop(0, 'rgba(255, 220, 125, 0.52)');
+      grad.addColorStop(1, 'rgba(255, 90, 60, 0)');
+      cx.fillStyle = grad;
+      cx.beginPath();
+      cx.moveTo(235, 250);
+      cx.lineTo(630, 130);
+      cx.lineTo(630, 390);
+      cx.closePath();
+      cx.fill();
+    }
+    if (studentImg && studentImg.complete && studentImg.naturalWidth) {
+      cx.drawImage(studentImg, 130, 175, 115, 230);
+    }
+  } else {
+    const bg = idx < 2 ? IMAGES.bg2 : IMAGES.bg5;
+    if (bg && bg.complete && bg.naturalWidth) cx.drawImage(bg, 0, 0, 800, 450);
+    if (idx < 2) {
+      cx.fillStyle = 'rgba(10, 8, 14, 0.55)';
+      cx.fillRect(0, 0, 800, 450);
+      if (IMAGES.frameBroken && IMAGES.frameBroken.complete && IMAGES.frameBroken.naturalWidth) {
+        cx.drawImage(IMAGES.frameBroken, 290, 75, 220, 270);
+      }
+      const spread = idx === 0 ? 55 : 0;
+      if (IMAGES.photo1 && IMAGES.photo1.complete) cx.drawImage(IMAGES.photo1, 320 - spread, 110 - spread / 2, 85, 105);
+      if (IMAGES.photo2 && IMAGES.photo2.complete) cx.drawImage(IMAGES.photo2, 395 + spread, 115 - spread / 3, 85, 105);
+      if (IMAGES.photo3 && IMAGES.photo3.complete) cx.drawImage(IMAGES.photo3, 355, 195 + spread, 95, 105);
+    } else {
+      const uncleImg = idx % 2 === 0 ? IMAGES.uncle0 : IMAGES.uncle1;
+      if (uncleImg && uncleImg.complete && uncleImg.naturalWidth) {
+        cx.drawImage(uncleImg, 495, 165, 118, 235);
+      }
+      if (studentWalkImg && studentWalkImg.complete && studentWalkImg.naturalWidth) {
+        cx.drawImage(studentWalkImg, 210 + (idx - 2) * 28, 175, 115, 230);
+      }
+      if (idx === 5) {
+        cx.fillStyle = 'rgba(12, 9, 18, 0.86)';
+        cx.fillRect(110, 28, 580, 92);
+        cx.strokeStyle = '#f0c45a';
+        cx.lineWidth = 3;
+        cx.strokeRect(110, 28, 580, 92);
+        cx.fillStyle = '#ffd875';
+        cx.font = 'bold 26px Tahoma, sans-serif';
+        cx.textAlign = 'center';
+        cx.fillText('คำสัญญา: พบกันที่งาน OPEN HOUSE BUU', 400, 68);
+        cx.fillStyle = '#ffffff';
+        cx.font = 'bold 20px Tahoma, sans-serif';
+        cx.fillText('วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา', 400, 102);
+      }
+    }
+  }
+  return c.toDataURL('image/jpeg', 0.9);
+}
+
 function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComplete) {
   state.flags.cutscenePlaying = true;
   state.moveInput = 0;
@@ -850,7 +955,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
       if (onComplete) onComplete();
       return;
     }
-    frameImg.src = `assets/frames/${prefix}_${idx}.jpg`;
+    frameImg.src = renderCutsceneFrameDataURL(prefix, idx);
     counterEl.textContent = `FRAME ${idx + 1} / ${total}`;
     captionEl.textContent = frameCaptions[idx];
     if (idx === 0) playSound('creak');

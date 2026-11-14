@@ -1,0 +1,38 @@
+[
+  {
+    "file": "assets_part_0.gz",
+    "size": 271179,
+    "b64_len": 361572,
+    "sha": "875edec43ec4918d629499cdbee6e82127da1b20"
+  },
+  {
+    "file": "assets_part_1.gz",
+    "size": 97015,
+    "b64_len": 129356,
+    "sha": "539a52183aea181346ef974b160da25a7ac49a13"
+  },
+  {
+    "file": "assets_part_2.gz",
+    "size": 247242,
+    "b64_len": 329656,
+    "sha": "118fd34c6b7eece4c8e5795ff1b3408f1a03d6bf"
+  },
+  {
+    "file": "assets_part_3.gz",
+    "size": 248868,
+    "b64_len": 331824,
+    "sha": "19e794f37fb3f80b36d8af98b9b2a847dee7b1d3"
+  },
+  {
+    "file": "assets_part_4.gz",
+    "size": 46056,
+    "b64_len": 61408,
+    "sha": "1035a6b932bad30a6ee2ea9c664e81eb702c3fc7"
+  },
+  {
+    "file": "assets_part_5.gz",
+    "size": 27204,
+    "b64_len": 36272,
+    "sha": "5299170a888e8506fdf3d1600bc4e457dc82a5c7"
+  }
+]

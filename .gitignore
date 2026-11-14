@@ -1,4 +1,4 @@
 node_modules/
 .vercel/
-*.pyc
-__pycache__/
+public_url.txt
+*.log
