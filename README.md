@@ -78,6 +78,19 @@ docs/audit/           รายงานการตรวจสอบโปร�
 | `GET /api/events` | ทั้งคู่ | SSE เฉพาะ local server |
 | `GET /api/qr?text=` | จอกลาง | QR เป็น SVG data URL (รับเฉพาะ URL http/https) |
 
+## เสียง
+
+เสียงส่วนใหญ่สังเคราะห์ด้วย Web Audio ใน `public/game.js` ไม่ต้องใช้ไฟล์ ยกเว้นไฟล์ใน `public/assets/audio/` ซึ่งเรนเดอร์จากคลังเสียงของ [earshot](https://github.com/Leonxlnx/earshot) (MIT):
+
+| ไฟล์ | ใช้เป็น | เสียงต้นทางใน earshot |
+|---|---|---|
+| `bell.mp3` | กระพรวนผีนางรำ | `fit/bell/small_bell` |
+| `whisper.mp3` | เสียงกระซิบในเรือน | `reverse_swell/breath` |
+| `scare.mp3` | jumpscare | `cut_hit/rumble` |
+| `tension.mp3` | ตอนผีปรากฏ/หาเจออีกครั้ง | `riser/tension` |
+
+ถ้าไฟล์ไหนโหลดไม่ได้ เกมจะกลับไปใช้เสียงสังเคราะห์เดิมอัตโนมัติ เพิ่ม/เปลี่ยนไฟล์ได้ที่ `SAMPLE_FILES` ใน `public/game.js` (ใช้ `.mp3` โมโน เพื่อให้เล่นได้ทั้ง iPhone และ Android)
+
 ## ปรับสมดุลเกม
 
 ค่าทั้งหมดอยู่ใน `CONFIG` ด้านบนของ [public/game.js](public/game.js) เช่น ความเร็วผู้เล่น/ผี, ระยะจับ, เวลาที่ผีค้นหาก่อนหายไป, cooldown ของกระดิ่ง และความถี่ในการ sync

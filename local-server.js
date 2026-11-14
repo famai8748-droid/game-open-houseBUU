@@ -155,6 +155,7 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webp': 'image/webp',
+  '.mp3': 'audio/mpeg',
   '.woff2': 'font/woff2'
 };
 

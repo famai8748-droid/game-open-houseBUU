@@ -79,6 +79,7 @@ function initAudio() {
     comp.connect(audioCtx.destination);
     audioBus.master.gain.value = audioMuted ? 0 : audioVolume;
     noiseBuffer = createNoiseBuffer(2);
+    loadSamples();
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
@@ -232,21 +233,33 @@ function playSound(type, opts = {}) {
       noiseHit(t, { dur: 0.06, peak: 0.05, filter: 'bandpass', freq: 600, q: 1.5, out });
     }
   } else if (type === 'chime') {
-    // Thai dancer ankle bells (กระพรวนข้อเท้า): bright partials with a slow decay
-    [1320, 1760].forEach((freq, idx) => {
-      const t = now + idx * 0.12;
-      tone(t, { freq, dur: 0.6, peak: 0.1, out });
-      tone(t, { freq: freq * 2.76, dur: 0.25, peak: 0.025, out });
-    });
+    // Thai dancer ankle bells (กระพรวนข้อเท้า): two slightly detuned bell strikes = a jingle
+    if (samples.bell) {
+      playSample('bell', out, { gain: 0.16, rate: 0.96 + Math.random() * 0.06, t: now });
+      playSample('bell', out, { gain: 0.11, rate: 1.1 + Math.random() * 0.06, t: now + 0.09 + Math.random() * 0.04 });
+    } else {
+      [1320, 1760].forEach((freq, idx) => {
+        const t = now + idx * 0.12;
+        tone(t, { freq, dur: 0.6, peak: 0.1, out });
+        tone(t, { freq: freq * 2.76, dur: 0.25, peak: 0.025, out });
+      });
+    }
   } else if (type === 'pickup') {
     tone(now, { freq: 520, to: 880, toTime: 0.18, dur: 0.22, peak: 0.13, out });
     tone(now + 0.08, { freq: 1046, dur: 0.3, peak: 0.05, out });
   } else if (type === 'scare') {
-    // jumpscare stinger: dissonant saw cluster + noise burst (kept under the compressor)
-    [110, 146, 233, 311].forEach((freq) => {
-      tone(now, { type: 'sawtooth', freq, to: freq * 0.94, dur: 0.9, peak: 0.09, attack: 0.002, out });
-    });
-    noiseHit(now, { dur: 0.6, peak: 0.22, filter: 'highpass', freq: 700, attack: 0.002, out });
+    if (samples.scare) {
+      playSample('scare', out, { gain: 0.55, t: now });
+    } else {
+      // jumpscare stinger: dissonant saw cluster + noise burst (kept under the compressor)
+      [110, 146, 233, 311].forEach((freq) => {
+        tone(now, { type: 'sawtooth', freq, to: freq * 0.94, dur: 0.9, peak: 0.09, attack: 0.002, out });
+      });
+      noiseHit(now, { dur: 0.6, peak: 0.22, filter: 'highpass', freq: 700, attack: 0.002, out });
+    }
+  } else if (type === 'tension') {
+    // rising dread when a ghost appears or finds you again (sample only)
+    playSample('tension', out, { gain: 0.2, t: now });
   } else if (type === 'heartbeat') {
     tone(now, { freq: 62, to: 42, dur: 0.14, peak: 0.45, attack: 0.008, out });
     tone(now + 0.17, { freq: 56, to: 40, dur: 0.12, peak: 0.3, attack: 0.008, out });
@@ -258,8 +271,50 @@ function playSound(type, opts = {}) {
       tone(now + i * 0.11, { freq: base, to: base * 1.35, dur: 0.08, peak: 0.025, out });
     }
   } else if (type === 'whisper') {
-    noiseHit(now, { dur: 1.2, peak: 0.05, filter: 'bandpass', freq: 2400, q: 4, attack: 0.4, out });
+    if (samples.whisper) {
+      playSample('whisper', out, { gain: 0.16, rate: 0.9 + Math.random() * 0.2, t: now });
+    } else {
+      noiseHit(now, { dur: 1.2, peak: 0.05, filter: 'bandpass', freq: 2400, q: 4, attack: 0.4, out });
+    }
   }
+}
+
+// --- recorded/rendered samples (public/assets/audio). Missing or failed files fall back to synthesis. ---
+// Rendered with earshot's sound bank (https://github.com/Leonxlnx/earshot, MIT): bell = fit/bell/small_bell,
+// whisper = reverse_swell/breath, scare = cut_hit/rumble, tension = riser/tension.
+const SAMPLE_FILES = {
+  bell: 'assets/audio/bell.mp3',
+  whisper: 'assets/audio/whisper.mp3',
+  scare: 'assets/audio/scare.mp3',
+  tension: 'assets/audio/tension.mp3'
+};
+const samples = {};
+let samplesRequested = false;
+
+function loadSamples() {
+  if (samplesRequested || !audioCtx) return;
+  samplesRequested = true;
+  Object.entries(SAMPLE_FILES).forEach(([name, url]) => {
+    fetch(url)
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data) => new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, reject)))
+      .then((buf) => { samples[name] = buf; })
+      .catch((err) => console.warn(`[audio] ${name} unavailable, using synthesized sound`, err && err.message));
+  });
+}
+
+function playSample(name, out, { gain = 1, rate = 1, t = audioCtx.currentTime } = {}) {
+  const buf = samples[name];
+  if (!buf) return false;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  const g = audioCtx.createGain();
+  g.gain.value = gain;
+  src.connect(g);
+  g.connect(out);
+  src.start(t);
+  return true;
 }
 
 // --- scene ambience (host only) ---
@@ -382,6 +437,15 @@ function setAmbientScene(scene) {
 function duckAmbient(on) {
   if (!audioCtx) return;
   audioBus.ambient.gain.setTargetAtTime(on ? 0.25 : 1, audioCtx.currentTime, 0.3);
+}
+
+// Rising dread sting; rate-limited so it never stacks.
+let lastTensionAt = -Infinity;
+function playTension() {
+  const now = performance.now();
+  if (now - lastTensionAt < 6000) return;
+  lastTensionAt = now;
+  playSound('tension');
 }
 
 // Ghost sounds follow the ghost: louder when close, panned to its side of the screen.
@@ -1719,6 +1783,7 @@ function enterScene(sceneNum, startX) {
     state.ghost.type = 'dancer';
     state.ghost.active = !state.flags.offeringsPlaced || !state.flags.photosRestored;
     playSound('chime');
+    if (state.ghost.active) playTension();
     if (!state.flags.visited4) {
       state.flags.visited4 = true;
       queueDialogue([
@@ -1783,6 +1848,7 @@ function triggerSamphawesiEncounter() {
     state.ghost.active = true;
     resetGhost(780);
     state.ghost.stunTimer = 1.5; // it is still rising: give the player a moment to run
+    playTension();
     broadcastState();
   });
 }
@@ -2107,6 +2173,7 @@ function updateGhost(dt) {
       }
     }
   } else {
+    if (g.phase === 'lurk' || g.phase === 'vanish') playTension(); // it found you again
     g.phase = 'chase'; // spotted you (or you came out): resume the hunt
     const dist = p.x - g.x;
     g.dir = dist >= 0 ? 1 : -1;
