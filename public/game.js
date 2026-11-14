@@ -59,6 +59,25 @@ function saveAudioPrefs() {
   try { localStorage.setItem(AUDIO_PREF_KEY, JSON.stringify({ volume: audioVolume, muted: audioMuted })); } catch (_) {}
 }
 
+// ----------------------- Settings (persisted on this machine) -----------------------
+const SETTINGS_KEY = 'buu-horror-settings-v1';
+const OS_REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const settings = { jumpscare: 'full', reduceMotion: OS_REDUCED_MOTION, autoFullscreen: false };
+
+(function loadSettings() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+    if (!raw || typeof raw !== 'object') return;
+    if (raw.jumpscare === 'full' || raw.jumpscare === 'soft' || raw.jumpscare === 'off') settings.jumpscare = raw.jumpscare;
+    if (typeof raw.reduceMotion === 'boolean') settings.reduceMotion = raw.reduceMotion;
+    settings.autoFullscreen = !!raw.autoFullscreen;
+  } catch (_) {}
+})();
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (_) {}
+}
+
 function initAudio() {
   if (!audioCtx) {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -123,6 +142,15 @@ function updateAudioUi() {
   }
   const slider = document.getElementById('volume-slider');
   if (slider) slider.value = String(Math.round((audioMuted ? 0 : audioVolume) * 100));
+  const sSlider = document.getElementById('settings-volume');
+  if (sSlider) sSlider.value = String(Math.round((audioMuted ? 0 : audioVolume) * 100));
+  const sValue = document.getElementById('settings-volume-value');
+  if (sValue) sValue.textContent = (audioMuted ? 0 : Math.round(audioVolume * 100)) + '%';
+  const sMute = document.getElementById('settings-mute');
+  if (sMute) {
+    sMute.classList.toggle('on', audioMuted);
+    sMute.setAttribute('aria-checked', String(audioMuted));
+  }
 }
 window.addEventListener('DOMContentLoaded', updateAudioUi);
 
@@ -652,8 +680,8 @@ function getSceneHotspots(sceneNum) {
         label: 'สำรวจเสาไฟและป่ารอบตัว',
         onInteract: () => {
           queueDialogue([
-            { speaker: getPlayerName(), text: 'กลับจากงานศพเพื่อนแท้ๆ... จู่ๆ รถก็เสียหลักคว่ำกลางทาง' },
-            { speaker: getPlayerName(), text: 'พ่อครับ! แม่ครับ! ได้ยินผมไหม... ทำไมป่านี้มันเงียบจนได้ยินแต่เสียงลมหายใจตัวเองเลย' }
+            { speaker: getPlayerName(), text: 'กลับจากงานศพเพื่อนแท้ๆ... จู่ๆ รถก็เสียหลัก ท้องฟ้ากลับหัว และทุกอย่างก็เงียบลง' },
+            { speaker: getPlayerName(), text: 'พ่อครับ! แม่ครับ!... ทำไมป่ากลางคืนถึงเงียบได้ขนาดนี้ เงียบจนได้ยินเสียงลมหายใจตัวเองชัดเกินไป' }
           ]);
         }
       },
@@ -666,9 +694,9 @@ function getSceneHotspots(sceneNum) {
           if (!state.flags.door1Opened) {
             state.flags.door1Opened = true;
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ขอโทษนะครับ! มีใครอยู่ไหมครับ รถผมเกิดอุบัติเหตุ ขอความช่วยเหลือหน่อยครับ!' },
-              { speaker: 'เสียงจากเรือนไม้', text: 'แอ๊ดดดดด... (บานประตูไม้ค่อยๆ แง้มเปิดออกเอง โดยไม่มีคนยืนอยู่)' },
-              { speaker: getPlayerName(), text: 'เอ๊ะ... ประตูเปิดเองเหรอ? เมื่อกี้ยังเห็นเงาคนผ่านหน้าต่างอยู่เลย... ลองเข้าไปดูหน่อยละกัน' }
+              { speaker: getPlayerName(), text: 'ขอโทษนะครับ! มีใครอยู่ไหม... รถผมคว่ำ ขอความช่วยเหลือหน่อยครับ!' },
+              { speaker: 'เสียงจากเรือนไม้', text: 'แอ๊ดดดดด... (บานประตูแง้มออกเองช้าๆ ราวกับมีมือหนึ่งผลักจากด้านใน)' },
+              { speaker: getPlayerName(), text: 'ประตูเปิดเอง... เมื่อกี้ยังเห็นเงาคนยืนอยู่ตรงหน้าต่าง ระหว่างที่ผมกะพริบตา มันหายไปไหน' }
             ], () => {
               playDoorCutscene(2, 160, 'ก้าวเข้าสู่เรือนไทย...');
             });
@@ -690,8 +718,8 @@ function getSceneHotspots(sceneNum) {
         onInteract: () => {
           state.flags.inspectedDust = true;
           queueDialogue([
-            { speaker: getPlayerName(), text: 'เงียบกริบเลย... ไม่มีคนอยู่จริงๆ เหรอเนี่ย ทั้งที่เมื่อกี้เห็นเปิดไฟไว้นี่นา' },
-            { speaker: getPlayerName(), text: 'ฝุ่นเกาะหนาขนาดนี้ เหมือนไม่มีคนอาศัยอยู่มาหลายสิบปีแล้ว...' }
+            { speaker: getPlayerName(), text: 'เงียบกริบ... ทั้งที่ตะเกียงยังติดอยู่ ใครเป็นคนจุดไฟ แล้วทำไมไม่มีใครตอบ' },
+            { speaker: getPlayerName(), text: 'ฝุ่นหนาจนจับเป็นแผ่น เหมือนเรือนนี้ไม่มีคนหายใจเข้ามาสิบปี... แต่กลิ่นธูปยังอุ่นอยู่เลย' }
           ]);
         }
       },
@@ -704,12 +732,12 @@ function getSceneHotspots(sceneNum) {
           state.flags.inspectedPortraits = true;
           if (state.flags.photosRestored) {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'รูปถ่ายที่ต่อครบแล้ว... เผยให้เห็นความจริงว่าจิตของเราหลุดเข้ามาในเรือนนี้ระหว่างความเป็นความตาย' }
+              { speaker: getPlayerName(), text: 'รูปที่ต่อครบแล้ว... และคนที่ยืนซ้อนอยู่ข้างหลังในรูป ก็คือตัวผมเอง' }
             ]);
           } else {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'รูปคนสมัยก่อนเต็มผนังเลย... ทำไมรู้สึกเหมือนสายตาในรูปกำลังจ้องตามหลังเราอยู่' },
-              { speaker: getPlayerName(), text: 'กรอบรูปตรงกลางมีรอยฉีกขาดหายไป 3 ชิ้น... ถ้าหาเศษรูปมาต่อคืนได้ น่าจะรู้อะไรเพิ่มขึ้น' }
+              { speaker: getPlayerName(), text: 'รูปคนทั้งตระกูลเรียงเต็มผนัง... ทุกดวงตาเอียงมาทางผมพร้อมกัน ทั้งที่รูปพวกนี้ไม่มีชีวิต' },
+              { speaker: getPlayerName(), text: 'กรอบกลางผนังถูกฉีกหายไปสามชิ้น เหมือนมีใครจงใจฉีกหน้าใครบางคนออกจากความทรงจำ' }
             ], () => {
               showPhotoPuzzleModal();
             });
@@ -728,8 +756,8 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ในซอกตู้ไม้สักมี "เศษรูปถ่ายปริศนา (ชิ้นที่ 1)" ซ่อนอยู่!' },
-              { speaker: getPlayerName(), text: '(ตู้ใบนี้กว้างพอจะมุดซ่อนตัวได้ด้วย ถ้ามีอะไรผิดปกติให้รีบกดปุ่ม [ซ่อนตัว])' }
+              { speaker: getPlayerName(), text: 'ในซอกตู้ไม้สักมีเศษกระดาษแข็งเหลืองกรอบค้างอยู่... เศษรูปถ่ายชิ้นที่ 1' },
+              { speaker: getPlayerName(), text: '(ตู้ใบนี้อาจซ่อนได้ทั้งตัว ถ้าได้ยินเสียงฝีเท้า ให้กด [ซ่อนตัว] ทันที)' }
             ]);
           } else {
             toggleHide();
@@ -748,14 +776,14 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'เจอ "พวงมาลัยดอกไม้" วางอยู่ข้างตะเกียง... เก็บไว้เป็นของเซ่นไหว้ดีกว่า (1/3)' },
-              { speaker: 'เสียงปริศนา', text: 'กุกกัก... กุกกัก... (เสียงดังมาจากหลังบานประตูฝั่งขวา)' },
-              { speaker: getPlayerName(), text: 'เสียงอะไรน่ะ?! มีคนอยู่ในห้องถัดไปจริงๆ ด้วย... ลองเดินตามเสียงไปดู!' }
+              { speaker: getPlayerName(), text: 'พวงมาลัยดอกไม้แห้งกรอบวางอยู่ข้างตะเกียง... กลิ่นยังหอมเหมือนเพิ่งร้อยเมื่อวาน (1/3)' },
+              { speaker: 'เสียงปริศนา', text: 'กุกกัก... กุกกัก... (เหมือนเล็บยาวๆ ขูดอยู่หลังบานประตูฝั่งขวา)' },
+              { speaker: getPlayerName(), text: 'มีบางอย่างอยู่ข้างในจริงๆ... แต่ทำไมเสียงนั้นเหมือนดังจากในกำแพง มากกว่าจากห้องถัดไป' }
             ]);
             playSound('rustle');
           } else {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'เสียงกุกกักยังดังมาจากประตูห้องด้านขวา...' }
+              { speaker: getPlayerName(), text: 'เสียงกุกกักยังไม่หยุด... หรือมันขยับตามผมทุกก้าว' }
             ]);
           }
         }
@@ -796,7 +824,7 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ข้างตุ่มน้ำมี "ธูปเทียนบูชา" ซ่อนอยู่! เก็บไว้เป็นของเซ่นไหว้ (2/3)' }
+              { speaker: getPlayerName(), text: 'ใต้ฐานตุ่มน้ำมีธูปเทียนมัดหนึ่ง ยังชื้นอยู่... ใครเพิ่งจุดมัน (2/3)' }
             ]);
           } else {
             toggleHide();
@@ -824,10 +852,10 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ได้ "เศษรูปถ่ายปริศนา (ชิ้นที่ 2)" มาแล้ว!' }
+              { speaker: getPlayerName(), text: 'เศษรูปชิ้นที่ 2 ติดอยู่ใต้โต๊ะ... เหมือนมีคนซ่อนมันไว้ด้วยมือที่สั่น' }
             ]);
           } else {
-            queueDialogue([{ speaker: getPlayerName(), text: 'ไม่มีอะไรเหลือบนโต๊ะแล้ว รีบไปห้องถัดไปเถอะ!' }]);
+            queueDialogue([{ speaker: getPlayerName(), text: 'ไม่มีอะไรเหลือบนโต๊ะแล้ว... แต่เสียงหายใจตรงมุมห้องยังไม่หยุด' }]);
           }
         }
       },
@@ -837,7 +865,7 @@ function getSceneHotspots(sceneNum) {
         width: 110,
         label: 'เปิดประตูไปโถงด้านในเรือน (ฉากที่ 4)',
         onInteract: () => {
-          playDoorCutscene(4, 150, 'เสียงกระพรวนข้อเท้าดังแว่วมาจากโถงด้านใน...', true);
+          playDoorCutscene(4, 150, 'เสียงกระพรวนข้อเท้าดังแว่วมาจากโถงด้านใน...');
         }
       }
     ];
@@ -866,7 +894,7 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'พบ "พานขนมมงคล" ซ่อนอยู่ในชั้นไม้! เก็บของเซ่นไหว้ครบแล้ว (3/3)!' }
+              { speaker: getPlayerName(), text: 'พานขนมมงคลวางอยู่ในชั้นไม้ ขนมยังไม่บูด... ทั้งที่เรือนนี้ควรว่างเปล่ามานานแล้ว (3/3)' }
             ]);
           } else {
             toggleHide();
@@ -885,14 +913,14 @@ function getSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ใต้ฐานหิ้งบูชามี "เศษรูปถ่ายปริศนา (ชิ้นที่ 3)" ซ่อนอยู่! ตอนนี้เราเก็บเศษรูปครบ 3 ชิ้นแล้ว!' }
+              { speaker: getPlayerName(), text: 'เศษรูปชิ้นสุดท้ายซ่อนใต้ฐานหิ้งบูชา... ครบสามชิ้นแล้ว แต่มือผมสั่นกว่าที่คิด' }
             ]);
             return;
           }
 
           if (state.inventory.offerings.length < 3) {
             queueDialogue([
-              { speaker: getPlayerName(), text: `ต้องรวบรวมของเซ่นไหว้ให้ครบ 3 ชิ้นก่อน (ตอนนี้มี ${state.inventory.offerings.length}/3 ชิ้น)` }
+              { speaker: getPlayerName(), text: `ยังขาดของเซ่นไหว้ (ตอนนี้มี ${state.inventory.offerings.length}/3 ชิ้น) ท่านคงไม่พอใจถ้าผมไปมือเปล่า` }
             ]);
             return;
           }
@@ -902,10 +930,10 @@ function getSceneHotspots(sceneNum) {
             playSound('chime');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ผมวางพวงมาลัย ธูปเทียน และพานขนมลงในกระทงเครื่องเซ่นครบแล้ว... ขอให้ดวงวิญญาณในเรือนนี้สงบลงด้วยเถิด' },
+              { speaker: getPlayerName(), text: 'ผมวางพวงมาลัย ธูปเทียน และพานขนมลงกระทง... กลิ่นธูปม้วนขึ้นมาเองทั้งที่ไม่มีลม ขอให้ดวงวิญญาณในเรือนนี้ได้ไปเสียที' },
               state.flags.photosRestored
-                ? { speaker: getPlayerName(), text: 'ทั้งของเซ่นไหว้และรูปภาพครบสมบูรณ์แล้ว... ขอให้ดวงวิญญาณในเรือนนี้ไปสู่สุคติเถิด' }
-                : { speaker: getPlayerName(), text: 'เหลือแค่ประกอบ "เศษรูปถ่ายทั้ง 3 ชิ้น" ให้ครบเพื่อปลดผนึกประตูหลังเรือน!' }
+                ? { speaker: getPlayerName(), text: 'ของเซ่นครบ รูปก็ครบ... เสียงกระพรวนเงียบลงแล้ว ขอให้ท่านไปสู่สุคติ' }
+                : { speaker: getPlayerName(), text: 'เหลือเพียงเศษรูปอีกสามชิ้น... ประตูหลังเรือนยังไม่ยอมเปิด' }
             ], () => {
               if (!state.flags.photosRestored) showPhotoPuzzleModal();
               else checkRitualComplete();
@@ -914,7 +942,7 @@ function getSceneHotspots(sceneNum) {
             showPhotoPuzzleModal();
           } else {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ทั้งของเซ่นไหว้และรูปภาพครบสมบูรณ์แล้ว! รีบไปออกทางประตูหลังเรือนฝั่งขวามือได้เลย!' }
+              { speaker: getPlayerName(), text: 'ครบแล้วทั้งของเซ่นและรูป... ประตูหลังเรือนด้านขวามีกลิ่นไอดินลอดออกมา' }
             ]);
           }
         }
@@ -927,7 +955,7 @@ function getSceneHotspots(sceneNum) {
         onInteract: () => {
           if (!state.flags.offeringsPlaced || !state.flags.photosRestored) {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ประตูหลังเรือนถูกผนึกไว้ด้วยอาถรรพ์! ต้อง "ถวายของเซ่นไหว้ให้ครบ 3 ชิ้น" และ "ต่อเศษรูปภาพปริศนาให้ครบ 3 ชิ้น" ก่อน!' }
+              { speaker: getPlayerName(), text: 'บานประตูเย็นเฉียบ... ยังผนึกอยู่ ต้องถวายของเซ่นให้ครบสามชิ้น และต่อเศษรูปให้ครบทั้งสามก่อน' }
             ], () => {
               if (state.inventory.photos.length > 0 && !state.flags.photosRestored) {
                 showPhotoPuzzleModal();
@@ -978,6 +1006,7 @@ function switchScreen(screenId) {
 
 function startSoloGame() {
   initAudio();
+  applyAutoFullscreen();
   state.role = 'host';
   state.started = true;
   switchScreen('game-screen');
@@ -1046,6 +1075,7 @@ function closeCoopLobby() {
 
 function startFromLobby() {
   closeCoopLobby();
+  applyAutoFullscreen();
   state.started = true;
   switchScreen('game-screen');
   startIntroSequence();
@@ -1584,6 +1614,7 @@ async function resumeFromCheckpoint() {
   const cp = loadCheckpoint();
   if (!cp) return startSoloGame();
   initAudio();
+  applyAutoFullscreen();
   selectCharacter(cp.character === 'female' ? 'female' : 'male');
   state.role = 'host';
   state.started = true;
@@ -1648,6 +1679,7 @@ function dismissRotateHint() {
 window.addEventListener('DOMContentLoaded', () => {
   const fsBtn = document.getElementById('btn-fullscreen');
   if (fsBtn && !canFullscreen()) fsBtn.classList.add('hidden');
+  refreshSettingsUi();
 });
 
 // ----------------------- Toast (non-blocking messages) -----------------------
@@ -1668,9 +1700,9 @@ function startIntroSequence() {
   state.player.x = 160;
   updateHud();
   queueDialogue([
-    { speaker: 'เหตุการณ์ก่อนหน้า', text: 'หลังจากกลับจากงานศพของเพื่อนสนิทพร้อมครอบครัว... รถของคุณประสบอุบัติเหตุรุนแรงกลางทางมืด' },
-    { speaker: getPlayerName(), text: 'อึก... ปวดหัวจัง... ที่นี่ที่ไหนเนี่ย? พ่อครับ! แม่ครับ!' },
-    { speaker: getPlayerName(), text: 'รอบตัวมีแต่ป่ามืดและเงียบสงัด... ข้างหน้านั้นมีบ้านทรงไทยเก่าเปิดไฟอยู่ ลองเดินไปขอความช่วยเหลือดูดีกว่า' }
+    { speaker: 'เหตุการณ์ก่อนหน้า', text: 'ขากลับจากงานศพของเพื่อนสนิท... รถของครอบครัวเสียหลักหมุนคว้าง ก่อนทุกอย่างจะดับลงเป็นความมืด' },
+    { speaker: getPlayerName(), text: 'อึก... ปวดหัวเหมือนมีใครตอกตะปูอยู่ข้างใน... พ่อครับ? แม่ครับ? มีใครได้ยินผมไหม' },
+    { speaker: getPlayerName(), text: 'รอบตัวมีแต่ป่ากับความเงียบ ที่เงียบจนได้ยินเสียงเลือดไหลในหู... ตรงนั้นมีเรือนไทยหลังหนึ่งยังเปิดไฟอยู่ ทั้งที่ไม่มีใครควรอยู่' }
   ]);
 }
 
@@ -1721,8 +1753,11 @@ function showNextDialogueLine() {
 
 // Typewriter text. Thai vowels and tone marks are combining characters, so the text is
 // split into grapheme clusters (a mark never shows up on its own mid-word).
-const typing = { timer: null, full: '' };
-const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const typing = { timer: null, full: '', nodes: null, caret: null, shown: 0, pause: 0, active: false };
+const TYPE_TICK_MS = 26;
+// A short beat is held after punctuation so each line lands instead of rattling out.
+const TYPE_BEATS = { '…': 240, '.': 170, ',': 120, '!': 190, '?': 180, '—': 150 };
+let REDUCED_MOTION = settings.reduceMotion;
 
 function splitGraphemes(text) {
   if (window.Intl && Intl.Segmenter) {
@@ -1731,30 +1766,69 @@ function splitGraphemes(text) {
   return Array.from(text);
 }
 
+// The whole line is rendered up-front as invisible clusters, then faded in one at a
+// time: the box never reflows mid-sentence and each character rises out of the dark.
 function typeDialogueText(text) {
   const el = document.getElementById('dialogue-text');
-  clearInterval(typing.timer);
+  finishTyping();
   typing.full = text;
+  typing.active = true;
+  el.textContent = '';
+  el.classList.add('is-typing');
   if (REDUCED_MOTION) {
     el.textContent = text;
-    typing.timer = null;
+    el.classList.remove('is-typing');
+    typing.active = false;
     return;
   }
-  const parts = splitGraphemes(text);
-  let shown = 0;
-  el.textContent = '';
-  typing.timer = setInterval(() => {
-    shown = Math.min(parts.length, shown + 2);
-    el.textContent = parts.slice(0, shown).join('');
-    if (shown >= parts.length) finishTyping();
-  }, 30);
+  typing.shown = 0;
+  typing.pause = 0;
+  typing.caret = document.createElement('span');
+  typing.caret.className = 'tw-caret';
+  typing.caret.textContent = '▌';
+  el.appendChild(typing.caret);
+  typing.nodes = splitGraphemes(text).map((part) => {
+    const span = document.createElement('span');
+    span.className = 'tw';
+    span.textContent = part;
+    el.insertBefore(span, typing.caret);
+    return span;
+  });
+  typing.timer = setInterval(stepTyping, TYPE_TICK_MS);
+}
+
+function stepTyping() {
+  if (!typing.active) return;
+  if (typing.pause > 0) {
+    typing.pause -= TYPE_TICK_MS;
+    return;
+  }
+  const node = typing.nodes && typing.nodes[typing.shown];
+  if (!node) {
+    finishTyping();
+    return;
+  }
+  node.classList.add('on');
+  typing.shown++;
+  const beat = TYPE_BEATS[node.textContent] || 0;
+  if (beat) typing.pause = beat;
+  // keep the caret right behind the cluster that was just revealed
+  if (typing.caret && typing.caret.parentNode === node.parentNode) {
+    node.parentNode.insertBefore(typing.caret, typing.nodes[typing.shown] || null);
+  }
+  if (typing.shown >= typing.nodes.length) finishTyping();
 }
 
 function finishTyping() {
-  if (!typing.timer) return false;
+  if (!typing.active) return false;
+  typing.active = false;
   clearInterval(typing.timer);
   typing.timer = null;
-  document.getElementById('dialogue-text').textContent = typing.full;
+  typing.nodes = null;
+  typing.caret = null;
+  const el = document.getElementById('dialogue-text');
+  el.classList.remove('is-typing');
+  el.textContent = typing.full;
   return true;
 }
 
@@ -1773,51 +1847,7 @@ function renderCutsceneFrame(cx, prefix, idx) {
   const studentImg = state.character === 'female' ? IMAGES.femaleWalk0 : IMAGES.maleWalk0;
   const studentWalkImg = state.character === 'female' ? IMAGES[`femaleWalk${idx % 8}`] : IMAGES[`maleWalk${idx % 8}`];
 
-  if (prefix === 'cutscene_door') {
-    const bg = IMAGES.bg1;
-    if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
-    cx.fillStyle = 'rgba(4, 6, 12, 0.72)';
-    cx.fillRect(0, 0, 800, 450);
-
-    // Dark interior cavity behind the double doors
-    const gap = [0, 8, 28, 64, 110, 148][idx] || 0;
-    cx.fillStyle = '#030408';
-    cx.fillRect(400 - gap, 70, gap * 2, 330);
-
-    if (idx >= 3 && isReady(IMAGES.dancerAnim1)) {
-      cx.save();
-      cx.globalAlpha = idx === 3 ? 0.85 : 0.45;
-      cx.drawImage(IMAGES.dancerAnim1, 345, 130, 110, 220);
-      cx.restore();
-    }
-
-    const door = IMAGES.door;
-    if (isReady(door)) {
-      const dw = door.naturalWidth;
-      const dh = door.naturalHeight;
-      // Left leaf
-      cx.drawImage(door, 0, 0, dw / 2, dh, 270 - gap, 65, 130, 335);
-      // Right leaf
-      cx.drawImage(door, dw / 2, 0, dw / 2, dh, 400 + gap, 65, 130, 335);
-    }
-
-    if (idx >= 4) {
-      const grad = cx.createRadialGradient(260, 260, 10, 420, 235, 290);
-      grad.addColorStop(0, 'rgba(255, 225, 130, 0.55)');
-      grad.addColorStop(1, 'rgba(255, 225, 130, 0)');
-      cx.fillStyle = grad;
-      cx.beginPath();
-      cx.moveTo(235, 255);
-      cx.lineTo(580, 110);
-      cx.lineTo(580, 385);
-      cx.closePath();
-      cx.fill();
-    }
-
-    if (isReady(studentWalkImg)) {
-      cx.drawImage(studentWalkImg, 135 + idx * 24, 175, 115, 230);
-    }
-  } else if (prefix === 'cutscene_sam') {
+  if (prefix === 'cutscene_sam') {
     const bg = IMAGES.bg3;
     if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
     cx.fillStyle = 'rgba(6, 5, 10, 0.65)';
@@ -1978,22 +2008,259 @@ function skipCutscene() {
   if (activeCutscene && performance.now() - activeCutscene.startedAt > 300) activeCutscene.finish();
 }
 
-function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดดดดด...', showGhostFlash = false) {
-  const captions = [
-    'เฟรม 1/6 : ยืนอยู่หน้าบานประตูไม้สักโบราณ...',
-    'เฟรม 2/6 : สลักกลอนไม้ค่อยๆ ขยับเปิดออกเอง...',
-    'เฟรม 3/6 : แอ๊ดดดดด... บานประตูแง้มออกช้าๆ',
-    showGhostFlash ? 'เฟรม 4/6 : !! เงาร่างปริศนายืนจ้องอยู่ในความมืดหลังประตู !!' : 'เฟรม 4/6 : ความมืดและกลิ่นธูปเก่าลอยออกมาจากห้องถัดไป...',
-    'เฟรม 5/6 : แสงไฟฉายสาดส่องฝ่าความมืดเข้าไป...',
-    `เฟรม 6/6 : ${captionText}`
-  ];
-  // The first time through a doorway shows the full sequence; going back and forth is quick.
+// ----------------------- Animated door transition -----------------------
+// One continuous shot for every doorway: the leaves swing open on their hinges, the
+// character walks into the dark, the camera pushes in, then the frame fades to black
+// and the next scene fades in underneath it. No ghosts, no hard cuts.
+function playDoorTransition(seen, captionText, onComplete) {
+  state.flags.cutscenePlaying = true;
+  state.moveInput = 0;
+  const overlay = document.getElementById('door-cutscene');
+  const canvasEl = document.getElementById('cutscene-canvas');
+  const cx = canvasEl.getContext('2d');
+  const captionEl = document.getElementById('door-caption');
+  closePhotoPuzzleModal();
+  overlay.classList.remove('hidden', 'leaving');
+
+  const duration = REDUCED_MOTION ? (seen ? 1100 : 1800) : (seen ? 1900 : 3800);
+  const start = performance.now();
+  let captionStep = -1;
+  let raf = 0;
+  let finished = false;
+  let footstep = 0;
+  let creakPlayed = false;
+  let rustlePlayed = false;
+
+  const beats = seen
+    ? [
+        [0, 'แอ๊ดดด... (ประตูบานเดิมเปิดออกอีกครั้ง)'],
+        [0.5, captionText]
+      ]
+    : [
+        [0, 'ยืนอยู่หน้าบานประตูไม้สัก... กลิ่นไม้เก่ากับธูปปนกันจนแน่นจมูก'],
+        [0.2, 'กลอนไม้ขยับเองช้าๆ เหมือนมีมือหนึ่งผลักจากด้านใน'],
+        [0.44, 'แอ๊ดดดดด... เสียงไม้ครางยาว ทั้งที่ไม่ควรมีลมพัด'],
+        [0.66, 'ความมืดกับกลิ่นธูปเก่าล้นออกมา... ข้างในดำสนิทจนมองไม่เห็นพื้น'],
+        [0.84, captionText]
+      ];
+
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  const easeOut = (v) => 1 - Math.pow(1 - clamp01(v), 3);
+  const easeInOut = (v) => (v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2);
+
+  function captionAt(t) {
+    let next = 0;
+    for (let i = 0; i < beats.length; i++) if (t >= beats[i][0]) next = i;
+    if (next === captionStep) return;
+    captionStep = next;
+    captionEl.classList.remove('caption-in');
+    void captionEl.offsetWidth;
+    captionEl.classList.add('caption-in');
+    captionEl.textContent = beats[next][1];
+  }
+
+  function draw(t) {
+    const door = IMAGES.door;
+
+    // timeline: walk up -> leaves open -> step through -> fade
+    const walkT = clamp01(t / 0.34);
+    const openT = clamp01((t - 0.18) / 0.44);
+    const enterT = clamp01((t - 0.6) / 0.24);
+    const black = clamp01((t - 0.86) / 0.08);
+
+    cx.setTransform(1, 0, 0, 1, 0, 0);
+    cx.imageSmoothingEnabled = false;
+    cx.fillStyle = '#040307';
+    cx.fillRect(0, 0, 800, 450);
+
+    // camera pushes in on the doorway
+    const zoom = REDUCED_MOTION ? 1 : 1 + 0.26 * easeInOut(clamp01((t - 0.05) / 0.85));
+    cx.save();
+    cx.translate(400, 250);
+    cx.scale(zoom, zoom);
+    cx.translate(-400, -250);
+
+    const doorY = 56;
+    const doorH = 340;
+    const leafW = 118;
+    const hingeL = 282;
+    const hingeR = 518;
+
+    // --- the porch the door sits in: wall, beam, floor, lantern ---------
+    const wall = cx.createLinearGradient(0, 30, 0, 410);
+    wall.addColorStop(0, '#1a1315');
+    wall.addColorStop(0.6, '#120e10');
+    wall.addColorStop(1, '#0a0809');
+    cx.fillStyle = wall;
+    cx.fillRect(86, 24, 628, 392);
+
+    cx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    for (let px = 100; px < 714; px += 46) cx.fillRect(px, 24, 1, 392);
+
+    cx.fillStyle = 'rgba(50, 35, 27, 0.8)';
+    cx.fillRect(250, 32, 302, 15);
+    cx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    cx.fillRect(250, 47, 302, 3);
+
+    const lampX = 204;
+    const lampY = 132;
+    const lamp = cx.createRadialGradient(lampX, lampY, 6, lampX, lampY, 255);
+    lamp.addColorStop(0, 'rgba(255, 198, 118, 0.4)');
+    lamp.addColorStop(0.34, 'rgba(206, 128, 54, 0.12)');
+    lamp.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    cx.fillStyle = lamp;
+    cx.fillRect(0, 0, 800, 450);
+
+    // hanging lantern: chain, cap, warm glass
+    cx.fillStyle = 'rgba(46, 30, 18, 0.9)';
+    cx.fillRect(lampX - 1, 47, 2, 68);
+    cx.fillStyle = 'rgba(66, 44, 26, 0.95)';
+    cx.fillRect(lampX - 7, 113, 14, 3);
+    cx.fillStyle = 'rgba(255, 206, 138, 0.92)';
+    cx.fillRect(lampX - 5, 116, 10, 16);
+    cx.fillStyle = 'rgba(255, 240, 200, 0.85)';
+    cx.fillRect(lampX - 2, 119, 4, 10);
+    cx.fillStyle = 'rgba(52, 34, 20, 0.95)';
+    cx.fillRect(lampX - 6, 132, 12, 2);
+
+    cx.fillStyle = '#0b0908';
+    cx.fillRect(86, 404, 628, 46);
+    cx.fillStyle = '#1a1210';
+    cx.fillRect(240, 396, 322, 9);
+    cx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    cx.fillRect(240, 404, 322, 5);
+
+    // --- the doorway itself: nothing but darkness ----------------------
+    cx.fillStyle = '#020204';
+    cx.fillRect(hingeL - 3, doorY, hingeR - hingeL + 6, doorH);
+
+    // --- door leaves, hinged at the outer edges -------------------------
+    const angle = easeOut(openT) * Math.PI * 0.44;
+    const leafNow = leafW * Math.cos(angle);
+    if (isReady(door)) {
+      const dw = door.naturalWidth;
+      const dh = door.naturalHeight;
+      const shade = 'rgba(4, 3, 7, ' + (0.1 + 0.6 * (1 - Math.cos(angle))) + ')';
+      cx.save();
+      cx.translate(hingeL, 0);
+      cx.drawImage(door, 0, 0, dw / 2, dh, 0, doorY, leafNow, doorH);
+      cx.fillStyle = shade;
+      cx.fillRect(0, doorY, leafNow, doorH);
+      cx.restore();
+      cx.save();
+      cx.translate(hingeR, 0);
+      cx.scale(-1, 1);
+      cx.drawImage(door, dw / 2, 0, dw / 2, dh, 0, doorY, leafNow, doorH);
+      cx.fillStyle = shade;
+      cx.fillRect(0, doorY, leafNow, doorH);
+      cx.restore();
+
+      // warm edge light on the inner stiles while the doors are ajar
+      if (openT > 0.05) {
+        const edge = (0.16 + 0.26 * Math.sin(openT * Math.PI)) * (1 - enterT * 0.7);
+        cx.fillStyle = 'rgba(238, 190, 120, ' + edge + ')';
+        cx.fillRect(hingeL + leafNow - 2, doorY, 2, doorH);
+        cx.fillRect(hingeR - leafNow, doorY, 2, doorH);
+      }
+    }
+
+    // --- the character: walk to the door, then into the dark ------------
+    const cycle = Math.floor(t * 28) % 8;
+    const sprite = state.character === 'female' ? IMAGES[`femaleWalk${cycle}`] : IMAGES[`maleWalk${cycle}`];
+    let x = 148 + (300 - 148) * easeInOut(walkT);
+    let scale = 1;
+    let alpha = 1;
+    if (enterT > 0) {
+      x = 300 + 140 * easeInOut(enterT);
+      scale = 1 - 0.45 * enterT;
+      alpha = 1 - 1.15 * enterT;
+    }
+    if (isReady(sprite) && alpha > 0.02) {
+      const h = 236 * scale;
+      const w = 118 * scale;
+      const feetY = 402 - (1 - scale) * 110;
+      cx.globalAlpha = alpha;
+      cx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      cx.beginPath();
+      cx.ellipse(x + w / 2, feetY, w * 0.36, 7 * scale, 0, 0, Math.PI * 2);
+      cx.fill();
+      cx.drawImage(sprite, x, feetY - h, w, h);
+      cx.globalAlpha = 1;
+    }
+
+    // ground fog lifted from the boards (radial only, so no hard edges)
+    const fog = cx.createRadialGradient(400, 408, 20, 400, 408, 300);
+    fog.addColorStop(0, 'rgba(170, 180, 192, 0.13)');
+    fog.addColorStop(1, 'rgba(170, 180, 192, 0)');
+    cx.fillStyle = fog;
+    cx.fillRect(0, 120, 800, 330);
+    cx.restore();
+
+    // vignette, letterbox and the fade that hands over to the next scene
+    const vig = cx.createRadialGradient(400, 225, 150, 400, 225, 470);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(1, 'rgba(0, 0, 0, 0.8)');
+    cx.fillStyle = vig;
+    cx.fillRect(0, 0, 800, 450);
+    cx.fillStyle = '#000';
+    cx.fillRect(0, 0, 800, 38);
+    cx.fillRect(0, 412, 800, 38);
+    if (black > 0) {
+      cx.fillStyle = 'rgba(0, 0, 0, ' + black + ')';
+      cx.fillRect(0, 0, 800, 450);
+    }
+  }
+
+  function frame(now) {
+    if (finished) return;
+    const t = Math.min(1, (now - start) / duration);
+    captionAt(t);
+    if (footstep < 3 && t > 0.06 + footstep * 0.1) {
+      playSound('step', { gain: 0.4 });
+      footstep++;
+    }
+    if (!creakPlayed && t > 0.2) {
+      creakPlayed = true;
+      playSound('creak');
+    }
+    if (!rustlePlayed && t > 0.64) {
+      rustlePlayed = true;
+      playSound('rustle', { gain: 0.5 });
+    }
+    draw(t);
+    if (t >= 1) {
+      finish();
+      return;
+    }
+    raf = requestAnimationFrame(frame);
+  }
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    cancelAnimationFrame(raf);
+    activeCutscene = null;
+    // bring the next scene in underneath, then lift the black frame away
+    if (onComplete) onComplete();
+    captionEl.textContent = '';
+    overlay.classList.add('leaving');
+    setTimeout(() => {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('leaving');
+      state.flags.cutscenePlaying = false;
+    }, 460);
+  }
+
+  activeCutscene = { finish, startedAt: performance.now() };
+  raf = requestAnimationFrame(frame);
+}
+
+function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดดดดด...') {
+  // The first time through a doorway plays the full shot; going back and forth is quick.
   const key = `${state.scene}->${targetScene}`;
   const seen = state.seenDoors.has(key);
   state.seenDoors.add(key);
-  playFrameByFrameCutscene('cutscene_door', captions, seen ? 380 : 520, () => {
-    enterScene(targetScene, targetX);
-  }, seen ? [2, 5] : null);
+  playDoorTransition(seen, captionText, () => enterScene(targetScene, targetX));
 }
 
 function enterScene(sceneNum, startX) {
@@ -2008,8 +2275,8 @@ function enterScene(sceneNum, startX) {
   if (sceneNum === 2 && !state.flags.visited2) {
     state.flags.visited2 = true;
     queueDialogue([
-      { speaker: getPlayerName(), text: 'เข้ามาข้างในแล้ว... ทำไมเงียบสงัดขนาดนี้ ไม่มีใครอยู่เลยทั้งที่เมื่อกี้เห็นคนเปิดไฟไว้' },
-      { speaker: getPlayerName(), text: 'ลองเดินสำรวจรูปภาพบนผนัง โต๊ะ และตู้ไม้ในห้องนี้ดูก่อนดีกว่า' }
+      { speaker: getPlayerName(), text: 'เข้ามาแล้ว... แต่ในเรือนกลับหนาวกว่าข้างนอก ไฟที่เห็นจากนอกหน้าต่างก็ดับไปแล้ว' },
+      { speaker: getPlayerName(), text: 'รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้ผมเดินไปแตะ' }
     ]);
   } else if (sceneNum === 3) {
     state.ghost.type = 'samphawesi';
@@ -2017,7 +2284,7 @@ function enterScene(sceneNum, startX) {
       state.ghost.active = false;
       state.ghost.x = 760;
       queueDialogue([
-        { speaker: getPlayerName(), text: 'เสียงกุกกักดังมาจากตรงกลางห้องนั้น... นั่นใครนั่งหันหลังทำอะไรอยู่ข้างกระทงใบตองน่ะ?' }
+        { speaker: getPlayerName(), text: 'ตรงกลางห้อง... มีใครบางคนนั่งยองๆ อยู่หลังกระทงใบตอง กำลังกินของเซ่นด้วยมือเปล่า' }
       ]);
     } else {
       state.ghost.active = true;
@@ -2030,15 +2297,15 @@ function enterScene(sceneNum, startX) {
     if (!state.flags.visited4) {
       state.flags.visited4 = true;
       queueDialogue([
-        { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... กริ๊ง... (เงาร่างผีนางรำในชุดสไบเปื้อนเลือดปรากฏตัวขึ้นในความมืด!)' },
-        { speaker: getPlayerName(), text: 'ผีนางรำ!! ต้องรีบเก็บของเซ่นไหว้และเศษรูปชิ้นสุดท้าย แล้วมุดซ่อนในตู้ไม้เวลาเธอเข้ามาใกล้!' }
+        { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... กริ๊ง... (ช้าๆ เหมือนมีคนเต้นรำอยู่ในความมืด ทั้งที่พื้นไม่สั่นเลย)' },
+        { speaker: getPlayerName(), text: 'ผีนางรำ... เธอไม่วิ่ง แต่ทุกครั้งที่ผมกะพริบตา เธอใกล้ขึ้นอีกก้าว รีบหาของเซ่นให้ครบแล้วซ่อนในตู้ไม้!' }
       ]);
     }
   } else if (sceneNum === 5) {
     state.ghost.active = false;
     state.player.flashlight = false;
     queueDialogue([
-      { speaker: getPlayerName(), text: 'แฮ่ก... แฮ่ก... ออกมาจากเรือนไทยนั่นได้สักที! ข้างนอกหมอกลงจางๆ... เอ๊ะ นั่นคุณลุงยืนอยู่ตรงนั้นนี่นา!' }
+      { speaker: getPlayerName(), text: 'แฮ่ก... ออกมาได้แล้ว ข้างนอกหมอกลงขาว... แต่เงาร่างตรงนั้น ทำไมคุ้นเหมือนญาติผู้ใหญ่ในงานศพ' }
     ]);
   }
   saveCheckpoint();
@@ -2068,8 +2335,8 @@ function checkRitualComplete() {
   document.getElementById('danger-overlay').classList.add('hidden');
   playSound('chime');
   queueDialogue([
-    { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... (เสียงกระพรวนค่อยๆ เงียบหายไป เงาผีนางรำสลายไปกับควันธูป)' },
-    { speaker: getPlayerName(), text: 'วิญญาณสงบลงแล้ว... ประตูหลังเรือนทางขวาน่าจะเปิดออกได้แล้ว!' }
+    { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... (แล้วเสียงกระพรวนก็ขาดหายไปกลางอากาศ เหลือแต่กลิ่นธูปที่ค่อยๆ จาง)' },
+    { speaker: getPlayerName(), text: 'วิญญาณท่านสงบแล้ว... หรือแค่กำลังรออยู่หลังประตูบานนั้น' }
   ]);
   broadcastState();
 }
@@ -2079,12 +2346,12 @@ function triggerSamphawesiEncounter() {
   state.flags.samphawesiTriggered = true;
   playSound('scare');
   const samCaptions = [
-    'เฟรม 1/6 : ท่ามกลางความมืด มีแสงเทียนสลัวอยู่ตรงกลางห้อง...',
-    'เฟรม 2/6 : ร่างปริศนานั่งยองๆ หันหลังกินของเซ่นไหว้อยู่หน้ากระทงใบตอง',
-    'เฟรม 3/6 : ลำแสงไฟฉายส่องไปกระทบแผ่นหลังที่เน่าเปื่อย... ร่างนั้นหยุดกึก!',
-    'เฟรม 4/6 : กร๊อบ... คอที่บิดเบี้ยวค่อยๆ หันกลับมาจ้องด้วยดวงตาขาวโพลน!',
-    'เฟรม 5/6 : สัมภเวสีลุกขึ้นยืนหลังค่อม แยกเขี้ยวเปื้อนเลือด!',
-    'เฟรม 6/6 : มันกระโจนคลานสี่ขาไล่ล่าคุณแล้ว! รีบซ่อนตัวในตุ่มน้ำหรือหนีเร็ว!!'
+    'เฟรม 1/6 : กลางห้องมีแสงเทียนดวงเดียว สั่นไหวเหมือนมีคนหายใจรด',
+    'เฟรม 2/6 : ร่างหนึ่งนั่งยองๆ หันหลังให้คุณ กำลังกินของเซ่นไหว้ด้วยมือเปล่า',
+    'เฟรม 3/6 : ลำไฟฉายส่องไปถูกแผ่นหลังที่เน่าเป็นรู... ร่างนั้นหยุดเคี้ยวทันที',
+    'เฟรม 4/6 : กร๊อบ... คอที่บิดผิดรูปค่อยๆ หมุนกลับมา ดวงตาขาวโพลนไม่มีรูม่านตา',
+    'เฟรม 5/6 : มันยันตัวลุกขึ้นช้าๆ เขี้ยวเปื้อนเลือด และส่งเสียงหัวเราะจากลำคอที่ขาด',
+    'เฟรม 6/6 : มันกระโจนมาสี่ขา! ซ่อนในตุ่มน้ำ หรือหนีให้พ้นแสงเทียนเดี๋ยวนี้!'
   ];
   playFrameByFrameCutscene('cutscene_sam', samCaptions, 680, () => {
     state.ghost.type = 'samphawesi';
@@ -2098,20 +2365,20 @@ function triggerSamphawesiEncounter() {
 
 function triggerEndingDialogue() {
   queueDialogue([
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'รอดออกมาได้แล้วสินะ... ที่เรือนไทยหลังนั้นไม่ใช่ที่ของคนเป็นหรอก' },
-    { speaker: getPlayerName(), text: 'คุณลุงเป็นใครครับ? แล้วพ่อกับแม่ของผมล่ะครับ?' },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'พ่อแม่เอ็งปลอดภัยดี อยู่ที่โรงพยาบาลแล้ว... ส่วนตัวเอ็งเป็นคนมีสัมผัสพิเศษ ตอนรถคว่ำดวงจิตเลยหลุดเข้ามาในเขตแดนนี้' },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ข้าจะพาเอ็งกลับเข้าร่างเดี๋ยวนี้แหละ... แต่เอ็งต้อง "สัญญา" กับข้าก่อนว่าจะไปที่แห่งหนึ่ง ไม่งั้นเอ็งจะถูกดึงกลับมาที่นี่อีก!' },
-    { speaker: getPlayerName(), text: 'ที่ไหนเหรอครับคุณลุง ผมสัญญาว่าจะไปแน่นอนครับ!' },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... จำคำสัญญาไว้ให้ดีล่ะ!' }
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ออกมาได้แล้วสินะ... เรือนหลังนั้นไม่ใช่ที่ของคนเป็น มันไม่เคยเป็น' },
+    { speaker: getPlayerName(), text: 'คุณลุงเป็นใครครับ... แล้วพ่อกับแม่ผม—' },
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ปลอดภัยแล้ว อยู่ที่โรงพยาบาล... แต่เอ็งน่ะ ตอนรถคว่ำดวงจิตหลุดออกจากร่าง ก่อนที่หมอจะได้พูดคำว่า "ช่วยไม่ได้"' },
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ข้าจะพาเอ็งกลับเข้าร่าง... แต่ต้องแลกด้วยสัญญา เอ็งต้องไปที่หนึ่งให้ได้ ไม่อย่างนั้น มันจะดึงเอ็งกลับมาทุกคืน' },
+    { speaker: getPlayerName(), text: 'ที่ไหนครับ... ผมสัญญา' },
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' }
   ], () => {
     const endCaptions = [
-      'เฟรม 1/6 : เศษรูปถ่ายทั้ง 3 ชิ้นประสานกันในกรอบรูปโบราณ...',
-      'เฟรม 2/6 : ความทรงจำกลับคืนมา... ดวงจิตของคุณหลุดมาขณะอยู่ระหว่างความเป็นความตาย',
-      'เฟรม 3/6 : ก้าวพ้นประตูเรือนไทยออกมาสู่สายหมอกยามรุ่งอรุณ',
-      'เฟรม 4/6 : พบคุณลุงชุดราชปะแตนผู้ช่วยชี้ทางกลับคืนสู่ร่าง',
-      'เฟรม 5/6 : "จำคำสัญญาของเราไว้ให้ดีล่ะ... ไม่งั้นจะถูกดึงกลับมาอีก"',
-      'เฟรม 6/6 : แล้วพบกันที่งาน OPEN HOUSE BUU วันที่ 20 – 21 นี้!'
+      'เฟรม 1/6 : เศษรูปทั้งสามประสานกันในกรอบไม้... ภาพสุดท้ายคือใบหน้าของคุณเองที่ยังหลับตาบนเตียงโรงพยาบาล',
+      'เฟรม 2/6 : ความทรงจำไหลคืนมา... คุณไม่ได้ตาย แต่ก็ยังไม่กลับเข้าไปในร่าง',
+      'เฟรม 3/6 : ก้าวพ้นประตูเรือนไทย ออกสู่หมอกยามรุ่งอรุณที่เย็นจนเจ็บผิว',
+      'เฟรม 4/6 : คุณลุงชุดราชปะแตนยืนรออยู่ตรงนั้น เงาของท่านยาวผิดปกติ',
+      'เฟรม 5/6 : "จำสัญญาของเราไว้... ไม่อย่างนั้น มันจะดึงเจ้ากลับมา"',
+      'เฟรม 6/6 : แล้วพบกันที่ OPEN HOUSE BUU วันที่ 20 – 21 นี้'
     ];
     playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => {
       state.flags.victory = true;
@@ -2174,11 +2441,11 @@ function placePhotoPiece(num) {
     updateHud();
     closePhotoPuzzleModal();
     queueDialogue([
-      { speaker: getPlayerName(), text: 'เศษรูปภาพทั้ง 3 ชิ้นต่อกันสมบูรณ์แล้ว... เดี๋ยวนะ คนในรูปที่ซ้อนอยู่ข้างหลังนั่นมัน... ตัวเราเอง?!' },
-      { speaker: getPlayerName(), text: 'จริงด้วย... เรามีสัมผัสพิเศษ และกำลังนอนไม่ได้สติอยู่ระหว่างความเป็นความตายจากอุบัติเหตุรถคว่ำ!' },
+      { speaker: getPlayerName(), text: 'ครบทั้งสามชิ้น... ภาพชัดขึ้นเรื่อยๆ และคนที่ยืนอยู่ข้างหลังในรูปก็คือผมเอง' },
+      { speaker: getPlayerName(), text: 'ผมไม่ได้อยู่ในรูป... ผมไม่ได้อยู่ที่ไหนเลย ผมนอนหมดสติอยู่ระหว่างความเป็นกับความตาย' },
       state.flags.offeringsPlaced
-        ? { speaker: getPlayerName(), text: 'ตอนนี้รู้ความจริงแล้ว และของเซ่นไหว้ก็ถวายครบแล้ว... ประตูหลังเรือนต้องเปิดได้แน่!' }
-        : { speaker: getPlayerName(), text: 'ตอนนี้รู้ความจริงแล้ว ถ้านำของเซ่นไหว้ไปวางครบ 3 ชิ้น ประตูหลังเรือนในฉากที่ 4 จะเปิดออกทันที!' }
+        ? { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้ผมออกไป' }
+        : { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ถ้าถวายของเซ่นครบสามชิ้นที่หิ้งบูชา ประตูหลังเรือนจะยอมเปิด' }
     ], checkRitualComplete);
   } else {
     showPhotoPuzzleModal();
@@ -2300,6 +2567,10 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) {
     if (e.code === 'Space') e.preventDefault();
     return; // held keys must not spam actions or skip whole conversations
+  }
+  if (e.key === 'Escape' && !document.getElementById('settings-modal').classList.contains('hidden')) {
+    closeSettings();
+    return;
   }
   if (e.key === 'Escape' && isPhotoModalOpen()) closePhotoPuzzleModal();
   if (k === 'e' || e.key === 'Enter') triggerInteract();
@@ -2485,17 +2756,23 @@ function triggerGameOver() {
   playSound('scare');
   const faceSrc = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
   document.getElementById('jumpscare-img').src = faceSrc;
-  // Full-screen jumpscare first, then the game-over screen.
+  // Full-screen jumpscare first, then the game-over screen. Intensity follows settings.
   const js = document.getElementById('jumpscare');
-  document.getElementById('jumpscare-face').src = faceSrc;
-  js.classList.remove('hidden', 'play');
-  void js.offsetWidth; // restart the CSS animation
-  js.classList.add('play');
-  setTimeout(() => {
-    js.classList.add('hidden');
-    js.classList.remove('play');
+  if (settings.jumpscare === 'off') {
     if (state.flags.gameOver) document.getElementById('gameover-modal').classList.remove('hidden');
-  }, REDUCED_MOTION ? 500 : 1150);
+  } else {
+    document.getElementById('jumpscare-face').src = faceSrc;
+    js.classList.remove('hidden', 'play', 'soft');
+    void js.offsetWidth; // restart the CSS animation
+    const soft = settings.jumpscare === 'soft';
+    if (soft) js.classList.add('soft');
+    js.classList.add('play');
+    setTimeout(() => {
+      js.classList.add('hidden');
+      js.classList.remove('play', 'soft');
+      if (state.flags.gameOver) document.getElementById('gameover-modal').classList.remove('hidden');
+    }, soft ? 700 : (REDUCED_MOTION ? 500 : 1150));
+  }
   broadcastState();
 }
 
@@ -3111,3 +3388,99 @@ function renderP2RadarLoop(now = performance.now()) {
   }
   requestAnimationFrame(renderP2RadarLoop);
 }
+
+// ----------------------- Settings sheet & kiosk helpers -----------------------
+function openSettings() {
+  refreshSettingsUi();
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+function refreshSettingsUi() {
+  const shown = Math.round((audioMuted ? 0 : audioVolume) * 100);
+  const vol = document.getElementById('settings-volume');
+  if (vol) vol.value = String(shown);
+  const volLabel = document.getElementById('settings-volume-value');
+  if (volLabel) volLabel.textContent = shown + '%';
+
+  const mute = document.getElementById('settings-mute');
+  if (mute) {
+    mute.classList.toggle('on', audioMuted);
+    mute.setAttribute('aria-checked', String(audioMuted));
+  }
+
+  const levels = document.querySelectorAll('#settings-jumpscare [data-level]');
+  for (let i = 0; i < levels.length; i++) {
+    const on = levels[i].dataset.level === settings.jumpscare;
+    levels[i].classList.toggle('on', on);
+    levels[i].setAttribute('aria-pressed', String(on));
+  }
+
+  const reduce = document.getElementById('settings-reduce-motion');
+  if (reduce) {
+    reduce.classList.toggle('on', settings.reduceMotion);
+    reduce.setAttribute('aria-checked', String(settings.reduceMotion));
+  }
+
+  const autofs = document.getElementById('settings-autofs');
+  if (autofs) {
+    autofs.classList.toggle('on', settings.autoFullscreen);
+    autofs.setAttribute('aria-checked', String(settings.autoFullscreen));
+    autofs.disabled = !canFullscreen();
+  }
+}
+
+function setMuted(on) {
+  if (audioMuted !== !!on) toggleAudioMute();
+  refreshSettingsUi();
+}
+
+function setJumpscareLevel(level) {
+  if (level !== 'full' && level !== 'soft' && level !== 'off') return;
+  settings.jumpscare = level;
+  saveSettings();
+  refreshSettingsUi();
+}
+
+function setReduceMotion(on) {
+  settings.reduceMotion = !!on;
+  REDUCED_MOTION = settings.reduceMotion;
+  saveSettings();
+  refreshSettingsUi();
+}
+
+function setAutoFullscreen(on) {
+  settings.autoFullscreen = !!on;
+  saveSettings();
+  refreshSettingsUi();
+}
+
+// Browsers only allow fullscreen from a user gesture, so this is called from the
+// start-game click handlers rather than at page load.
+function applyAutoFullscreen() {
+  if (!settings.autoFullscreen || !canFullscreen()) return;
+  if (document.fullscreenElement || document.webkitFullscreenElement) return;
+  toggleFullscreen().catch(() => {});
+}
+
+// Booth helper: hand the machine to the next visitor with no save left behind.
+function requestClearSave() {
+  const hasSave = !!loadCheckpoint();
+  if (hasSave && !window.confirm('ล้างจุดเซฟของคนก่อนหน้าหรือไม่?\nคนเล่นคนถัดไปจะเริ่มเกมใหม่ตั้งแต่ต้น')) return;
+  clearCheckpoint();
+  const btn = document.getElementById('btn-resume');
+  if (btn) btn.classList.add('hidden');
+  closeSettings();
+  showToast('ล้างจุดเซฟแล้ว — พร้อมให้คนถัดไปเริ่มใหม่');
+}
+
+// Escape closes the settings sheet from the title screen too (the game key handler
+// above only runs once a game has started).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const modal = document.getElementById('settings-modal');
+  if (modal && !modal.classList.contains('hidden')) closeSettings();
+});
