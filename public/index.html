@@ -101,18 +101,22 @@
         <span id="hud-room-badge" class="room-badge hidden">ห้อง: ----</span>
       </div>
       <div class="hud-center">
-        <div class="objective-pill">
-          🕯️ ของเซ่นไหว้: <strong id="hud-offerings">0/3</strong>
+        <div class="objective-pill" title="ของเซ่นไหว้">
+          🕯️ <span class="lbl">ของเซ่นไหว้:</span> <strong id="hud-offerings">0/3</strong>
           <span id="hud-offerings-placed" class="tag-done hidden">(ถวายแล้ว!)</span>
         </div>
-        <div class="objective-pill">
-          🖼️ เศษรูปภาพ: <strong id="hud-photos">0/3</strong>
+        <div class="objective-pill" title="เศษรูปภาพ">
+          🖼️ <span class="lbl">เศษรูปภาพ:</span> <strong id="hud-photos">0/3</strong>
           <span id="hud-photos-placed" class="tag-done hidden">(ต่อครบแล้ว!)</span>
         </div>
       </div>
       <div class="hud-right">
-        <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute">🔊 เสียง: เปิด</button>
-        <button class="btn-hud" onclick="showPhotoPuzzleModal()">🖼️ ดูกรอบรูป</button>
+        <div class="audio-controls">
+          <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute" aria-label="เปิด/ปิดเสียง"><span class="ic">🔊</span><span class="lbl"> เสียง</span></button>
+          <input id="volume-slider" class="volume-slider" type="range" min="0" max="100" step="5" value="80" aria-label="ระดับเสียง" oninput="setVolume(this.value)" />
+        </div>
+        <button class="btn-hud" onclick="showPhotoPuzzleModal()" aria-label="ดูกรอบรูป"><span class="ic">🖼️</span><span class="lbl"> ดูกรอบรูป</span></button>
+        <button id="btn-fullscreen" class="btn-hud only-touch" onclick="toggleFullscreen()" aria-label="เต็มจอ"><span class="ic">⛶</span></button>
       </div>
     </div>
 
@@ -207,27 +211,38 @@
     <!-- On-Screen Touch / Mouse Controls (works on both PC & Mobile Solo) -->
     <div class="controls-bar">
       <div class="dpad-group">
-        <button class="ctrl-btn" id="btn-left" data-local-move="-1">
-          ◀ เดินซ้าย [A]
+        <button class="ctrl-btn" id="btn-left" data-local-move="-1" aria-label="เดินซ้าย">
+          <span class="ic">◀</span><span class="lbl">เดินซ้าย</span><kbd>A</kbd>
         </button>
-        <button class="ctrl-btn" id="btn-right" data-local-move="1">
-          เดินขวา [D] ▶
+        <button class="ctrl-btn" id="btn-right" data-local-move="1" aria-label="เดินขวา">
+          <span class="ic">▶</span><span class="lbl">เดินขวา</span><kbd>D</kbd>
         </button>
       </div>
       <div class="action-group">
-        <button class="ctrl-btn action-primary" onclick="triggerInteract()">
-          🔍 สำรวจ / เปิดประตู [E]
+        <button class="ctrl-btn action-primary" id="btn-interact" onclick="triggerInteract()" aria-label="สำรวจ / เปิดประตู">
+          <span class="ic">🔍</span><span class="lbl">สำรวจ</span><kbd>E</kbd>
         </button>
-        <button class="ctrl-btn" id="btn-hide" onclick="toggleHide()">
-          🏺 ซ่อนตัว [Q]
+        <button class="ctrl-btn" id="btn-hide" onclick="toggleHide()" aria-label="ซ่อนตัว">
+          <span class="ic">🏺</span><span class="lbl">ซ่อนตัว</span><kbd>Q</kbd>
         </button>
-        <button class="ctrl-btn" id="btn-flashlight" onclick="toggleFlashlight()">
-          🔦 ไฟฉาย [F]
+        <button class="ctrl-btn" id="btn-flashlight" onclick="toggleFlashlight()" aria-label="ไฟฉาย">
+          <span class="ic">🔦</span><span class="lbl">ไฟฉาย</span><kbd>F</kbd>
         </button>
-        <button class="ctrl-btn spiritual-btn" id="btn-sixthsense" onclick="toggleSixthSense()">
-          👁️ สัมผัสพิเศษ [Space]
+        <button class="ctrl-btn spiritual-btn" id="btn-sixthsense" onclick="toggleSixthSense()" aria-label="สัมผัสพิเศษ">
+          <span class="ic">👁️</span><span class="lbl">สัมผัสพิเศษ</span><kbd>Space</kbd>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Shown over the game on phones held upright -->
+  <div id="rotate-hint" class="rotate-hint">
+    <div class="rotate-card">
+      <div class="rotate-icon" aria-hidden="true">📱</div>
+      <h3>หมุนมือถือเป็นแนวนอน</h3>
+      <p>เกมนี้ออกแบบให้เล่นแนวนอน จะเห็นฉากเต็มจอและกดปุ่มได้ถนัดกว่า</p>
+      <button class="btn-primary" onclick="enterLandscapeFullscreen()">⛶ เต็มจอแนวนอน</button>
+      <button class="btn-link" onclick="dismissRotateHint()">เล่นแนวตั้งต่อ</button>
     </div>
   </div>
 
