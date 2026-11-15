@@ -57,6 +57,7 @@ const audioBus = {};
 let noiseBuffer = null;
 const ambient = { scene: null, out: null, sources: [], timers: [] };
 let heartbeatTimer = 0;
+let ghostVoiceTimer = 1.5;
 
 (function loadAudioPrefs() {
   try {
@@ -435,6 +436,23 @@ function playSound(type, opts = {}) {
   } else if (type === 'road_rumble') {
     tone(now, { type: 'triangle', freq: 58, to: 52, toTime: 1.4, dur: 1.5, peak: 0.045, attack: 0.18, out });
     noiseHit(now, { dur: 1.45, peak: 0.028, filter: 'lowpass', freq: 240, q: 0.9, attack: 0.2, out });
+  } else if (type === 'dancer_motif') {
+    // a few slow ranat-like mallet notes from a Thai pentatonic scale, a little out of tune
+    const scale = [392, 440, 523, 587, 659, 784];
+    let i = 2 + Math.floor(Math.random() * 4);
+    const count = 3 + Math.floor(Math.random() * 2);
+    for (let n = 0; n < count; n++) {
+      const t = now + n * (0.34 + Math.random() * 0.12);
+      const f = scale[i] * (1 + (Math.random() - 0.5) * 0.02);
+      tone(t, { type: 'triangle', freq: f, dur: 0.42, peak: 0.07, attack: 0.003, out });
+      tone(t, { freq: f * 3.9, dur: 0.09, peak: 0.018, attack: 0.002, out }); // wooden click
+      i = Math.max(0, i - 1 - (Math.random() < 0.3 ? 1 : 0));
+    }
+  } else if (type === 'sam_breath') {
+    // a long, wet breath in and a groan out
+    noiseHit(now, { dur: 1.1, peak: 0.06, filter: 'bandpass', freq: 900, q: 1.4, attack: 0.5, out });
+    noiseHit(now + 1.2, { dur: 1.3, peak: 0.05, filter: 'lowpass', freq: 420, attack: 0.15, out });
+    tone(now + 1.2, { type: 'sawtooth', freq: 78, to: 61, toTime: 1.2, dur: 1.25, peak: 0.022, attack: 0.2, out });
   } else if (type === 'phone_vibe') {
     tone(now, { type: 'triangle', freq: 145, to: 140, toTime: 0.14, dur: 0.15, peak: 0.045, attack: 0.005, out });
     tone(now + 0.22, { type: 'triangle', freq: 148, to: 142, toTime: 0.16, dur: 0.17, peak: 0.04, attack: 0.005, out });
@@ -2764,7 +2782,7 @@ function triggerEndingDialogue() {
       'เฟรม 5/6 : "จำสัญญาของเราไว้... ไม่อย่างนั้น มันจะดึงเจ้ากลับมา"',
       'เฟรม 6/6 : แล้วพบกันที่ OPEN HOUSE BUU วันที่ 20 – 21 นี้'
     ];
-    playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => {
+    playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playPhoneSting(() => {
       state.flags.victory = true;
       clearCheckpoint();
       playSound('chime');
@@ -2772,8 +2790,60 @@ function triggerEndingDialogue() {
       setMusicLevel(0.85, 1.2);
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
-    });
+    }));
   });
+}
+
+// The last beat before the ending screen: you wake up to two messages from the friend whose
+// funeral started the night. The first one, unread, arrived a minute before the crash; the
+// second arrives now. Runs as a cutscene, so E / tap / Space skip it once it has had a moment.
+const PHONE_STING_SKIP_AFTER = 1500;
+function playPhoneSting(onComplete) {
+  const el = document.getElementById('phone-sting');
+  if (!el) return onComplete();
+  const name = state.character === 'female' ? 'ริน' : 'นนท์';
+  const notes = [document.getElementById('phone-note-1'), document.getElementById('phone-note-2')];
+  const line = document.getElementById('phone-sting-line');
+  document.getElementById('phone-note-1-text').textContent = `${name} บอกพ่อให้ขับช้าๆ นะ โค้งข้างหน้ามีรถสวนมา`;
+  document.getElementById('phone-note-2-text').textContent = 'ตื่นแล้วใช่ไหม... ดีแล้ว ไปงานแทนเราด้วยนะ เดี๋ยวเราแอบไปยืนดูอยู่ข้างๆ';
+  notes.forEach((n) => n.classList.remove('show', 'buzz'));
+  line.classList.remove('show');
+  line.textContent = '';
+  el.classList.remove('awake', 'hidden');
+  state.flags.cutscenePlaying = true;
+  state.moveInput = 0;
+  setMusicLevel(0, 0.8);
+
+  const timers = [];
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+  const say = (text) => {
+    line.classList.remove('show');
+    at(350, () => { line.textContent = text; line.classList.add('show'); });
+  };
+  const arrive = (n) => {
+    playSound('phone_vibe', { gain: 2.2 });
+    notes[n].classList.add('show');
+    if (!REDUCED_MOTION) notes[n].classList.add('buzz');
+  };
+
+  at(700, () => el.classList.add('awake'));
+  at(1300, () => arrive(0));
+  at(3000, () => say('ข้อความเมื่อคืนที่ไม่มีใครได้เปิดอ่าน... ส่งมาก่อนรถคว่ำแค่หนึ่งนาที'));
+  at(6400, () => arrive(1));
+  at(8200, () => { say('ทั้งสองข้อความ ส่งมาจากเบอร์ของเพื่อน... คนที่เมื่อวานเพิ่งไปส่งเขาที่งานศพ'); playSound('whisper', { gain: 0.6 }); });
+  at(12500, () => finish());
+
+  function finish() {
+    if (activeCutscene !== cut) return;
+    timers.forEach(clearTimeout);
+    activeCutscene = null;
+    el.classList.add('hidden');
+    state.flags.cutscenePlaying = false;
+    onComplete();
+  }
+  // skipCutscene() allows a skip after 300 ms; start the clock so the first message is seen
+  const cut = { finish, startedAt: performance.now() + PHONE_STING_SKIP_AFTER - 300 };
+  activeCutscene = cut;
 }
 
 // ----------------------- Photo Puzzle Modal -----------------------
@@ -3212,6 +3282,15 @@ function updateGhost(dt) {
     heartbeatTimer = 0.45 + k * 0.65;
   }
 
+  // Each ghost has its own voice, placed left/right where it is: the dancer's ranat phrase
+  // (silent while the beam holds her still) and the samphawesi's breathing.
+  ghostVoiceTimer -= dt;
+  if (solid && !g.frozen && ghostVoiceTimer <= 0) {
+    const sfx = ghostSoundOptions(g.x, p.x);
+    if (sfx.prox > 0.05) playSound(g.type === 'dancer' ? 'dancer_motif' : 'sam_breath', sfx);
+    ghostVoiceTimer = (g.type === 'dancer' ? 3.6 : 3.0) + Math.random() * 1.8;
+  }
+
   g.animTimer += dt;
   if (g.animTimer >= 0.16) {
     g.animTimer = 0;
@@ -3464,6 +3543,7 @@ function renderScene() {
     renderDarknessAndFlashlight();
     renderGhostSilhouette();
     renderRoomGlow();
+    renderPortraitScare();
   }
 
   // 6. Atmospheric Weather / Dust Particles
@@ -3791,6 +3871,69 @@ function renderRoomGlow() {
   ctx.restore();
   drawFlame(life.lamp.x, life.lamp.y, 0.6, 1.7);
   (CANDLE_FLAMES[state.scene] || []).forEach((c, i) => drawFlame(c.x, c.y, c.s, i * 3.1));
+}
+
+// The photo wall in the hallway, once per game: as you walk under it, the eyes in every
+// portrait light up one after another and follow you, then all go out together with a thud.
+// Eye midpoints are measured on bg_scene2_hallway.jpg (canvas coordinates); r = half the eye gap.
+const PORTRAIT_EYES = [
+  { x: 228, y: 251, r: 5 }, { x: 324, y: 242, r: 5 }, { x: 233, y: 370, r: 5 }, { x: 327, y: 372, r: 5 },
+  { x: 582, y: 249, r: 5 }, { x: 678, y: 256, r: 5 }, { x: 581, y: 368, r: 5 }, { x: 676, y: 364, r: 4 }
+];
+const PORTRAIT_SCARE_MS = 2600;
+const portraitScare = { startAt: -1, sceneSince: 0 };
+function renderPortraitScare() {
+  const now = performance.now();
+  if (state.scene !== 2 || !state.started) {
+    portraitScare.sceneSince = 0;
+    if (portraitScare.startAt > 0) portraitScare.startAt = -2; // left mid-scare: drop it quietly
+    return;
+  }
+  if (!portraitScare.sceneSince) portraitScare.sceneSince = now;
+  if (portraitScare.startAt < 0) {
+    const p = state.player;
+    if (state.flags.portraitScareSeen || p.hidden || isWorldFrozen() || now - portraitScare.sceneSince < 2500) return;
+    if (p.x < 300 || p.x > 640) return;
+    state.flags.portraitScareSeen = true;
+    portraitScare.startAt = now;
+    playSound('whisper', { gain: 1, pan: -0.3 });
+  }
+  const t = now - portraitScare.startAt;
+  if (t >= PORTRAIT_SCARE_MS) {
+    if (portraitScare.startAt > 0) {
+      portraitScare.startAt = -2; // done; never again this game
+      queueDialogue([
+        { speaker: getPlayerName(), text: `...เมื่อกี้รูปบนผนังลืมตา แล้วมองตาม${pWord('ผม', 'ฉัน')}ทุกรูป` },
+        { speaker: getPlayerName(), text: 'ไม่สิ... ตาฝาดไปเอง ใช่ไหม' }
+      ]);
+    }
+    return;
+  }
+  // pupils lean toward the player
+  const look = Math.max(-1, Math.min(1, (state.player.x - 450) / 300)) * 1.6;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  PORTRAIT_EYES.forEach((e, i) => {
+    const on = t - i * 140; // one portrait after another, left to right
+    if (on < 0 || t > PORTRAIT_SCARE_MS - 260) return;
+    const a = Math.min(1, on / 220) * (REDUCED_MOTION ? 1 : 0.8 + Math.sin(now / 60 + i) * 0.2);
+    [-1, 1].forEach((side) => {
+      const x = e.x + side * e.r + look;
+      const halo = ctx.createRadialGradient(x, e.y, 0, x, e.y, 7);
+      halo.addColorStop(0, `rgba(255, 60, 40, ${0.55 * a})`);
+      halo.addColorStop(1, 'rgba(255, 40, 30, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(x - 7, e.y - 7, 14, 14);
+      ctx.fillStyle = `rgba(255, 220, 200, ${a})`;
+      ctx.fillRect(x - 1, e.y - 1, 2, 2);
+    });
+  });
+  ctx.restore();
+  // everything goes out at once, with a dull knock from inside the wall
+  if (t > PORTRAIT_SCARE_MS - 260 && !portraitScare.knocked) {
+    portraitScare.knocked = true;
+    playSound('scare', { gain: 0.45 });
+  }
 }
 
 // Every so often a figure drifts past the window, outside. Rare (at most once per 40 s) so it
