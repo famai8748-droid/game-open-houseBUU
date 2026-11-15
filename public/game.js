@@ -337,6 +337,37 @@ function playSound(type, opts = {}) {
     } else {
       noiseHit(now, { dur: 1.2, peak: 0.05, filter: 'bandpass', freq: 2400, q: 4, attack: 0.4, out });
     }
+  } else if (type === 'wiper') {
+    tone(now, { type: 'triangle', freq: 195, to: 125, toTime: 0.16, dur: 0.17, peak: 0.024, attack: 0.02, out });
+    noiseHit(now + 0.02, { dur: 0.14, peak: 0.032, filter: 'bandpass', freq: 620, q: 2.2, attack: 0.02, out });
+  } else if (type === 'horn') {
+    tone(now, { type: 'sawtooth', freq: 185, to: 179, toTime: 0.72, dur: 0.74, peak: 0.14, attack: 0.03, out });
+    tone(now, { type: 'sawtooth', freq: 233, to: 226, toTime: 0.72, dur: 0.74, peak: 0.12, attack: 0.03, out });
+    noiseHit(now, { dur: 0.65, peak: 0.05, filter: 'bandpass', freq: 900, q: 1.6, attack: 0.03, out });
+  } else if (type === 'crash_hit') {
+    tone(now, { type: 'triangle', freq: 128, to: 30, toTime: 0.42, dur: 0.46, peak: 0.26, attack: 0.002, out });
+    tone(now + 0.02, { type: 'sawtooth', freq: 310, to: 85, toTime: 0.24, dur: 0.26, peak: 0.12, attack: 0.002, out });
+    noiseHit(now, { dur: 0.55, peak: 0.28, filter: 'bandpass', freq: 1950, q: 0.9, attack: 0.003, out });
+    noiseHit(now + 0.03, { dur: 0.85, peak: 0.22, filter: 'lowpass', freq: 360, q: 0.8, attack: 0.005, out });
+  } else if (type === 'blip_male') {
+    const f = 205 + Math.random() * 24;
+    tone(now, { type: 'square', freq: f, to: f * 0.92, toTime: 0.04, dur: 0.045, peak: 0.026, attack: 0.002, out });
+  } else if (type === 'blip_female') {
+    const f = 355 + Math.random() * 32;
+    tone(now, { type: 'triangle', freq: f, to: f * 1.05, toTime: 0.04, dur: 0.044, peak: 0.036, attack: 0.002, out });
+  } else if (type === 'blip_dad') {
+    const f = 142 + Math.random() * 16;
+    tone(now, { type: 'triangle', freq: f, to: f * 0.9, toTime: 0.048, dur: 0.052, peak: 0.038, attack: 0.003, out });
+  } else if (type === 'blip_mom') {
+    const f = 290 + Math.random() * 22;
+    tone(now, { type: 'sine', freq: f, to: f * 1.04, toTime: 0.042, dur: 0.046, peak: 0.034, attack: 0.003, out });
+  } else if (type === 'blip_friend') {
+    const f = 420 + Math.random() * 26;
+    tone(now, { type: 'sine', freq: f, to: f * 0.9, toTime: 0.065, dur: 0.07, peak: 0.024, attack: 0.008, out });
+    tone(now + 0.012, { type: 'sine', freq: f * 1.98, to: f * 1.85, toTime: 0.055, dur: 0.06, peak: 0.01, attack: 0.01, out });
+  } else if (type === 'blip_narrator') {
+    const f = 168 + Math.random() * 14;
+    tone(now, { type: 'triangle', freq: f, to: f * 0.96, toTime: 0.03, dur: 0.034, peak: 0.022, attack: 0.002, out });
   }
 }
 

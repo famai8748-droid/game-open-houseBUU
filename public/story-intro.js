@@ -1,651 +1,1245 @@
-/* ============================================================================
-   Story intro —— 5-scene, 25-beat continuous pixel-art cutscene ("ซีนยาวๆเลยๆ").
-   Scene 0: Friend's funeral at the temple
-   Scene 1: Late-night drive (Phase A: Mom & Dad conversation with empty dark road -> Phase B: sudden oncoming truck & head-on crash)
-   Scene 2: Thrown onto the road beside the overturned burning car -> blackout
-   Scene 3: Waking up in the moonlit Thai banana grove with a single flashlight
-   Scene 4: Walking out of the grove to discover the veiled Thai house
-   Rendered continuously on a 960x540 canvas matching crisp 16-bit pixel art.
-   ========================================================================== */
-(function () {
+/* ==================== Opening Story Cutscene (6 Scenes / 30 Beats) ==================== */
+(() => {
   'use strict';
 
   const W = 960;
   const H = 540;
 
-  function ready(img) {
-    return !!img && img.complete && img.naturalWidth > 0;
+  const fallbackImgCache = new Map();
+  let introAudioCtx = null;
+
+  function safeAudioCtx() {
+    try {
+      if (typeof initAudio === 'function') initAudio();
+      if (!introAudioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx) introAudioCtx = new Ctx();
+      }
+      if (introAudioCtx && introAudioCtx.state === 'suspended') {
+        introAudioCtx.resume().catch(() => {});
+      }
+      return introAudioCtx;
+    } catch {
+      return null;
+    }
   }
 
-  function hash(n) {
-    const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
-    return x - Math.floor(x);
+  function safePlaySound(type) {
+    try {
+      if (typeof playSound === 'function') playSound(type);
+    } catch {
+      /* Ignore audio unlock failures before user interaction */
+    }
   }
 
-  function smooth(x) {
-    return x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  function playAnkleBellChime() {
+    safePlaySound('whisper');
+    const ctx = safeAudioCtx();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [0, 0.24].forEach((offset) => {
+      [2180, 3290, 4120].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = i === 0 ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(freq + offset * 90, now + offset);
+        gain.gain.setValueAtTime(0.0001, now + offset);
+        gain.gain.linearRampToValueAtTime(0.032 / (i + 1), now + offset + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.42);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + offset);
+        osc.stop(now + offset + 0.45);
+      });
+    });
   }
 
-  function characterSprite(index) {
-    const female = typeof state !== 'undefined' && state.character === 'female';
-    const img = female ? IMAGES[`femaleWalk${index % 8}`] : IMAGES[`maleWalk${index % 8}`];
-    return ready(img) ? img : null;
+  function getImg(key) {
+    if (!key) return null;
+    if (typeof IMAGES !== 'undefined' && IMAGES && IMAGES[key]) {
+      const img = IMAGES[key];
+      if (img.complete && img.naturalWidth > 0) return img;
+    }
+    if (fallbackImgCache.has(key)) {
+      const cached = fallbackImgCache.get(key);
+      return cached.complete && cached.naturalWidth > 0 ? cached : null;
+    }
+    if (key.startsWith('intro_') && typeof Image !== 'undefined') {
+      const img = new Image();
+      img.src = `assets/frames/${key}.png`;
+      fallbackImgCache.set(key, img);
+      return img.complete && img.naturalWidth > 0 ? img : null;
+    }
+    return null;
   }
 
-  function drawPixelPlate(cx, img, zoom, panX, panY) {
-    if (!ready(img)) return false;
-    cx.save();
-    cx.imageSmoothingEnabled = false;
-    const z = zoom || 1;
-    cx.translate(W / 2 + (panX || 0), H / 2 + (panY || 0));
-    cx.scale(z, z);
-    cx.translate(-W / 2, -H / 2);
-    cx.drawImage(img, 0, 0, W, H);
-    cx.restore();
+  function getProtagonist() {
+    const isFemale = typeof state !== 'undefined' && state && state.gender === 'female';
+    return isFemale
+      ? { name: 'ริน', role: 'female', blip: 'blip_female' }
+      : { name: 'นนท์', role: 'male', blip: 'blip_male' };
+  }
+
+  function resolveSpeaker(speakerTag) {
+    const p = getProtagonist();
+    if (speakerTag === 'PROTAGONIST') {
+      return { name: p.name, role: p.role, blip: p.blip, css: p.role === 'female' ? 'is-rin' : 'is-non' };
+    }
+    if (speakerTag === 'แม่') {
+      return { name: 'แม่', role: 'mom', blip: 'blip_mom', css: 'is-mom' };
+    }
+    if (speakerTag === 'พ่อ') {
+      return { name: 'พ่อ', role: 'dad', blip: 'blip_dad', css: 'is-dad' };
+    }
+    if (speakerTag === 'เพื่อนสนิท') {
+      return { name: 'เพื่อนสนิท (เสียงในความมืด)', role: 'friend', blip: 'blip_friend', css: 'is-friend' };
+    }
+    if (speakerTag === 'เสียงกระพรวน') {
+      return { name: 'เสียงกระพรวน', role: 'bell', blip: 'blip_friend', css: 'is-bell' };
+    }
+    return { name: 'บรรยาย', role: 'narrator', blip: 'blip_narrator', css: 'is-narrator' };
+  }
+
+  function getLines() {
+    const p = getProtagonist();
+    const callMe = p.role === 'female' ? 'เธอ' : 'มึง';
+    const polite = p.role === 'female' ? 'ค่ะ' : 'ครับ';
+    const friendCall = p.role === 'female' ? 'ริน' : 'นนท์';
+
+    return [
+      // --- Scene 0: Altar & Keepsake (Beats 0..4, 5 beats) ---
+      {
+        scene: 0,
+        tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
+        speaker: 'บรรยาย',
+        text: 'คืนฝนพรำหลังพิธีสวดอภิธรรม ควันธูปจางลงหน้าโลงไม้สักที่มีรูปถ่ายเพื่อนรักตั้งอยู่',
+        frame: 'intro_s1_f0',
+      },
+      {
+        scene: 0,
+        tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
+        speaker: 'PROTAGONIST',
+        text: `"...สัญญากันไว้แท้ๆ ว่าจะกลับไปเรียนด้วยกันหลังปิดเทอม ไม่น่าด่วนจากไปเลยนะ..."`,
+        frame: 'intro_s1_f1',
+      },
+      {
+        scene: 0,
+        tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
+        speaker: 'แม่',
+        text: `"${friendCall}เอ๊ย... ทางวัดเขามอบของใช้ติดตัวของเพื่อนไว้ให้ แม่เห็นไฟฉายกระบอกนี้มันอยู่บนหิ้ง เลยเอามาให้ลูกเก็บไว้นะ"`,
+        frame: 'intro_s1_f2',
+      },
+      {
+        scene: 0,
+        tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
+        speaker: 'บรรยาย',
+        text: `ไฟฉายพกพาสีทึมกับด้ายสายสิญจน์สีขาวนวลขมวดปมติดข้อมือ... ยังคงอุ่นจางๆ อยู่ในอุ้งมือของ${friendCall}`,
+        frame: 'intro_s1_f4',
+        showKeepsake: true,
+      },
+      {
+        scene: 0,
+        tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
+        speaker: 'PROTAGONIST',
+        text: `"ขอบคุณ${polite}... ต่อให้มืดแค่ไหน เราจะเก็บไฟฉายกับสายสิญจน์เส้นนี้ติดตัวไว้ตลอดไป"`,
+        frame: 'intro_s1_f5',
+        showKeepsake: true,
+      },
+
+      // --- Scene 1: Car Drive (NO truck in 5..8!) & Crash (Beats 5..12, 8 beats) ---
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'บรรยาย',
+        text: 'ขากลับบ้านกลางดึก ฝนโปรยลงกระจกหน้า ถนนลาดยางข้างทางมีเพียงแนวไม้ทึบและความมืดมิดไร้เงารถสวน',
+        frame: 'intro_s2_f0',
+        wipers: true,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'พ่อ',
+        text: `"ฝนตกทางมืดหน่อยนะลูก คาดเข็มขัดดีๆ เดี๋ยวถึงทางแยกหน้าก็ใกล้จะเข้าเขตบ้านแล้ว"`,
+        frame: 'intro_s2_f1',
+        wipers: true,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'แม่',
+        text: `"คืนนี้ง่วงก็พักสายตาไปก่อนเถอะลูก พ่อเขาขับระวังอยู่แล้ว... เห็นลูกเงียบมาตั้งแต่หน้างานศพ"`,
+        frame: 'intro_s2_f2',
+        wipers: true,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'PROTAGONIST',
+        text: `"${polite}แม่... ไม่เป็นไรหรอก เหมือนฝนข้างนอกมันเริ่มเทหนักขึ้นทุกทีแล้วนะพ่อ"`,
+        frame: 'intro_s2_f3',
+        wipers: true,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'แม่',
+        text: `"เอ๊ะ... พ่อ! ข้างหน้าทางโค้งนั่นไฟรถใครสาดข้ามเลนมา?! ทำไมมันส่ายเข้ามาฝั่งเราล่ะ!"`,
+        frame: 'intro_s2_f4',
+        wipers: true,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'พ่อ',
+        text: `"เฮ้ย! รถบรรทุกเสียหลักแหกโค้ง! มันเบรกไม่อยู่แล้ว—จับเบาะไว้แน่นๆ!!"`,
+        frame: 'intro_s2_f5',
+        sfx: 'horn',
+        shake: 8,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'PROTAGONIST',
+        text: `"พ่อครับ!! ระวัง——!!"`,
+        frame: 'intro_s2_f6',
+        shake: 16,
+      },
+      {
+        scene: 1,
+        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        speaker: 'บรรยาย',
+        text: 'โครม!! แรงกระแทกมหาศาลฉีกกระจกหน้าแตกกระจาย แสงไฟหน้ารถสว่างวาบก่อนทุกอย่างจะหมุนคว้างลงข้างทาง...',
+        frame: 'intro_s2_f7',
+        sfx: 'crash_hit',
+        shake: 24,
+        flashWhite: true,
+      },
+
+      // --- Scene 2: Pre-Blackout Bridge (Beats 13..16, 4 beats) ---
+      {
+        scene: 2,
+        tag: 'บทนำ ๓/๖ · ก่อนลมหายใจขาดห้วง',
+        speaker: 'บรรยาย',
+        text: 'กลิ่นน้ำมันปนกลิ่นฝนคลุ้งบนพื้นถนนเปียกแฉะ เปลวไฟลุกโชนข้างซากรถที่พลิกตะแคงอยู่ด้านหลัง',
+        frame: 'intro_s3_f0',
+      },
+      {
+        scene: 2,
+        tag: 'บทนำ ๓/๖ · ก่อนลมหายใจขาดห้วง',
+        speaker: 'PROTAGONIST',
+        text: `"อึก... พ่อ... แม่... ร่างกายมันหนักจนขยับไม่ไหว... แต่ตรงนั้น... นั่นมัน..."`,
+        frame: 'intro_s3_f1',
+        showDroppedKeepsake: true,
+      },
+      {
+        scene: 2,
+        tag: 'บทนำ ๓/๖ · ก่อนลมหายใจขาดห้วง',
+        speaker: 'บรรยาย',
+        text: 'นิ้วที่ชาด้านเอื้อมไปกำไฟฉายของเพื่อนที่กระเด็นตกอยู่ข้างมือ ด้ายสายสิญจน์บนข้อมือส่องประกายทองจางๆ ท่ามกลางเงาไฟ',
+        frame: 'intro_s3_f2',
+        showDroppedKeepsake: true,
+      },
+      {
+        scene: 2,
+        tag: 'บทนำ ๓/๖ · ก่อนลมหายใจขาดห้วง',
+        speaker: 'PROTAGONIST',
+        text: `"อย่าเพิ่ง... หลับตาสิ... ช่วยด้วย..." เปลือกตาหนักอึ้งค่อยๆ ปิดลงพร้อมเสียงไฟไหม้ที่จางหายไปในความมืดสนิท`,
+        frame: 'intro_s3_f4',
+        closingEyes: true,
+      },
+
+      // --- Scene 3: NEW Unconscious Limbo Bridge (Beats 17..21, 5 beats) ---
+      {
+        scene: 3,
+        tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
+        speaker: 'บรรยาย',
+        text: 'ไม่มีเสียงถนน ไม่มีเปลวไฟ และไม่มีความเจ็บปวด... รอบกายมีเพียงความมืดว่างเปล่ากับละอองเส้นด้ายสีทองที่ลอยนิ่ง',
+        sfx: 'whisper',
+      },
+      {
+        scene: 3,
+        tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
+        speaker: 'เพื่อนสนิท',
+        text: `"${friendCall}... ได้ยินเสียงเราไหม? ...ดีนะที่ด้ายสายสิญจน์กับไฟฉายเส้นนี้ช่วยรั้งดวงจิตของ${callMe}เอาไว้ทัน"`,
+      },
+      {
+        scene: 3,
+        tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
+        speaker: 'PROTAGONIST',
+        text: `"เสียงนายเหรอ?! เกิดอะไรขึ้น... เมื่อกี้รถเพิ่งคว่ำ ทำไมเราถึงมาอยู่ที่มืดๆ แบบนี้ล่ะ?"`,
+      },
+      {
+        scene: 3,
+        tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
+        speaker: 'เพื่อนสนิท',
+        text: `"แรงปะทะเมื่อกี้ทำให้จิตของ${callMe}หลุดออกมาติดอยู่ที่เขตแดนกึ่งกลาง... ที่นี่มันดูดวิญญาณคนหลงทางเข้าไปในเรือนเก่าริมป่า"`,
+      },
+      {
+        scene: 3,
+        tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
+        speaker: 'เพื่อนสนิท',
+        text: `"สายสิญจน์เส้นนี้คือสายใยเดียวที่ยึด${callMe}ไว้กับโลกจริง จงกำไฟฉายในมือให้แน่น... แล้วลืมตาตื่นขึ้นมาเดี๋ยวนี้!"`,
+        flashGoldWake: true,
+      },
+
+      // --- Scene 4: Post-Wakeup Bridge (Beats 22..25, 4 beats) ---
+      {
+        scene: 4,
+        tag: 'บทนำ ๕/๖ · ฟื้นกลางดงต้นกล้วย',
+        speaker: 'PROTAGONIST',
+        text: `"เฮือก!! แค่ก... แค่ก...! ที่นี่... ที่ไหนกัน?!" ลมหายใจหอบถี่เมื่อสะดุ้งตื่นขึ้นมากลางป่าดงดิบชื้น`,
+        frame: 'intro_s4_f0',
+        openingEyes: true,
+      },
+      {
+        scene: 4,
+        tag: 'บทนำ ๕/๖ · ฟื้นกลางดงต้นกล้วย',
+        speaker: 'บรรยาย',
+        text: 'ไม่มีซากรถยนต์ ไม่มีเสียงไซเรนกู้ภัย หรือร่องรอยบาดแผลใดๆ เหลืออยู่ มีเพียงแสงจันทร์เหนือดงต้นกล้วยและแอ่งโคลนเปียกแฉะ',
+        frame: 'intro_s4_f1',
+        heldFlashlight: true,
+      },
+      {
+        scene: 4,
+        tag: 'บทนำ ๕/๖ · ฟื้นกลางดงต้นกล้วย',
+        speaker: 'PROTAGONIST',
+        text: `"ไฟฉายของเพื่อน... ยังอยู่ในมือเราจริงๆ ด้วย! แล้วสายสิญจน์ที่ข้อมือนี่ก็ยังอยู่..."`,
+        frame: 'intro_s4_f2',
+        heldFlashlight: true,
+      },
+      {
+        scene: 4,
+        tag: 'บทนำ ๕/๖ · ฟื้นกลางดงต้นกล้วย',
+        speaker: 'เพื่อนสนิท',
+        text: `"อย่าเพิ่งตื่นตระหนกไปเลยนะ... เดินตามแสงไฟฉายไปข้างหน้า เราต้องหาทางกลับเข้าร่างให้ได้ก่อนฟ้าสาง!"`,
+        frame: 'intro_s4_f3',
+        heldFlashlight: true,
+      },
+
+      // --- Scene 5: Haunted Mansion Arrival (Beats 26..29, 4 beats) ---
+      {
+        scene: 5,
+        tag: 'บทนำ ๖/๖ · เรือนซ่อนวิญญาณ',
+        speaker: 'บรรยาย',
+        text: 'ปลายลำแสงไฟฉายส่องทะลุม่านหมอกและใบกล้วยออกไป เผยให้เห็นโครงสร้างเรือนไม้ทรงไทยเก่าแก่ตั้งตระหง่านอย่างโดดเดี่ยว',
+        frame: 'intro_s4_f4',
+        heldFlashlight: true,
+      },
+      {
+        scene: 5,
+        tag: 'บทนำ ๖/๖ · เรือนซ่อนวิญญาณ',
+        speaker: 'PROTAGONIST',
+        text: `"เรือนไม้หลังนั้น... ทำไมบรรยากาศมันเย็นยะเยือกแบบนี้ เหมือนมีใครกำลังจ้องมองลงมาจากข้างบน..."`,
+        frame: 'intro_panel_4',
+      },
+      {
+        scene: 5,
+        tag: 'บทนำ ๖/๖ · เรือนซ่อนวิญญาณ',
+        speaker: 'เสียงกระพรวน',
+        text: `"กรุ๊ง... กริ๊ง... กรุ๊ง... กริ๊ง..." เสียงโลหะกระทบกันเป็นจังหวะเชื่องช้าดังแว่วออกมาจากโถงมืดใต้เรือนไม้`,
+        sfx: 'bell_whisper',
+      },
+      {
+        scene: 5,
+        tag: 'บทนำ ๖/๖ · เรือนซ่อนวิญญาณ',
+        speaker: 'เพื่อนสนิท',
+        text: `"ระวังตัวด้วยนะ... ประตูทางออกอยู่ที่เรือนหลังนั้น เดี๋ยวเราจะคอยกระซิบบอกทางให้ เดินก้าวเข้าไปเถอะ!"`,
+      },
+    ];
+  }
+
+  /* -------------------- Shared Pixel Art Drawing Helpers -------------------- */
+  function drawCoverFrame(ctx, img, t, { zoom = 1, panX = 0, panY = 0, shakeX = 0, shakeY = 0, alpha = 1 } = {}) {
+    if (!img) return false;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = false;
+    const iw = img.naturalWidth || img.width;
+    const ih = img.naturalHeight || img.height;
+    const scale = Math.max(W / iw, H / ih) * zoom;
+    const dw = iw * scale;
+    const dh = ih * scale;
+    const dx = (W - dw) * 0.5 + panX + shakeX;
+    const dy = (H - dh) * 0.5 + panY + shakeY;
+    ctx.drawImage(img, Math.round(dx), Math.round(dy), Math.round(dw), Math.round(dh));
+    ctx.restore();
     return true;
   }
 
-  // ---------------------------------------------------------------- scene 0
-  // Friend's funeral: crisp 16-bit storyboard plate + continuous rising smoke, embers & candlelight
-  function drawAltar(cx, t, phase) {
-    const pIdx = Math.min(5, Math.max(0, phase || 0));
-    const frameImg = IMAGES[`intro_s1_f${pIdx}`] || IMAGES.intro_panel_1;
-    const push = 1 + Math.min(t, 18) * 0.0035;
+  function drawSaiSinGlow(ctx, x, y, t, scale = 1, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const pulse = 0.72 + Math.sin(t * 4.2) * 0.25;
+    const g = ctx.createRadialGradient(x, y, 2, x, y, 28 * scale);
+    g.addColorStop(0, `rgba(255, 232, 150, ${0.42 * pulse})`);
+    g.addColorStop(1, 'rgba(255, 200, 90, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, 28 * scale, 0, Math.PI * 2);
+    ctx.fill();
 
-    if (!drawPixelPlate(cx, frameImg, push, 0, 0)) {
-      cx.fillStyle = '#0c0a10';
-      cx.fillRect(0, 0, W, H);
-    }
+    // Knotted white-gold sai-sin loop
+    ctx.strokeStyle = '#fff5d4';
+    ctx.lineWidth = Math.max(2, 3 * scale);
+    ctx.beginPath();
+    ctx.ellipse(x, y, 12 * scale, 7 * scale, -0.25, 0, Math.PI * 2);
+    ctx.stroke();
 
-    const flicker = 0.85 + Math.sin(t * 6.5) * 0.08 + Math.sin(t * 11.1) * 0.04;
-    const glow = cx.createRadialGradient(600, 270, 20, 600, 270, 380);
-    glow.addColorStop(0, 'rgba(255, 184, 98, ' + (0.16 * flicker) + ')');
-    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    cx.fillStyle = glow;
-    cx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#ffd56b';
+    ctx.lineWidth = Math.max(1.5, 2 * scale);
+    ctx.beginPath();
+    ctx.moveTo(x - 6 * scale, y + 6 * scale);
+    ctx.lineTo(x - 15 * scale, y + 14 * scale);
+    ctx.moveTo(x + 4 * scale, y + 7 * scale);
+    ctx.lineTo(x + 12 * scale, y + 15 * scale);
+    ctx.stroke();
+    ctx.restore();
+  }
 
-    // Subtle rising pixel incense smoke wisps layered smoothly on top of the plate
-    const iz = 1 + pIdx * 0.028;
-    const incX = 588 + (push - 1) * 80;
-    const incY = 365 - (iz - 1) * 140;
-    for (let s = 0; s < 3; s++) {
-      for (let k = 0; k < 16; k++) {
-        const p = (k / 16 + t * 0.25 + s * 0.33) % 1;
-        const y = incY - p * 135;
-        const sway = Math.sin(p * 6 + t * 1.4 + s * 1.9) * (6 + p * 18);
-        const x = incX + (s - 1) * 11 + sway;
-        cx.fillStyle = 'rgba(222, 228, 240, ' + ((1 - p) * 0.22) + ')';
-        cx.fillRect(Math.round(x / 3) * 3, Math.round(y / 3) * 3, 3, 6);
-      }
-    }
+  function drawPocketFlashlight(ctx, x, y, scale = 1, lit = false, t = 0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.32);
+    ctx.scale(scale, scale);
+    // Dark outline
+    ctx.fillStyle = '#0c0d10';
+    ctx.fillRect(-16, -6, 32, 12);
+    // Metal barrel
+    ctx.fillStyle = '#3c4552';
+    ctx.fillRect(-14, -4, 20, 8);
+    ctx.fillStyle = '#606d80';
+    ctx.fillRect(-14, -4, 20, 3);
+    // Brass bezel & lens
+    ctx.fillStyle = '#7e6a42';
+    ctx.fillRect(6, -5, 8, 10);
+    ctx.fillStyle = lit ? '#fff5c4' : '#9eb0bf';
+    ctx.fillRect(13, -4, 2, 8);
+    // Switch
+    ctx.fillStyle = '#b9443c';
+    ctx.fillRect(-4, -5, 4, 2);
+    ctx.restore();
 
-    // Glowing incense ember tips
-    for (let i = 0; i < 3; i++) {
-      const ex = incX + (i - 1) * 11;
-      const pulse = 0.65 + Math.sin(t * 5.2 + i * 1.6) * 0.35;
-      cx.fillStyle = 'rgba(255, 118, 42, ' + pulse + ')';
-      cx.fillRect(Math.round(ex), Math.round(incY), 4, 4);
-    }
-
-    // Subtle dust motes in the temple hall
-    for (let i = 0; i < 18; i++) {
-      const dx = 280 + hash(i) * 520 + Math.sin(t * 0.6 + i) * 10;
-      const dy = (hash(i + 40) * 360 + t * 8) % 380 + 70;
-      cx.fillStyle = 'rgba(255, 215, 155, ' + (0.08 + hash(i + 7) * 0.12) + ')';
-      cx.fillRect(Math.round(dx / 2) * 2, Math.round(dy / 2) * 2, 3, 3);
-    }
-
-    // Gentle fade-out as they walk out to the car on the final line of Scene 0
-    if (pIdx >= 4) {
-      const dim = Math.min(0.45, Math.max(0, (t % 3.5) * 0.08));
-      cx.fillStyle = 'rgba(3, 4, 8, ' + dim + ')';
-      cx.fillRect(0, 0, W, H);
+    if (lit) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const flicker = 0.88 + Math.sin(t * 7.5) * 0.08;
+      const beam = ctx.createRadialGradient(x + 18 * scale, y - 6 * scale, 4, x + 180 * scale, y - 60 * scale, 220 * scale);
+      beam.addColorStop(0, `rgba(255, 238, 180, ${0.38 * flicker})`);
+      beam.addColorStop(0.5, `rgba(255, 222, 145, ${0.14 * flicker})`);
+      beam.addColorStop(1, 'rgba(255, 210, 120, 0)');
+      ctx.fillStyle = beam;
+      ctx.beginPath();
+      ctx.moveTo(x + 10 * scale, y - 6 * scale);
+      ctx.lineTo(x + 320 * scale, y - 160 * scale);
+      ctx.lineTo(x + 340 * scale, y + 60 * scale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
   }
 
-  // ---------------------------------------------------------------- scene 1
-  // Night drive: Phase A (phase < 5) = Mom & Dad talk on EMPTY dark road (NO truck!).
-  // Phase B (phase >= 5) = Distant headlights appear -> truck swerves -> head-on crash!
-  function drawCar(cx, t, phase, lineT, speaker) {
-    phase = phase || 0;
-    lineT = lineT || 0;
-    const isCrashImpact = phase >= 7;
-    const isSwerving = phase === 6;
-
-    // Gentle engine/road vibration during normal drive, escalating shake as the truck closes in
-    let shakeX = Math.sin(t * 2.1) * 1.4;
-    let shakeY = Math.cos(t * 3.4) * 1.1;
-    let plate = null;
-    let zoom = 1;
-
-    if (phase < 5) {
-      // Phase A: Pure dark empty country road while Mom & Dad talk (zero truck!)
-      const cycle = Math.floor(t * 5.5) % 4;
-      plate = IMAGES[`intro_s2_f${cycle}`] || IMAGES.intro_panel_2_notruck;
-      zoom = 1 + Math.min(phase, 4) * 0.008;
-    } else if (phase === 5) {
-      // Distant pinpoint headlights suddenly appear around the curve
-      plate = IMAGES.intro_s2_f4 || IMAGES.intro_panel_2_notruck;
-      zoom = 1.03 + smooth(lineT / 2.5) * 0.02;
-      shakeX = Math.sin(t * 8) * 1.8;
-    } else if (isSwerving) {
-      // Out-of-control truck swerves across our lane: s2_f5 -> s2_f6
-      if (lineT < 0.85) {
-        plate = IMAGES.intro_s2_f5 || IMAGES.intro_panel_2;
-        zoom = 1.04 + smooth(lineT / 0.85) * 0.04;
-      } else {
-        plate = IMAGES.intro_s2_f6 || IMAGES.intro_panel_2;
-        zoom = 1.08 + smooth((lineT - 0.85) / 1.4) * 0.05;
-      }
-      shakeX = Math.sin(t * 26) * 5;
-      shakeY = Math.cos(t * 22) * 3.5;
-    } else {
-      // Head-on impact & shattered windshield glass
-      plate = IMAGES.intro_s2_f7 || IMAGES.intro_panel_2;
-      zoom = 1.12;
-      shakeX = Math.sin(t * 42) * 8;
-      shakeY = Math.cos(t * 38) * 6;
-    }
-
-    if (!drawPixelPlate(cx, plate, zoom, shakeX, shakeY)) {
-      cx.fillStyle = '#04060d';
-      cx.fillRect(0, 0, W, H);
-    }
-
-    // Extra continuous pixel motion overlays inside the windshield opening
-    if (phase < 5) {
-      // Animated receding pixel center-line dashes along the empty dark road
-      for (let i = 0; i < 4; i++) {
-        const p = (i * 0.25 + t * 0.85) % 1;
-        const y = 186 + p * p * 74;
-        const w = p < 0.45 ? 3 : 6;
-        cx.fillStyle = 'rgba(176, 194, 218, ' + (0.25 + p * 0.5) + ')';
-        cx.fillRect(474 - w / 2, Math.round(y), w, Math.round(4 + p * 8));
-      }
-
-      // Subtle warm highlight near whichever parent is currently speaking
-      if (speaker === 'แม่') {
-        const mg = cx.createRadialGradient(290, 260, 10, 290, 260, 140);
-        mg.addColorStop(0, 'rgba(240, 200, 140, 0.1)');
-        mg.addColorStop(1, 'rgba(240, 200, 140, 0)');
-        cx.fillStyle = mg;
-        cx.fillRect(140, 120, 300, 280);
-      } else if (speaker === 'พ่อ') {
-        const fg = cx.createRadialGradient(705, 255, 10, 705, 255, 140);
-        fg.addColorStop(0, 'rgba(240, 200, 140, 0.1)');
-        fg.addColorStop(1, 'rgba(240, 200, 140, 0)');
-        cx.fillStyle = fg;
-        cx.fillRect(555, 115, 300, 280);
-      }
-    } else if (phase === 5) {
-      // Pulsing twin distant high-beam flare on the dark curve
-      const pulse = 0.55 + Math.sin(t * 14) * 0.25;
-      const dg = cx.createRadialGradient(474, 174, 4, 474, 174, 120);
-      dg.addColorStop(0, 'rgba(255, 244, 195, ' + (0.38 * pulse) + ')');
-      dg.addColorStop(1, 'rgba(255, 210, 120, 0)');
-      cx.fillStyle = dg;
-      cx.fillRect(320, 80, 320, 190);
-    } else if (isSwerving) {
-      // Blinding oncoming truck glare flood
-      const intensity = smooth(lineT / 1.5);
-      const bg = cx.createRadialGradient(475, 200, 20, 475, 200, 340);
-      bg.addColorStop(0, 'rgba(255, 248, 218, ' + (0.35 + intensity * 0.25) + ')');
-      bg.addColorStop(0.5, 'rgba(255, 224, 150, ' + (0.14 + intensity * 0.12) + ')');
-      bg.addColorStop(1, 'rgba(255, 210, 120, 0)');
-      cx.fillStyle = bg;
-      cx.fillRect(0, 0, W, H);
-    }
-
-    // Crisp rain streaks across the windshield glass
-    cx.strokeStyle = 'rgba(190, 214, 236, 0.32)';
-    cx.lineWidth = 1.5;
-    for (let i = 0; i < 42; i++) {
-      const rx = 310 + ((hash(i) * 340 + t * 90) % 340);
-      const ry = 90 + ((hash(i + 30) * 165 + t * 280) % 165);
-      cx.beginPath();
-      cx.moveTo(rx, ry);
-      cx.lineTo(rx - 4, ry + 12);
-      cx.stroke();
-    }
-
-    if (isCrashImpact) {
-      // Explosive white-amber crash flash that blooms at impact
-      const flash = Math.min(0.88, Math.max(0.18, smooth(lineT / 0.85) * 0.82));
-      cx.fillStyle = 'rgba(255, 245, 224, ' + flash + ')';
-      cx.fillRect(0, 0, W, H);
-    }
+  function drawVignette(ctx, alpha = 0.55) {
+    const v = ctx.createRadialGradient(W * 0.5, H * 0.48, H * 0.25, W * 0.5, H * 0.5, W * 0.68);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, `rgba(0,0,0,${alpha})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
   }
 
-  // ---------------------------------------------------------------- scene 2
-  // Overturned burning car on the asphalt, reaching arm, rising embers, fading into unconsciousness
-  function drawCrash(cx, t, phase) {
-    const pIdx = Math.min(4, Math.max(0, phase || 0));
-    const plate = IMAGES[`intro_s3_f${pIdx}`] || IMAGES.intro_panel_3;
-    const zoom = 1.02 + pIdx * 0.015;
-    const swayY = Math.sin(t * 2.2) * 2;
+  /* -------------------- 6 Scene Canvas Drawers -------------------- */
+  function drawAltar(ctx, line, t, beatProgress) {
+    ctx.fillStyle = '#090707';
+    ctx.fillRect(0, 0, W, H);
 
-    if (!drawPixelPlate(cx, plate, zoom, 0, swayY)) {
-      cx.fillStyle = '#060509';
-      cx.fillRect(0, 0, W, H);
+    const img = getImg(line.frame || 'intro_s1_f0') || getImg('intro_panel_1');
+    const zoom = 1.02 + beatProgress * 0.04;
+    drawCoverFrame(ctx, img, t, { zoom, panY: Math.sin(t * 0.7) * 3 });
+
+    // Flickering incense & candle glow
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const candle = 0.65 + Math.sin(t * 6.5) * 0.2 + Math.cos(t * 11) * 0.1;
+    const cg = ctx.createRadialGradient(W * 0.6, H * 0.48, 8, W * 0.6, H * 0.48, 220);
+    cg.addColorStop(0, `rgba(255, 190, 92, ${0.22 * candle})`);
+    cg.addColorStop(1, 'rgba(255, 140, 40, 0)');
+    ctx.fillStyle = cg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Rising incense smoke particles
+    for (let i = 0; i < 12; i++) {
+      const cy = H * 0.62 - ((t * 28 + i * 24) % 210);
+      const cx = W * 0.56 + Math.sin(t * 1.8 + i) * (6 + i * 0.8);
+      const a = Math.max(0, 0.18 - (H * 0.62 - cy) / 900);
+      ctx.fillStyle = `rgba(225, 220, 210, ${a})`;
+      ctx.fillRect(Math.round(cx / 3) * 3, Math.round(cy / 3) * 3, 6, 6);
+    }
+    ctx.restore();
+
+    if (line.showKeepsake) {
+      // Keepsake spotlight inset box in lower-right showing flashlight + sai-sin
+      const bx = W - 220;
+      const by = H - 118;
+      ctx.save();
+      ctx.fillStyle = 'rgba(12, 9, 8, 0.86)';
+      ctx.strokeStyle = 'rgba(240, 196, 90, 0.7)';
+      ctx.lineWidth = 2;
+      ctx.fillRect(bx, by, 196, 96);
+      ctx.strokeRect(bx, by, 196, 96);
+      drawPocketFlashlight(ctx, bx + 76, by + 48, 2.2, false, t);
+      drawSaiSinGlow(ctx, bx + 144, by + 50, t, 1.35, 1);
+      ctx.fillStyle = '#f2deb3';
+      ctx.font = 'bold 12px "Chakra Petch", sans-serif';
+      ctx.fillText('ของดูต่างหน้า · ไฟฉาย + สายสิญจน์', bx + 12, by + 20);
+      ctx.restore();
     }
 
-    // Warm firelight pulse on the right wreck
-    const flicker = 0.85 + Math.sin(t * 10.5) * 0.1 + Math.sin(t * 17.3) * 0.05;
-    const fireGlow = cx.createRadialGradient(730, 320, 20, 730, 320, 360);
-    fireGlow.addColorStop(0, 'rgba(255, 148, 52, ' + (0.28 * flicker) + ')');
-    fireGlow.addColorStop(0.5, 'rgba(204, 68, 22, ' + (0.14 * flicker) + ')');
-    fireGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    cx.fillStyle = fireGlow;
-    cx.fillRect(280, 0, W - 280, H);
-
-    // Continuous rising pixel embers
-    for (let i = 0; i < 40; i++) {
-      const life = (t * (0.26 + hash(i) * 0.3) + hash(i + 55)) % 1;
-      const ex = 510 + hash(i + 14) * 390 + Math.sin(t * 1.6 + i) * 18;
-      const ey = 420 - life * 380;
-      const sz = i % 3 === 0 ? 4 : 3;
-      cx.fillStyle = 'rgba(255, ' + (135 + Math.floor(hash(i + 3) * 95)) + ', 52, ' + ((1 - life) * 0.88) + ')';
-      cx.fillRect(Math.round(ex / 2) * 2, Math.round(ey / 2) * 2, sz, sz);
-    }
-
-    // Blackout dimming on the final unconsciousness beat
-    if (pIdx >= 4) {
-      const fade = Math.min(0.75, 0.28 + Math.sin(t * 1.8) * 0.12);
-      cx.fillStyle = 'rgba(2, 2, 6, ' + fade + ')';
-      cx.fillRect(0, 0, W, H);
-    }
+    drawVignette(ctx, 0.52);
   }
 
-  // ---------------------------------------------------------------- scene 3
-  // Waking up in the Thai banana grove under the full moon with one flashlight
-  function drawGrove(cx, t, phase) {
-    const pIdx = Math.min(4, Math.max(0, phase || 0));
-    const plate = IMAGES[`intro_s4_f${pIdx}`] || IMAGES.intro_panel_4;
-    const zoom = 1 + pIdx * 0.025 + Math.min(t, 12) * 0.002;
-    const bobY = Math.sin(t * 2.5) * 1.5;
+  function drawCar(ctx, line, t, beatProgress, meta) {
+    ctx.fillStyle = '#04060b';
+    ctx.fillRect(0, 0, W, H);
 
-    if (!drawPixelPlate(cx, plate, zoom, 0, bobY)) {
-      cx.fillStyle = '#05090b';
-      cx.fillRect(0, 0, W, H);
+    const img = getImg(line.frame || 'intro_s2_f0') || getImg('intro_panel_2_notruck');
+    const roadBump = Math.sin(t * 13) * 1.4 + Math.cos(t * 7.5) * 1.1;
+    const shakeMag = line.shake || 0;
+    const sx = shakeMag ? (Math.sin(t * 48) * shakeMag * (1 - beatProgress * 0.45)) : 0;
+    const sy = shakeMag ? (Math.cos(t * 53) * shakeMag * 0.7) : roadBump;
+
+    drawCoverFrame(ctx, img, t, { zoom: 1.03, shakeX: sx, shakeY: sy });
+
+    // Driving rain streaks across windshield
+    ctx.save();
+    ctx.fillStyle = 'rgba(180, 210, 245, 0.24)';
+    for (let i = 0; i < 36; i++) {
+      const rx = ((i * 73 + t * 140) % W);
+      const ry = ((i * 119 + t * 520) % H);
+      ctx.fillRect(Math.round(rx / 2) * 2, Math.round(ry / 2) * 2, 2, 16);
+    }
+    ctx.restore();
+
+    // Animated windshield wipers + wiper SFX on beats with wipers: true
+    if (line.wipers) {
+      const sweepPhase = (t * 1.35) % (Math.PI * 2);
+      const sweepAngle = Math.sin(sweepPhase) * 0.62 - 0.15;
+      const halfCycle = Math.floor((t * 1.35) / Math.PI);
+      if (meta && meta.lastWiperCycle !== halfCycle) {
+        meta.lastWiperCycle = halfCycle;
+        safePlaySound('wiper');
+      }
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(18, 22, 30, 0.88)';
+      ctx.lineWidth = 7;
+      ctx.lineCap = 'square';
+      [[W * 0.34, H * 0.56], [W * 0.65, H * 0.56]].forEach(([px, py]) => {
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.sin(sweepAngle) * 155, py - Math.cos(sweepAngle) * 125);
+        ctx.stroke();
+      });
+      ctx.restore();
     }
 
-    // Moonlight mist shimmer
-    const moon = cx.createRadialGradient(545, 165, 15, 545, 165, 230);
-    moon.addColorStop(0, 'rgba(224, 240, 232, 0.16)');
-    moon.addColorStop(1, 'rgba(224, 240, 232, 0)');
-    cx.fillStyle = moon;
-    cx.fillRect(280, 0, 520, 380);
+    // Blinding high-beam flare on Beat 10
+    if (line.frame === 'intro_s2_f5') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const pulse = 0.7 + Math.sin(t * 18) * 0.2;
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.38, 10, W * 0.5, H * 0.38, 340);
+      g.addColorStop(0, `rgba(255, 248, 210, ${0.52 * pulse})`);
+      g.addColorStop(0.45, `rgba(255, 225, 130, ${0.24 * pulse})`);
+      g.addColorStop(1, 'rgba(255, 190, 90, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
 
-    // Drifting fireflies in the banana trees
+    // Impact white flash fading into dark crack overlay on Beat 12
+    if (line.flashWhite) {
+      const flashAlpha = Math.max(0, 0.85 - meta.lineElapsed * 1.5);
+      if (flashAlpha > 0.01) {
+        ctx.fillStyle = `rgba(255, 248, 232, ${flashAlpha})`;
+        ctx.fillRect(0, 0, W, H);
+      }
+    }
+
+    drawVignette(ctx, 0.45);
+  }
+
+  function drawCrash(ctx, line, t, beatProgress, meta) {
+    ctx.fillStyle = '#070404';
+    ctx.fillRect(0, 0, W, H);
+
+    const img = getImg(line.frame || 'intro_s3_f0') || getImg('intro_panel_3');
+    drawCoverFrame(ctx, img, t, { zoom: 1.03 + beatProgress * 0.03, panX: Math.sin(t * 0.5) * 4 });
+
+    // Crackling bonfire embers
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 24; i++) {
+      const ex = W * 0.65 + ((i * 39 + Math.sin(t * 3 + i) * 35) % 240) - 80;
+      const ey = H * 0.78 - ((t * (75 + (i % 4) * 18) + i * 31) % 320);
+      const size = (i % 3 === 0) ? 4 : 3;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 195, 70, 0.72)' : 'rgba(255, 110, 40, 0.65)';
+      ctx.fillRect(Math.round(ex / 2) * 2, Math.round(ey / 2) * 2, size, size);
+    }
+    ctx.restore();
+
+    if (line.showDroppedKeepsake) {
+      const pulse = 0.75 + Math.sin(t * 5) * 0.25;
+      drawPocketFlashlight(ctx, W * 0.36, H * 0.76, 1.9, false, t);
+      drawSaiSinGlow(ctx, W * 0.30, H * 0.82, t, 1.25, pulse);
+    }
+
+    // Pre-blackout eyelids closing smoothly on Beat 16
+    if (line.closingEyes) {
+      const closeAmt = Math.min(0.96, 0.22 + meta.lineElapsed * 0.36);
+      const barH = (H * 0.5) * closeAmt;
+      ctx.fillStyle = '#020203';
+      ctx.fillRect(0, 0, W, barH);
+      ctx.fillRect(0, H - barH, W, barH);
+      ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(0.75, closeAmt * 0.8)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    drawVignette(ctx, 0.58);
+  }
+
+  function drawLimbo(ctx, line, t, beatProgress, meta) {
+    // Deep unconscious spirit threshold pitch-void with golden sai-sin filaments
+    ctx.fillStyle = '#040307';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle spectral mist halo in center
+    ctx.save();
+    const bgGlow = ctx.createRadialGradient(W * 0.5, H * 0.45, 24, W * 0.5, H * 0.45, 360);
+    bgGlow.addColorStop(0, 'rgba(62, 52, 24, 0.42)');
+    bgGlow.addColorStop(0.55, 'rgba(24, 28, 42, 0.25)');
+    bgGlow.addColorStop(1, 'rgba(4, 3, 7, 0)');
+    ctx.fillStyle = bgGlow;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    // Flowing woven golden sai-sin thread connecting protagonist silhouette (left) and friend spirit (right)
+    ctx.save();
+    for (let strand = 0; strand < 3; strand++) {
+      ctx.beginPath();
+      ctx.strokeStyle = strand === 1 ? 'rgba(255, 232, 152, 0.82)' : 'rgba(225, 178, 72, 0.38)';
+      ctx.lineWidth = strand === 1 ? 3 : 1.5;
+      for (let x = W * 0.26; x <= W * 0.72; x += 8) {
+        const u = (x - W * 0.26) / (W * 0.46);
+        const y = H * 0.56 + Math.sin(u * Math.PI * 3 + t * 2.2 + strand) * (10 + strand * 5) - Math.sin(u * Math.PI) * 34;
+        if (x === W * 0.26) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Protagonist faint seated spirit silhouette (left)
+    ctx.save();
+    const lx = W * 0.24;
+    const ly = H * 0.58 + Math.sin(t * 1.4) * 5;
+    ctx.fillStyle = '#151924';
+    ctx.strokeStyle = 'rgba(130, 165, 220, 0.42)';
+    ctx.lineWidth = 2;
+    // Head + shoulders in crisp pixel blocks
+    ctx.fillRect(Math.round(lx - 18), Math.round(ly - 58), 36, 36);
+    ctx.strokeRect(Math.round(lx - 18), Math.round(ly - 58), 36, 36);
+    ctx.fillRect(Math.round(lx - 32), Math.round(ly - 18), 64, 62);
+    ctx.strokeRect(Math.round(lx - 32), Math.round(ly - 18), 64, 62);
+    // Suspended keepsake flashlight + sai-sin beside protagonist
+    drawPocketFlashlight(ctx, lx + 42, ly + 10, 2.0, true, t);
+    drawSaiSinGlow(ctx, lx + 24, ly + 22, t, 1.35, 1);
+    ctx.restore();
+
+    // Best Friend's translucent golden-cyan spirit silhouette (right)
+    ctx.save();
+    const rx = W * 0.73;
+    const ry = H * 0.44 + Math.cos(t * 1.6) * 6;
+    const spGlow = ctx.createRadialGradient(rx, ry, 10, rx, ry, 115);
+    spGlow.addColorStop(0, 'rgba(255, 224, 130, 0.34)');
+    spGlow.addColorStop(0.55, 'rgba(130, 210, 235, 0.14)');
+    spGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = spGlow;
+    ctx.beginPath();
+    ctx.arc(rx, ry, 115, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Friend pixel bust
+    const fp = (ox, oy, pw, ph, col) => {
+      ctx.fillStyle = col;
+      ctx.fillRect(Math.round(rx + ox * 4), Math.round(ry + oy * 4), pw * 4, ph * 4);
+    };
+    fp(-7, -14, 14, 12, 'rgba(34, 30, 26, 0.9)'); // Hair
+    fp(-6, -10, 12, 10, 'rgba(220, 206, 184, 0.78)'); // Face
+    fp(-4, -6, 2, 2, '#1d1915');
+    fp(2, -6, 2, 2, '#1d1915');
+    fp(-9, 1, 18, 16, 'rgba(232, 224, 206, 0.72)'); // Student shirt
+    fp(-10, 1, 20, 16, 'rgba(255, 220, 128, 0.14)');
+    ctx.restore();
+
+    // Rising golden dust motes
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 32; i++) {
+      const px = ((i * 59 + Math.sin(t + i) * 32) % (W - 40)) + 20;
+      const py = H - ((t * (18 + (i % 5) * 6) + i * 37) % H);
+      ctx.fillStyle = i % 3 === 0 ? 'rgba(255, 230, 140, 0.5)' : 'rgba(160, 215, 235, 0.32)';
+      ctx.fillRect(Math.round(px / 4) * 4, Math.round(py / 4) * 4, 4, 4);
+    }
+    ctx.restore();
+
+    // Final Beat 21 wake-up white-gold burst transition
+    if (line.flashGoldWake) {
+      const surge = Math.min(0.65, 0.08 + Math.max(0, meta.lineElapsed - 0.8) * 0.24);
+      const wg = ctx.createRadialGradient(W * 0.5, H * 0.5, 16, W * 0.5, H * 0.5, 420);
+      wg.addColorStop(0, `rgba(255, 245, 205, ${surge})`);
+      wg.addColorStop(1, 'rgba(255, 220, 130, 0)');
+      ctx.fillStyle = wg;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    drawVignette(ctx, 0.48);
+  }
+
+  function drawGrove(ctx, line, t, beatProgress, meta) {
+    ctx.fillStyle = '#040708';
+    ctx.fillRect(0, 0, W, H);
+
+    const img = getImg(line.frame || 'intro_s4_f0') || getImg('intro_panel_4');
+    drawCoverFrame(ctx, img, t, { zoom: 1.03, panX: Math.sin(t * 0.8) * 5, panY: Math.cos(t * 0.6) * 2 });
+
+    // Floating moonlit mist & fireflies across Thai banana grove
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     for (let i = 0; i < 16; i++) {
-      const fx = 120 + hash(i + 200) * 720 + Math.sin(t * 1.1 + i * 1.7) * 22;
-      const fy = 120 + hash(i + 230) * 290 + Math.cos(t * 0.9 + i * 2.1) * 14;
-      const blink = Math.max(0.15, Math.sin(t * 3.4 + i * 2.3) * 0.5 + 0.5);
-      cx.fillStyle = 'rgba(218, 250, 128, ' + (blink * 0.78) + ')';
-      cx.fillRect(Math.round(fx / 2) * 2, Math.round(fy / 2) * 2, 3, 3);
+      const fx = ((i * 79 + Math.sin(t * 1.1 + i) * 42) % (W - 60)) + 30;
+      const fy = ((i * 53 + Math.cos(t * 0.9 + i * 2) * 28) % (H - 80)) + 40;
+      const a = 0.25 + Math.abs(Math.sin(t * 2.4 + i)) * 0.55;
+      ctx.fillStyle = `rgba(215, 245, 150, ${a})`;
+      ctx.fillRect(Math.round(fx / 4) * 4, Math.round(fy / 4) * 4, 4, 4);
+    }
+    ctx.restore();
+
+    // Protagonist holding lit keepsake flashlight + glowing wrist sai-sin in bottom-left corner
+    if (line.heldFlashlight) {
+      const swayX = Math.sin(t * 1.8) * 6;
+      const swayY = Math.cos(t * 2.1) * 4;
+      drawPocketFlashlight(ctx, 136 + swayX, H - 78 + swayY, 2.5, true, t);
+      drawSaiSinGlow(ctx, 94 + swayX, H - 58 + swayY, t, 1.45, 0.95);
     }
 
-    // Crisp night rain falling over the jungle path
-    cx.strokeStyle = 'rgba(182, 214, 236, 0.34)';
-    cx.lineWidth = 1.5;
-    for (let i = 0; i < 65; i++) {
-      const rx = (hash(i + 900) * W + t * 65) % W;
-      const ry = (hash(i + 930) * H + t * 340) % H;
-      cx.beginPath();
-      cx.moveTo(rx, ry);
-      cx.lineTo(rx - 4, ry + 14);
-      cx.stroke();
+    // Wake-up eyelid opening transition on Beat 22
+    if (line.openingEyes && meta.lineElapsed < 1.1) {
+      const closeAmt = Math.max(0, 1 - meta.lineElapsed / 1.1);
+      const barH = (H * 0.5) * closeAmt;
+      ctx.fillStyle = '#050507';
+      ctx.fillRect(0, 0, W, barH);
+      ctx.fillRect(0, H - barH, W, barH);
     }
+
+    drawVignette(ctx, 0.45);
   }
 
-  // ---------------------------------------------------------------- scene 4
-  // Stepping out of the banana grove and seeing the veiled Thai house in the rain
-  function drawArrival(cx, t, phase) {
-    const push = 1 + Math.min(t, 12) * 0.008;
-    cx.save();
-    cx.imageSmoothingEnabled = false;
-    cx.translate(W / 2, H / 2);
-    cx.scale(push, push);
-    cx.translate(-W / 2, -H / 2);
+  function drawArrival(ctx, line, t, beatProgress) {
+    ctx.fillStyle = '#050406';
+    ctx.fillRect(0, 0, W, H);
 
-    if (ready(IMAGES.bg1)) {
-      cx.drawImage(IMAGES.bg1, 0, 0, W, H);
-    } else {
-      cx.fillStyle = '#05080d';
-      cx.fillRect(0, 0, W, H);
+    const frameImg = getImg(line.frame || 'intro_s4_f4') || getImg('bg1');
+    if (frameImg) {
+      drawCoverFrame(ctx, frameImg, t, { zoom: 1.04 + beatProgress * 0.04, panY: -4 });
     }
 
-    // Night storm tint
-    cx.fillStyle = 'rgba(4, 7, 14, 0.56)';
-    cx.fillRect(0, 0, W, H);
+    // Darken slightly + render looming traditional Thai teak mansion silhouette in the moonlit clearing
+    ctx.save();
+    ctx.fillStyle = 'rgba(4, 6, 10, 0.42)';
+    ctx.fillRect(0, 0, W, H);
 
-    // Rain streaks
-    cx.strokeStyle = 'rgba(186, 214, 236, 0.36)';
-    cx.lineWidth = 1.5;
-    for (let i = 0; i < 95; i++) {
-      const rx = (hash(i + 700) * W + t * 72) % W;
-      const ry = (hash(i + 730) * H + t * 420) % H;
-      cx.beginPath();
-      cx.moveTo(rx, ry);
-      cx.lineTo(rx - 4, ry + 16);
-      cx.stroke();
+    const mx = W * 0.5;
+    const my = H * 0.62;
+    ctx.fillStyle = '#0e0b0d';
+    // Thai gable roof (ทรงไทยจั่วแหลม)
+    ctx.beginPath();
+    ctx.moveTo(mx - 170, my - 46);
+    ctx.lineTo(mx, my - 165);
+    ctx.lineTo(mx + 170, my - 46);
+    ctx.closePath();
+    ctx.fill();
+    // Main upper wooden house & stilts
+    ctx.fillRect(mx - 138, my - 48, 276, 118);
+    ctx.fillRect(mx - 122, my + 70, 20, 76);
+    ctx.fillRect(mx - 42, my + 70, 20, 76);
+    ctx.fillRect(mx + 22, my + 70, 20, 76);
+    ctx.fillRect(mx + 102, my + 70, 20, 76);
+
+    // Dim eerie warm window slits
+    const winFlicker = 0.45 + Math.sin(t * 4.5) * 0.25;
+    ctx.fillStyle = `rgba(255, 170, 68, ${winFlicker})`;
+    ctx.fillRect(mx - 86, my - 18, 26, 40);
+    ctx.fillRect(mx + 60, my - 18, 26, 40);
+    // Open dark doorway
+    ctx.fillStyle = '#040203';
+    ctx.fillRect(mx - 22, my - 24, 44, 94);
+    ctx.restore();
+
+    if (line.heldFlashlight) {
+      drawPocketFlashlight(ctx, 136, H - 78, 2.5, true, t);
+      drawSaiSinGlow(ctx, 94, H - 58, t, 1.45, 0.95);
     }
 
-    // Protagonist walking toward the lit Thai house with a sweeping flashlight cone
-    const walkX = Math.min(285, 118 + t * 18);
-    const walkY = 306;
-    const sweep = Math.sin(t * 0.9) * 0.08 + 0.34;
-    const apexX = walkX + 44;
-    const apexY = walkY + 86;
-
-    cx.save();
-    cx.translate(apexX, apexY);
-    cx.rotate(sweep);
-    const beam = cx.createLinearGradient(0, 0, 0, -520);
-    beam.addColorStop(0, 'rgba(255, 244, 200, 0.26)');
-    beam.addColorStop(1, 'rgba(255, 240, 185, 0)');
-    cx.fillStyle = beam;
-    cx.beginPath();
-    cx.moveTo(-10, 0);
-    cx.lineTo(-105, -520);
-    cx.lineTo(105, -520);
-    cx.lineTo(10, 0);
-    cx.closePath();
-    cx.fill();
-    cx.restore();
-
-    const sprite = characterSprite(Math.floor(t * 7));
-    const bob = Math.abs(Math.sin(t * 4.2)) * 2.5;
-    if (sprite) {
-      cx.drawImage(sprite, walkX - 24, walkY - bob, 92, 142);
-    }
-
-    // Eerie ghost dancer silhouette flickering near the house starting on phase 1
-    if (phase >= 1) {
-      const flick = hash(Math.floor(t * 8)) > 0.72 ? 0.16 : 0.44;
-      const gImg = IMAGES['dancerAnim' + (Math.floor(t * 4) % 8)];
-      if (ready(gImg)) {
-        cx.save();
-        cx.globalAlpha = flick;
-        cx.drawImage(gImg, 648, 224, 96, 146);
-        cx.restore();
+    // Crimson ankle-bell acoustic ripple pulses when "เสียงกระพรวน" speaks
+    if (line.speaker === 'เสียงกระพรวน') {
+      ctx.save();
+      for (let r = 0; r < 3; r++) {
+        const radius = ((t * 140 + r * 70) % 240) + 18;
+        const alpha = Math.max(0, 0.65 - radius / 260);
+        ctx.strokeStyle = `rgba(255, 92, 92, ${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(W * 0.5, H * 0.63, radius, 0, Math.PI * 2);
+        ctx.stroke();
       }
+      ctx.restore();
     }
 
-    cx.restore();
+    drawVignette(ctx, 0.56);
   }
 
-  // ------------------------------------------------------------------ script (25 continuous beats)
-  const LINES = [
-    // Scene 0: Funeral (0..4)
-    { scene: 0, speaker: '@player', text: 'งานศพคืนสุดท้ายของเพื่อนสนิท... ผมยืนมองรูปหน้าศพของเขานิ่ง ๆ จนธูปในกระถางเผาไหม้เกือบหมดดอก', sfx: 'chime' },
-    { scene: 0, speaker: '@player', text: 'ควันธูปลอยคลุ้งในศาลาวัดที่เงียบสงัด แววตาของเพื่อนในรูปถ่ายดูเหมือนมีอะไรบางอย่างอยากจะบอกผมเป็นครั้งสุดท้าย' },
-    { scene: 0, speaker: 'แม่', text: 'ดึกมากแล้วนะลูก... เข้าไปกราบลาเพื่อนเสียเถอะ เราต้องขับรถกลับบ้านต่างจังหวัดกันอีกไกล' },
-    { scene: 0, speaker: 'พ่อ', text: 'ฝนตั้งเค้ามืดมาแล้วด้วย รีบออกเดินทางตอนนี้ดีกว่า เดี๋ยวทางช่วงผ่านป่าจะยิ่งมืดและขับยาก' },
-    { scene: 0, speaker: '@player', text: 'ครับพ่อ ครับแม่... หลับให้สบายนะเพื่อน แล้วสักวันเราคงได้เจอกันอีก' },
+  const DRAW = [drawAltar, drawCar, drawCrash, drawLimbo, drawGrove, drawArrival];
 
-    // Scene 1A: Mom & Dad conversation inside the car — EMPTY dark road, NO truck yet! (5..9)
-    { scene: 1, speaker: 'บรรยาย', text: 'บนรถเก๋งของครอบครัวท่ามกลางสายฝนยามดึก พ่อขับรถอยู่ฝั่งขวา แม่นั่งข้างซ้าย มองผ่านกระจกหน้าเห็นเพียงถนนลาดยางที่มืดและว่างเปล่า', sfx: 'whisper' },
-    { scene: 1, speaker: 'แม่', text: 'ทางเส้นนี้มืดจังเลยนะพ่อ ไฟถนนก็ไม่มีสักดวง... ฝนตกถนนลื่นแบบนี้ค่อย ๆ ขับนะจ๊ะ ไม่ต้องรีบ' },
-    { scene: 1, speaker: 'พ่อ', text: 'ไม่ต้องห่วงหรอกแม่ พ่อชินทางเส้นนี้ดี ถนนโล่งไม่มีรถสวนมาเลยสักคัน... อีกไม่เกินชั่วโมงก็ถึงบ้านเราแล้ว' },
-    { scene: 1, speaker: 'แม่', text: 'แล้วลูกเป็นยังไงบ้างจ๊ะ นั่งเงียบมาตลอดทางเลย... คงจะเหนื่อยและเสียใจเรื่องงานศพเพื่อนมากสินะลูก' },
-    { scene: 1, speaker: '@player', text: 'ผมไม่เป็นไรครับแม่ แค่รู้สึกเพลีย ๆ นิดหน่อย... เดี๋ยวพ้นโค้งป่าข้างหน้านี้ผมว่าจะหลับพักสายตาสักพักครับ' },
+  /* -------------------- 64x64 Pixel Character Portrait Renderer -------------------- */
+  function drawPortrait(pCtx, speakerInfo, t, isTalking) {
+    if (!pCtx) return;
+    pCtx.imageSmoothingEnabled = false;
+    const role = speakerInfo ? speakerInfo.role : 'narrator';
+    const talkOpen = isTalking && (Math.floor(t * 10) % 2 === 0);
+    const blink = Math.floor(t * 0.5) % 9 === 0 && (t % 1.9) > 1.72;
 
-    // Scene 1B: Conversation ends -> Truck suddenly appears -> Crash! (10..12)
-    { scene: 1, speaker: 'พ่อ', text: 'งั้นลูกเอนหลังหลับได้เลย— เอ๊ะ... เดี๋ยวก่อนนะ นั่นแสงไฟสูงรถอะไรพุ่งอ้อมโค้งมาน่ะ!?', sfx: 'thunder' },
-    { scene: 1, speaker: 'แม่', text: 'ว้ายยย!! พ่อระวัง!! รถบรรทุกคันนั้นมันเสียหลักข้ามเลนพุ่งเข้ามาหาเราแล้ว!!', sfx: 'tension' },
-    { scene: 1, speaker: 'พ่อ', text: 'หักหลบไม่ทันแล้ว— จับแน่น ๆ นะลูก!! เอี๊ยดดดดดด!! โครมมมมมม!!', sfx: 'scare' },
+    // 32x32 logical pixel grid scaled 2x -> 64x64 crisp retro portrait
+    const px = (x, y, w, h, col) => {
+      pCtx.fillStyle = col;
+      pCtx.fillRect(Math.round(x) * 2, Math.round(y) * 2, Math.round(w) * 2, Math.round(h) * 2);
+    };
 
-    // Scene 2: Overturned burning car -> reaching hand -> unconsciousness (13..17)
-    { scene: 2, speaker: 'บรรยาย', text: 'แรงกระแทกมหาศาลเหวี่ยงร่างของคุณกระเด็นตกลงมาบนพื้นถนนเย็นเฉียบ เสียงเหล็กบิดงอและกระจกแตกดังก้องอยู่ในหู', sfx: 'heartbeat' },
-    { scene: 2, speaker: '@player', text: 'อึก... เจ็บไปทั้งตัวเลย... รถของเราพลิกตะแคงอยู่ตรงนั้น แล้วไฟก็กำลังลุกท่วมซากรถ!' },
-    { scene: 2, speaker: '@player', text: 'พ่อครับ! แม่ครับ! ได้ยินผมไหม!? พ่อกับแม่ยังติดอยู่ในรถ... ผมต้องคลานไปช่วย—', sfx: 'heartbeat' },
-    { scene: 2, speaker: 'บรรยาย', text: 'คุณพยายามยื่นแขนที่สั่นเทาออกไปข้างหน้า แต่ความร้อนจากเปลวเพลิงและควันไฟพัดโหมเข้าใส่จนแทบหายใจไม่ออก' },
-    { scene: 2, speaker: '@player', text: 'ไม่ไหวแล้ว... เปลือกตาหนักเหลือเกิน... พ่อครับ แม่ครับ... (สติสัมปชัญญะทั้งหมดค่อย ๆ ดับวูบลงสู่ความมืดมิด)' },
+    const bgMap = {
+      male: '#111624',
+      female: '#1a1224',
+      dad: '#0d151e',
+      mom: '#1e1516',
+      friend: '#080705',
+      narrator: '#13100d',
+      bell: '#1a0608',
+    };
+    px(0, 0, 32, 32, bgMap[role] || '#100d0b');
 
-    // Scene 3: Waking in the Thai banana grove under the moonlight (18..21)
-    { scene: 3, speaker: '@player', text: 'เฮือก...! ผมค่อย ๆ ลืมตาตื่นขึ้นมาท่ามกลางกลิ่นดินเปียกชื้นและอากาศที่หนาวเหน็บจับขั้วหัวใจ', sfx: 'whisper' },
-    { scene: 3, speaker: '@player', text: 'เดี๋ยวนะ... ซากรถที่ไฟไหม้กับถนนใหญ่หายไปไหนหมด!? ทำไมรอบตัวผมถึงมีแต่ดงต้นกล้วยกับป่ารกทึบใต้แสงจันทร์เต็มดวงแบบนี้' },
-    { scene: 3, speaker: '@player', text: 'ในมือมีแค่ไฟฉายกระบอกเดียวที่ยังติดอยู่... พ่อครับ! แม่ครับ! มีใครอยู่แถวนี้ไหมครับ!?' },
-    { scene: 3, speaker: 'บรรยาย', text: 'ไม่มีเสียงตอบรับใด ๆ นอกจากเสียงลมพัดใบตองเสียดสีกัน และทางดินแฉะที่มีแอ่งน้ำขังทอดยาวลึกเข้าไปในป่า' },
+    if (role === 'narrator') {
+      // Keepsake Flashlight + Coiled Golden Sai-Sin Scroll Badge
+      px(3, 3, 26, 26, '#1a1511');
+      px(4, 4, 24, 24, '#110e0b');
+      // Flashlight angled
+      px(6, 17, 11, 5, '#465261');
+      px(6, 17, 11, 2, '#6d7b8e');
+      px(17, 16, 4, 7, '#a58746');
+      px(21, 17, 2, 5, '#fff4bd');
+      // Soft light cone
+      px(23, 15, 3, 9, 'rgba(255, 240, 175, 0.35)');
+      px(26, 13, 3, 13, 'rgba(255, 225, 140, 0.2)');
+      // Glowing coiled sai-sin above flashlight
+      px(10, 7, 10, 6, '#f6ecc8');
+      px(12, 9, 6, 2, '#110e0b');
+      px(14, 12, 2, 3, '#ffd56b');
+      return;
+    }
 
-    // Scene 4: Discovering the haunted Thai house ahead (22..24)
-    { scene: 4, speaker: '@player', text: 'พอก้าวเดินพ้นดงกล้วยออกมา... ข้างหน้านั้นมีเรือนไทยไม้สักหลังใหญ่ตั้งอยู่กลางป่า และมีแสงไฟสลัวลอดออกมาจากหน้าต่าง!' },
-    { scene: 4, speaker: 'เสียงกระพรวน', text: 'กริ๊ง... กริ๊ง... (เสียงกระพรวนข้อเท้าดังแว่วมาจากเงามืดบนเรือนไทย ราวกับกำลังเชื้อเชิญให้ก้าวเข้าไป)', sfx: 'chime' },
-    { scene: 4, speaker: '@player', text: 'ไม่ว่าจะเกิดอะไรขึ้น ผมต้องเข้าไปหาทางขอความช่วยเหลือในเรือนไทยหลังนั้นให้ได้!' }
-  ];
+    if (role === 'bell') {
+      const sway = Math.round(Math.sin(t * 5) * 1.5);
+      // Crimson ripple pixels
+      px(5, 5, 22, 1, 'rgba(255, 86, 86, 0.35)');
+      px(5, 26, 22, 1, 'rgba(255, 86, 86, 0.35)');
+      // Cord
+      px(10 + sway, 6, 12, 2, '#8b2424');
+      // Twin brass ankle bells (กระพรวน)
+      px(8 + sway, 10, 7, 9, '#a67b24');
+      px(9 + sway, 11, 5, 7, '#e2b64e');
+      px(10 + sway, 12, 2, 2, '#fff1ad');
+      px(11 + sway, 17, 1, 2, '#2a0909');
 
-  const SCENE_TAGS = [
-    '1 / 5 · งานศพเพื่อนสนิท',
-    '2 / 5 · บทสนทนาในรถและอุบัติเหตุ',
-    '3 / 5 · ซากรถคว่ำและเปลวเพลิง',
-    '4 / 5 · ฟื้นตื่นในดงกล้วยป่าไทย',
-    '5 / 5 · เรือนไทยปริศนาในความมืด'
-  ];
+      px(17 + sway, 11, 7, 9, '#a67b24');
+      px(18 + sway, 12, 5, 7, '#e2b64e');
+      px(19 + sway, 13, 2, 2, '#fff1ad');
+      px(20 + sway, 18, 1, 2, '#2a0909');
+      return;
+    }
 
-  const SPEAKER_COLORS = {
-    'นนท์': '#f0c45a',
-    'ริน': '#8fd6c0',
-    'พ่อ': '#d8c39a',
-    'แม่': '#e6c2ae',
-    'บรรยาย': '#b6aa94',
-    'เสียงกระพรวน': '#c88a8a'
+    if (role === 'friend') {
+      // Glowing gold sai-sin dust in spirit threshold
+      px(4, 6 + (Math.floor(t * 3) % 3), 1, 1, '#ffe082');
+      px(27, 11 + (Math.floor(t * 4) % 3), 1, 1, '#ffe082');
+      px(6, 22, 1, 1, '#9be2f5');
+      // Translucent spiritual bust
+      px(9, 21, 14, 11, '#b8b2a6');
+      px(13, 21, 6, 5, '#dfd6c7');
+      px(10, 6, 12, 14, '#1b1918'); // Hair
+      px(11, 10, 10, 10, '#d7cebf'); // Face
+      px(10, 7, 12, 4, '#242120'); // Fringe
+      if (!blink) {
+        px(13, 14, 2, 2, '#1d1b1a');
+        px(18, 14, 2, 2, '#1d1b1a');
+      } else {
+        px(13, 15, 2, 1, '#1d1b1a');
+        px(18, 15, 2, 1, '#1d1b1a');
+      }
+      px(14, 18, 4, talkOpen ? 2 : 1, '#5a4f45');
+      // Subtle translucent cyan-gold border aura
+      px(8, 5, 16, 1, 'rgba(255, 224, 130, 0.5)');
+      return;
+    }
+
+    if (role === 'dad') {
+      px(7, 22, 18, 10, '#2c4159'); // Shirt
+      px(12, 22, 8, 5, '#415f80'); // Collar
+      px(13, 19, 6, 4, '#cfa37e'); // Neck
+      px(10, 7, 12, 13, '#dba982'); // Face
+      px(9, 5, 14, 5, '#1b191c'); // Hair
+      px(9, 8, 2, 6, '#5c6472'); // Grey temple streak
+      px(21, 8, 2, 6, '#5c6472');
+      if (!blink) {
+        px(12, 13, 2, 2, '#1a1514');
+        px(18, 13, 2, 2, '#1a1514');
+      } else {
+        px(12, 14, 2, 1, '#1a1514');
+        px(18, 14, 2, 1, '#1a1514');
+      }
+      px(12, 11, 3, 1, '#262022'); // Brows
+      px(17, 11, 3, 1, '#262022');
+      px(13, 16, 6, 1, '#2b2220'); // Mustache
+      px(14, 17, 4, talkOpen ? 2 : 1, '#7a453b');
+      return;
+    }
+
+    if (role === 'mom') {
+      px(7, 22, 18, 10, '#b5927c'); // Blouse
+      px(13, 19, 6, 4, '#e5b996'); // Neck
+      px(8, 6, 16, 19, '#191417'); // Shoulder-length hair
+      px(10, 9, 12, 11, '#ebbf9c'); // Face
+      px(10, 6, 12, 4, '#241c20');
+      px(20, 8, 2, 2, '#e3be66'); // Silver-gold hairpin
+      if (!blink) {
+        px(12, 13, 2, 2, '#1e1718');
+        px(18, 13, 2, 2, '#1e1718');
+      } else {
+        px(12, 14, 2, 1, '#1e1718');
+        px(18, 14, 2, 1, '#1e1718');
+      }
+      px(14, 17, 4, talkOpen ? 2 : 1, '#9c524b');
+      return;
+    }
+
+    if (role === 'female') {
+      // Rin (ริน) - female high school student + subtle sai-sin gold accent
+      px(7, 22, 18, 10, '#e8e8ee'); // White blouse
+      px(12, 22, 8, 4, '#222d4d'); // Navy student collar
+      px(15, 25, 2, 4, '#2f3d68');
+      px(13, 19, 6, 4, '#f0c8a4');
+      px(8, 6, 16, 16, '#15141c'); // Bob hair
+      px(10, 9, 12, 11, '#f4cca8'); // Face
+      px(10, 7, 12, 3, '#1d1b26'); // Bangs
+      if (!blink) {
+        px(12, 13, 2, 2, '#191620');
+        px(18, 13, 2, 2, '#191620');
+      } else {
+        px(12, 14, 2, 1, '#191620');
+        px(18, 14, 2, 1, '#191620');
+      }
+      px(14, 17, 4, talkOpen ? 2 : 1, '#a95d54');
+      px(26, 26, 3, 2, '#ffe082'); // Tiny sai-sin charm pixel
+      return;
+    }
+
+    // Default: Non (นนท์) - male student + sai-sin charm accent
+    px(7, 22, 18, 10, '#e6e8ec'); // White school shirt
+    px(13, 19, 6, 4, '#dfb08a');
+    px(19, 26, 4, 4, '#cfd6e0'); // Shirt pocket
+    px(9, 5, 14, 10, '#14151c'); // Hair
+    px(10, 9, 12, 11, '#e6b892'); // Face
+    px(10, 7, 12, 3, '#1c1d26'); // Parted bangs
+    if (!blink) {
+      px(12, 13, 2, 2, '#16161c');
+      px(18, 13, 2, 2, '#16161c');
+    } else {
+      px(12, 14, 2, 1, '#16161c');
+      px(18, 14, 2, 1, '#16161c');
+    }
+    px(14, 17, 4, talkOpen ? 2 : 1, '#8c4e44');
+    px(26, 26, 3, 2, '#ffe082'); // Tiny sai-sin charm pixel
+  }
+
+  /* -------------------- Cutscene State & Runtime Controller -------------------- */
+  const story = {
+    active: false,
+    autoPlay: false,
+    idx: 0,
+    charShown: 0,
+    typeDone: false,
+    holdTimer: 0,
+    lineElapsed: 0,
+    startTime: 0,
+    lastTs: 0,
+    lastBlipTime: 0,
+    lastBlipCharStep: -1,
+    lastWiperCycle: -1,
+    playedSfxIdx: -1,
+    rafId: null,
+    done: null,
+    lines: [],
   };
 
-  const DRAW = [drawAltar, drawCar, drawCrash, drawGrove, drawArrival];
-  const TYPE_MS = 22;
-
-  let story = null;
-
-  function els() {
-    return {
-      root: document.getElementById('story-intro'),
-      canvas: document.getElementById('story-canvas'),
-      speaker: document.getElementById('story-speaker'),
-      line: document.getElementById('story-line'),
-      hint: document.getElementById('story-step'),
-      tag: document.getElementById('story-scene-tag'),
-      progress: document.getElementById('story-progress-fill'),
-      pauseBtn: document.getElementById('story-pause-btn')
-    };
+  function el(id) {
+    return document.getElementById(id);
   }
 
-  function updatePauseButton() {
-    if (!story || !story.ui.pauseBtn) return;
-    story.ui.pauseBtn.textContent = story.paused ? '▶ เล่นต่อ' : '⏸ หยุดชั่วคราว';
+  function updateControlsUI() {
+    const pauseBtn = el('story-pause-btn');
+    if (pauseBtn) {
+      pauseBtn.textContent = story.autoPlay ? '⏸ อัตโนมัติ: เปิด' : '▶ อัตโนมัติ: ปิด';
+      pauseBtn.classList.toggle('active', story.autoPlay);
+    }
+    const prompt = el('story-press-prompt');
+    if (prompt) {
+      prompt.classList.toggle('ready', story.typeDone);
+      if (story.autoPlay) {
+        prompt.textContent = 'โหมดเล่นอัตโนมัติ (กด P เพื่อหยุด · ESC ข้ามฉาก)';
+      } else if (story.typeDone) {
+        prompt.textContent = 'กด E / Space / Enter หรือคลิกเพื่อไปต่อ ';
+      } else {
+        prompt.textContent = 'คลิกกรอบ / กด E เพื่อข้ามตัวหนังสือ · ESC ข้ามฉาก';
+      }
+    }
   }
 
-  function playStoryIntro(onDone) {
-    const ui = els();
-    if (!ui.root || !ui.canvas) {
-      if (onDone) onDone();
+  function enterLine(index) {
+    story.idx = Math.max(0, Math.min(story.lines.length - 1, index));
+    story.charShown = 0;
+    story.typeDone = false;
+    story.holdTimer = 0;
+    story.lineElapsed = 0;
+    story.lastBlipCharStep = -1;
+    story.lastWiperCycle = -1;
+
+    const line = story.lines[story.idx];
+    const speaker = resolveSpeaker(line.speaker);
+
+    const tagEl = el('story-scene-tag');
+    if (tagEl) tagEl.textContent = line.tag || '';
+
+    const stepEl = el('story-step');
+    if (stepEl) {
+      const n = String(story.idx + 1).padStart(2, '0');
+      const total = String(story.lines.length).padStart(2, '0');
+      stepEl.textContent = `${n} / ${total}`;
+    }
+
+    const fillEl = el('story-progress-fill');
+    if (fillEl) {
+      const pct = ((story.idx + 1) / Math.max(1, story.lines.length)) * 100;
+      fillEl.style.width = `${pct.toFixed(1)}%`;
+    }
+
+    const spEl = el('story-speaker');
+    if (spEl) {
+      spEl.className = `story-speaker ${speaker.css}`;
+      spEl.textContent = speaker.name;
+    }
+
+    const lineEl = el('story-line');
+    if (lineEl) lineEl.textContent = '';
+
+    // Trigger one-shot beat SFX
+    if (story.playedSfxIdx !== story.idx && line.sfx) {
+      story.playedSfxIdx = story.idx;
+      if (line.sfx === 'bell_whisper') playAnkleBellChime();
+      else safePlaySound(line.sfx);
+    } else {
+      story.playedSfxIdx = story.idx;
+    }
+
+    updateControlsUI();
+  }
+
+  function frameLoop(ts) {
+    if (!story.active) return;
+    if (!story.lastTs) story.lastTs = ts;
+    const dt = Math.min(0.08, Math.max(0.001, (ts - story.lastTs) / 1000));
+    story.lastTs = ts;
+    const t = (ts - story.startTime) / 1000;
+    story.lineElapsed += dt;
+
+    const line = story.lines[story.idx];
+    if (!line) {
+      finishStory();
       return;
     }
-    if (typeof state !== 'undefined' && (state.role === 'p1' || state.role === 'p2')) {
-      if (onDone) onDone();
-      return;
+
+    const speaker = resolveSpeaker(line.speaker);
+
+    // Typewriter progression & per-speaker retro voice blips
+    if (!story.typeDone) {
+      const speed = 34; // chars/sec
+      story.charShown = Math.min(line.text.length, story.charShown + speed * dt);
+      const count = Math.floor(story.charShown);
+      const lineEl = el('story-line');
+      if (lineEl) lineEl.textContent = line.text.slice(0, count);
+
+      // Voice blip every 3 visible characters (throttled >= 55ms)
+      const ch = line.text.charAt(Math.max(0, count - 1));
+      const charBucket = Math.floor(count / 3);
+      if (count > 0 && ch && !/\s/.test(ch) && charBucket !== story.lastBlipCharStep && (ts - story.lastBlipTime) > 55) {
+        story.lastBlipCharStep = charBucket;
+        story.lastBlipTime = ts;
+        safePlaySound(speaker.blip);
+      }
+
+      if (count >= line.text.length) {
+        story.typeDone = true;
+        story.holdTimer = 0;
+        if (lineEl) lineEl.textContent = line.text;
+        updateControlsUI();
+      }
+    } else if (story.autoPlay) {
+      story.holdTimer += dt;
+      const holdDur = Math.max(2.1, Math.min(3.6, line.text.length * 0.032 + 0.9));
+      if (story.holdTimer >= holdDur) {
+        if (story.idx < story.lines.length - 1) {
+          enterLine(story.idx + 1);
+        } else {
+          finishStory();
+          return;
+        }
+      }
     }
-    const cx = ui.canvas.getContext('2d');
-    cx.imageSmoothingEnabled = false;
 
-    story = {
-      cx,
-      ui,
-      index: -1,
-      scene: -1,
-      sceneStart: performance.now(),
-      lineStart: performance.now(),
-      paused: false,
-      pausedAt: 0,
-      raf: null,
-      onDone,
-      finished: false,
-      doneAt: 0,
-      lineInScene: 0
-    };
+    // Draw main scene viewport (960x540)
+    const canvas = el('story-canvas');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    if (ctx) {
+      const beatProgress = Math.min(1, story.lineElapsed / 3.5);
+      const drawer = DRAW[line.scene] || DRAW[0];
+      drawer(ctx, line, t, beatProgress, story);
+    }
 
-    ui.root.classList.remove('hidden');
-    if (typeof state !== 'undefined') state.flags.cutscenePlaying = true;
-    if (typeof initAudio === 'function') initAudio();
-    updatePauseButton();
+    // Draw 64x64 pixel character portrait
+    const portrait = el('story-portrait');
+    const pCtx = portrait ? portrait.getContext('2d') : null;
+    if (pCtx) {
+      drawPortrait(pCtx, speaker, t, !story.typeDone);
+    }
 
-    story.raf = requestAnimationFrame(tick);
-    nextStoryLine();
-    window.addEventListener('keydown', onStoryKey, true);
+    story.rafId = requestAnimationFrame(frameLoop);
   }
 
-  function nextStoryLine() {
-    if (!story) return;
-    story.index++;
-    if (story.index >= LINES.length) return finishStory();
-
-    const line = LINES[story.index];
-    if (line.scene !== story.scene) {
-      story.scene = line.scene;
-      story.sceneStart = performance.now();
-      story.ui.tag.textContent = SCENE_TAGS[line.scene] || '';
+  function advanceStory() {
+    if (!story.active) return;
+    safeAudioCtx();
+    const line = story.lines[story.idx];
+    if (!line) {
+      finishStory();
+      return;
     }
-    if (line.sfx && typeof playSound === 'function') {
-      try { playSound(line.sfx, { gain: 0.65 }); } catch (_) {}
+    if (!story.typeDone) {
+      story.charShown = line.text.length;
+      story.typeDone = true;
+      const lineEl = el('story-line');
+      if (lineEl) lineEl.textContent = line.text;
+      updateControlsUI();
+      return;
     }
-
-    story.lineInScene = LINES.slice(0, story.index).filter((l) => l.scene === line.scene).length;
-    story.lineStart = performance.now();
-    if (story.paused) story.pausedAt = story.lineStart;
-
-    const speakerName = line.speaker === '@player'
-      ? (typeof state !== 'undefined' && state.character === 'female' ? 'ริน' : 'นนท์')
-      : line.speaker;
-    story.ui.speaker.textContent = speakerName;
-    story.ui.speaker.style.color = SPEAKER_COLORS[speakerName] || '#cbbfae';
-    story.ui.line.textContent = story.paused ? line.text : '';
-    story.ui.hint.textContent = `ซีน ${story.index + 1} / ${LINES.length} · คลิก / E เพื่อไปต่อ`;
-    if (story.ui.progress) {
-      story.ui.progress.style.width = (((story.index + 1) / LINES.length) * 100).toFixed(1) + '%';
+    if (story.idx < story.lines.length - 1) {
+      enterLine(story.idx + 1);
+    } else {
+      finishStory();
     }
   }
 
   function prevStoryLine() {
-    if (!story || story.finished) return;
-    if (story.index <= 0) {
-      story.lineStart = performance.now();
-      story.sceneStart = story.lineStart;
-      return;
+    if (!story.active) return;
+    safeAudioCtx();
+    if (story.idx > 0) {
+      enterLine(story.idx - 1);
+    } else {
+      enterLine(0);
     }
-    story.index = story.index - 2;
-    story.scene = -1;
-    nextStoryLine();
   }
 
   function togglePauseStory() {
-    if (!story || story.finished) return;
-    const now = performance.now();
-    if (!story.paused) {
-      story.paused = true;
-      story.pausedAt = now;
-    } else {
-      const pausedDur = now - story.pausedAt;
-      story.lineStart += pausedDur;
-      story.sceneStart += pausedDur;
-      story.paused = false;
-    }
-    updatePauseButton();
+    if (!story.active) return;
+    safeAudioCtx();
+    story.autoPlay = !story.autoPlay;
+    story.holdTimer = 0;
+    updateControlsUI();
   }
 
-  function tick(now) {
-    if (!story || story.finished) return;
-    const cx = story.cx;
-    const effectiveNow = story.paused ? story.pausedAt : now;
-    const sceneTime = (effectiveNow - story.sceneStart) / 1000;
-    const lineElapsed = (effectiveNow - story.lineStart) / 1000;
-    const line = LINES[story.index];
-
-    cx.fillStyle = '#000';
-    cx.fillRect(0, 0, W, H);
-    if (DRAW[story.scene]) {
-      DRAW[story.scene](cx, sceneTime, story.lineInScene || 0, lineElapsed, line ? line.speaker : '');
+  function finishStory() {
+    if (!story.active) return;
+    story.active = false;
+    if (story.rafId) {
+      cancelAnimationFrame(story.rafId);
+      story.rafId = null;
     }
-
-    // Soft vignette + cinematic letterbox bars
-    const vig = cx.createRadialGradient(W / 2, H / 2, 230, W / 2, H / 2, 640);
-    vig.addColorStop(0, 'rgba(0,0,0,0)');
-    vig.addColorStop(1, 'rgba(0,0,0,0.58)');
-    cx.fillStyle = vig;
-    cx.fillRect(0, 0, W, H);
-    cx.fillStyle = 'rgba(0,0,0,0.92)';
-    cx.fillRect(0, 0, W, 10);
-    cx.fillRect(0, H - 10, W, 10);
-
-    if (line && !story.paused) {
-      const elapsed = now - story.lineStart;
-      const shown = Math.min(line.text.length, Math.floor(elapsed / TYPE_MS));
-      if (story.ui.line.textContent.length !== shown) {
-        story.ui.line.textContent = line.text.slice(0, shown);
-      }
-      const full = 1900 + line.text.length * 52;
-      if (elapsed > full) nextStoryLine();
-    }
-    story.raf = requestAnimationFrame(tick);
+    window.removeEventListener('keydown', onStoryKeyDown, true);
+    const root = el('story-intro');
+    if (root) root.classList.add('hidden');
+    const cb = story.done;
+    story.done = null;
+    if (typeof cb === 'function') cb();
   }
 
-  function advanceStory() {
-    if (!story || story.finished) return;
-    const line = LINES[story.index];
-    if (!line) return finishStory();
-    if (story.paused) {
-      story.paused = false;
-      updatePauseButton();
-    }
-    const shown = story.ui.line.textContent.length;
-    if (shown < line.text.length) {
-      story.ui.line.textContent = line.text;
-      story.lineStart = performance.now() - line.text.length * TYPE_MS - 2200;
-      return;
-    }
-    nextStoryLine();
-  }
-
-  function onStoryKey(e) {
-    if (!story || story.finished) return;
+  function onStoryKeyDown(e) {
+    if (!story.active) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
       finishStory();
-      return;
-    }
-    if (e.key === 'ArrowLeft') {
+    } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       e.stopPropagation();
       prevStoryLine();
-      return;
-    }
-    if (e.key === 'p' || e.key === 'P') {
+    } else if (e.key === 'p' || e.key === 'P') {
       e.preventDefault();
       e.stopPropagation();
       togglePauseStory();
-      return;
-    }
-    if (e.key === 'e' || e.key === 'E' || e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') {
+    } else if (e.key === ' ' || e.key === 'Enter' || e.key === 'e' || e.key === 'E' || e.key === 'ArrowRight') {
       e.preventDefault();
       e.stopPropagation();
       advanceStory();
     }
   }
 
-  function finishStory() {
-    if (!story || story.finished) return;
-    story.finished = true;
-    story.doneAt = performance.now();
-    cancelAnimationFrame(story.raf);
-    window.removeEventListener('keydown', onStoryKey, true);
-    story.ui.root.classList.add('hidden');
-    if (typeof state !== 'undefined') state.flags.cutscenePlaying = false;
-    const done = story.onDone;
-    const ui = story.ui;
-    story = null;
-    if (done) done();
-    return ui;
+  function playStoryIntro(onDone) {
+    safeAudioCtx();
+    story.lines = getLines();
+    story.done = onDone;
+    story.active = true;
+    story.autoPlay = false; // Manual step-by-step progression by default
+    story.playedSfxIdx = -1;
+    story.startTime = performance.now();
+    story.lastTs = 0;
+
+    const root = el('story-intro');
+    if (root) root.classList.remove('hidden');
+
+    enterLine(0);
+    window.addEventListener('keydown', onStoryKeyDown, true);
+    if (story.rafId) cancelAnimationFrame(story.rafId);
+    story.rafId = requestAnimationFrame(frameLoop);
   }
+
+  window.playStoryIntro = playStoryIntro;
+  window.advanceStory = advanceStory;
+  window.prevStoryLine = prevStoryLine;
+  window.togglePauseStory = togglePauseStory;
+  window.skipStoryIntro = finishStory;
 
   window.storyIntro = {
     play: playStoryIntro,
@@ -654,11 +1248,7 @@
     togglePause: togglePauseStory,
     skip: finishStory,
     scenes: DRAW,
-    size: { width: W, height: H }
+    lines: getLines,
+    size: { width: W, height: H },
   };
-  window.playStoryIntro = playStoryIntro;
-  window.advanceStory = advanceStory;
-  window.prevStoryLine = prevStoryLine;
-  window.togglePauseStory = togglePauseStory;
-  window.skipStoryIntro = finishStory;
 })();

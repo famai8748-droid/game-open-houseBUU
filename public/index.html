@@ -521,20 +521,32 @@
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <!-- STORY INTRO CUTSCENE -->
-  <div id="story-intro" class="story-intro hidden" onclick="advanceStory()">
-    <canvas id="story-canvas" width="960" height="540" class="story-canvas" aria-label="ฉากเปิดเรื่อง"></canvas>
-    <div class="story-tag" id="story-scene-tag"></div>
-    <div class="story-sub">
-      <div class="story-progress"><div id="story-progress-fill" class="story-progress-fill"></div></div>
-      <div class="story-speaker" id="story-speaker"></div>
-      <p class="story-line" id="story-line"></p>
-      <div class="story-hint">
-        <span id="story-step">คลิก / E เพื่อไปต่อ · ESC ข้ามฉาก</span>
-        <div class="story-controls" onclick="event.stopPropagation()">
-          <button type="button" class="story-ctrl-btn" onclick="prevStoryLine()">⏮ ย้อนกลับ</button>
-          <button type="button" id="story-pause-btn" class="story-ctrl-btn" onclick="togglePauseStory()">⏸ หยุดชั่วคราว</button>
-          <button type="button" class="story-ctrl-btn" onclick="advanceStory()">⏭ ถัดไป</button>
-          <button type="button" class="story-ctrl-btn skip" onclick="skipStoryIntro()">ข้ามคัทซีน ⏭</button>
+  <div id="story-intro" class="story-intro hidden" role="dialog" aria-modal="true" aria-label="คัทซีนเปิดเรื่อง" onclick="advanceStory()">
+    <div class="story-window">
+      <div class="story-viewport">
+        <canvas id="story-canvas" width="960" height="540" class="story-canvas" aria-label="ฉากเปิดเรื่อง"></canvas>
+        <div class="story-tag" id="story-scene-tag"></div>
+        <div class="story-step-badge" id="story-step">01 / 30</div>
+      </div>
+      <div class="story-sub">
+        <div class="story-progress"><div id="story-progress-fill" class="story-progress-fill"></div></div>
+        <div class="story-dialogue-row">
+          <div class="story-portrait-wrap">
+            <canvas id="story-portrait" width="64" height="64" class="story-portrait" aria-hidden="true"></canvas>
+          </div>
+          <div class="story-dialogue-text">
+            <div class="story-speaker" id="story-speaker"></div>
+            <p class="story-line" id="story-line"></p>
+          </div>
+        </div>
+        <div class="story-hint">
+          <span class="story-press-prompt" id="story-press-prompt">คลิกกรอบ / กด E หรือ Space เพื่อไปต่อ · ESC ข้ามฉาก</span>
+          <div class="story-controls" onclick="event.stopPropagation()">
+            <button type="button" class="story-ctrl-btn" onclick="prevStoryLine()">⏮ ย้อนกลับ</button>
+            <button type="button" id="story-pause-btn" class="story-ctrl-btn" onclick="togglePauseStory()">▶ อัตโนมัติ: ปิด</button>
+            <button type="button" class="story-ctrl-btn primary" onclick="advanceStory()">ถัดไป ▶</button>
+            <button type="button" class="story-ctrl-btn skip" onclick="skipStoryIntro()">ข้ามคัทซีน ⏭</button>
+          </div>
         </div>
       </div>
     </div>
