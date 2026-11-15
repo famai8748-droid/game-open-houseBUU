@@ -612,6 +612,24 @@ function preloadAssets() {
     const d = new Image(); d.src = `assets/frames/dancer_anim_${i}.png`; IMAGES[`dancerAnim${i}`] = d;
     const s = new Image(); s.src = `assets/frames/sam_anim_${i}.png`; IMAGES[`samAnim${i}`] = s;
   }
+  // Preload Storyboard Intro panels & extended 24 animation frames
+  for (let s = 1; s <= 4; s++) {
+    const panel = new Image();
+    panel.src = `assets/frames/intro_panel_${s}.png`;
+    IMAGES[`intro_panel_${s}`] = panel;
+  }
+  const p2NoTruck = new Image();
+  p2NoTruck.src = 'assets/frames/intro_panel_2_notruck.png';
+  IMAGES.intro_panel_2_notruck = p2NoTruck;
+
+  const introFrameCounts = { 1: 6, 2: 8, 3: 5, 4: 5 };
+  Object.entries(introFrameCounts).forEach(([sceneKey, count]) => {
+    for (let f = 0; f < count; f++) {
+      const fr = new Image();
+      fr.src = `assets/frames/intro_s${sceneKey}_f${f}.png`;
+      IMAGES[`intro_s${sceneKey}_f${f}`] = fr;
+    }
+  });
 }
 preloadAssets();
 
@@ -1944,10 +1962,29 @@ function renderCutsceneFrame(cx, prefix, idx) {
   const studentWalkImg = state.character === 'female' ? IMAGES[`femaleWalk${idx % 8}`] : IMAGES[`maleWalk${idx % 8}`];
 
   if (prefix === 'cutscene_sam') {
+    cx.save();
+    if (!REDUCED_MOTION && idx >= 3) {
+      const z = 1.0 + (idx - 2) * 0.035;
+      const sx = idx === 3 ? -4 : idx === 4 ? 5 : -7;
+      const sy = idx === 3 ? 2 : idx === 4 ? -3 : 4;
+      cx.translate(400 + sx, 225 + sy);
+      cx.scale(z, z);
+      cx.translate(-400, -225);
+    }
     const bg = IMAGES.bg3;
     if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
     cx.fillStyle = 'rgba(6, 5, 10, 0.65)';
     cx.fillRect(0, 0, 800, 450);
+
+    // Flickering warm candle glow around the krathong offering
+    const candleR = 115 + (idx % 2 === 0 ? 18 : -10);
+    const candleGrad = cx.createRadialGradient(553, 352, 8, 553, 352, candleR);
+    candleGrad.addColorStop(0, 'rgba(255, 185, 75, 0.52)');
+    candleGrad.addColorStop(1, 'rgba(255, 90, 20, 0)');
+    cx.fillStyle = candleGrad;
+    cx.beginPath();
+    cx.arc(553, 352, candleR, 0, Math.PI * 2);
+    cx.fill();
 
     if (isReady(IMAGES.krathong)) {
       cx.drawImage(IMAGES.krathong, 515, 325, 76, 62);
@@ -1974,6 +2011,7 @@ function renderCutsceneFrame(cx, prefix, idx) {
     if (isReady(studentImg)) {
       cx.drawImage(studentImg, 130, 175, 115, 230);
     }
+    cx.restore();
   } else {
     const bg = idx < 2 ? IMAGES.bg2 : IMAGES.bg5;
     if (isReady(bg)) cx.drawImage(bg, 0, 0, 800, 450);
@@ -1994,6 +2032,13 @@ function renderCutsceneFrame(cx, prefix, idx) {
       }
       if (isReady(studentWalkImg)) {
         cx.drawImage(studentWalkImg, 210 + (idx - 2) * 28, 175, 115, 230);
+      }
+      // Rising golden dawn particles
+      cx.fillStyle = 'rgba(255, 225, 130, 0.72)';
+      for (let p = 0; p < 14; p++) {
+        const px = 80 + ((p * 53 + idx * 17) % 640);
+        const py = 360 - ((p * 29 + (idx - 2) * 45) % 280);
+        cx.fillRect(px, py, 4, 4);
       }
       if (idx === 5) {
         cx.fillStyle = 'rgba(12, 9, 18, 0.86)';

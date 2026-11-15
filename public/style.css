@@ -3174,3 +3174,64 @@ body,
   .story-line { min-height: 4.2em; font-size: 15px; }
   .story-tag { font-size: 9.5px; letter-spacing: 2px; }
 }
+
+.story-progress {
+  width: 100%;
+  height: 3px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.story-progress-fill {
+  width: 4%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c99e5a, #ffd67a);
+  transition: width 0.28s ease;
+}
+
+.story-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.story-ctrl-btn {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dfd4c2;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(201, 164, 90, 0.35);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.story-ctrl-btn:hover,
+.story-ctrl-btn:focus-visible {
+  color: #fff3d6;
+  background: rgba(201, 164, 90, 0.2);
+  border-color: rgba(246, 221, 169, 0.75);
+  outline: none;
+}
+
+.story-ctrl-btn.skip {
+  color: #f0c45a;
+}
+
+@media (max-width: 720px) {
+  .story-hint {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .story-ctrl-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}

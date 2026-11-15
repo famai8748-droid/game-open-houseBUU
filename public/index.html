@@ -66,6 +66,7 @@
         <button id="btn-resume" class="t-item hidden" onclick="resumeFromCheckpoint()">เล่นต่อ</button>
         <button class="t-item" onclick="startSoloGame()">เริ่มเกมใหม่</button>
         <button id="btn-open-lobby" class="t-item" onclick="openCoopLobby()">เล่น 2 คน (QR Code)</button>
+        <button class="t-item" onclick="playStoryIntro()">ดูคัทซีนเปิดเรื่อง (ฉบับเต็ม)</button>
         <div class="t-divider"></div>
         <button class="t-item" onclick="openSettings()">ตั้งค่า</button>
         <button class="t-item" onclick="openHowTo()">วิธีเล่น</button>
@@ -524,11 +525,17 @@
     <canvas id="story-canvas" width="960" height="540" class="story-canvas" aria-label="ฉากเปิดเรื่อง"></canvas>
     <div class="story-tag" id="story-scene-tag"></div>
     <div class="story-sub">
+      <div class="story-progress"><div id="story-progress-fill" class="story-progress-fill"></div></div>
       <div class="story-speaker" id="story-speaker"></div>
       <p class="story-line" id="story-line"></p>
       <div class="story-hint">
         <span id="story-step">คลิก / E เพื่อไปต่อ · ESC ข้ามฉาก</span>
-        <span class="story-skip" onclick="skipStoryIntro()">ข้ามอินทโร ⏭</span>
+        <div class="story-controls" onclick="event.stopPropagation()">
+          <button type="button" class="story-ctrl-btn" onclick="prevStoryLine()">⏮ ย้อนกลับ</button>
+          <button type="button" id="story-pause-btn" class="story-ctrl-btn" onclick="togglePauseStory()">⏸ หยุดชั่วคราว</button>
+          <button type="button" class="story-ctrl-btn" onclick="advanceStory()">⏭ ถัดไป</button>
+          <button type="button" class="story-ctrl-btn skip" onclick="skipStoryIntro()">ข้ามคัทซีน ⏭</button>
+        </div>
       </div>
     </div>
   </div>
