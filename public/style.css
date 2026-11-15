@@ -3391,3 +3391,64 @@ body,
   height: 1em;
   vertical-align: -0.12em;
 }
+
+/* ---- Press-to-start (only when the browser holds the sound back) ---- */
+.press-start {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(40, 8, 10, 0.55), rgba(0, 0, 0, 0.92) 70%),
+    url('assets/bg_scene1_forest.jpg') center / cover no-repeat;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.press-start.hidden { display: none; }
+.press-start:focus { outline: none; }
+.ps-title {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-weight: 700;
+  font-size: clamp(38px, 7vw, 76px);
+  color: #d8262c;
+  text-shadow: 0 0 24px rgba(216, 38, 44, 0.55), 3px 3px 0 #000;
+  letter-spacing: 1px;
+}
+.ps-sub {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: clamp(11px, 1.4vw, 14px);
+  letter-spacing: 6px;
+  color: rgba(240, 207, 149, 0.7);
+}
+.ps-line {
+  width: min(360px, 60vw);
+  height: 1px;
+  margin: 14px 0 18px;
+  background: linear-gradient(90deg, transparent, #b3262b, #f0cf95, #b3262b, transparent);
+}
+.ps-prompt {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 600;
+  font-size: clamp(16px, 2.2vw, 22px);
+  color: #f6dda9;
+  animation: ps-blink 1.6s ease-in-out infinite;
+}
+.ps-note {
+  margin-top: 8px;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 13px;
+  color: rgba(233, 220, 198, 0.55);
+}
+.ps-note .i { width: 14px; height: 14px; vertical-align: -2px; }
+.ps-touch { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .ps-mouse { display: none; }
+  .ps-touch { display: inline; }
+}
+@keyframes ps-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .ps-prompt { animation: none; } }

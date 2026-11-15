@@ -1214,8 +1214,41 @@ function stopTitleMusic() {
     if (isTitleActive() && !state.started && (!music.el || music.el.paused)) startTitleMusic();
   }, { capture: true, passive: true });
 });
-window.addEventListener('DOMContentLoaded', () => {
+// Opening the game should land on the menu with the theme already playing. When the browser
+// allows sound (booth launcher / a site the visitor has used before) that just happens; when
+// it holds sound back until a first press, a "press any key" screen asks for that press first.
+function pressStartVisible() {
+  const ps = document.getElementById('press-start');
+  return !!(ps && !ps.classList.contains('hidden'));
+}
+
+function dismissPressStart(e) {
+  if (!pressStartVisible()) return;
+  if (e) { e.preventDefault(); e.stopPropagation(); } // this press only starts things, it does not pick a menu item
+  initAudio();
   startTitleMusic();
+  document.getElementById('press-start').classList.add('hidden');
+  const first = document.querySelector('#title-screen .t-nav .t-item:not(.hidden)');
+  if (first) first.focus();
+}
+
+function checkTitleAutoplay() {
+  if (initialRoleParam || state.started || !isTitleActive()) return;
+  startTitleMusic();
+  setTimeout(() => {
+    if (state.started || !isTitleActive()) return;
+    const blocked = !audioCtx || audioCtx.state !== 'running' || !music.el || music.el.paused;
+    if (blocked) {
+      const ps = document.getElementById('press-start');
+      if (ps) { ps.classList.remove('hidden'); ps.focus(); }
+    }
+  }, 500);
+}
+
+['keydown', 'pointerdown'].forEach((ev) => window.addEventListener(ev, dismissPressStart, true));
+
+window.addEventListener('DOMContentLoaded', () => {
+  checkTitleAutoplay();
   // title menu: a tick on hover, a thump on choosing
   document.querySelectorAll('#title-screen .t-item').forEach((b) => {
     b.addEventListener('mouseenter', () => playSound('ui_move'));
