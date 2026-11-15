@@ -1254,7 +1254,9 @@ function buildStatePatch() {
     support: {
       bellCooldown: Math.ceil(state.bellCooldown),
       context: hostContext(),
-      prompt: (state.started && !state.flags.cutscenePlaying && getActiveHotspot()) ? getActiveHotspot().label : ''
+      prompt: (state.started && !state.flags.cutscenePlaying && getActiveHotspot()) ? getActiveHotspot().label : '',
+      goal: state.started ? currentObjective().text : '',
+      target: state.started ? (currentObjective().target || '') : ''
     }
   };
 }
@@ -1478,6 +1480,10 @@ function applyRoomStateToClient(room) {
 
 // The P1 phone's big button says what pressing it will do right now on the main screen.
 function updatePhoneButtons(room) {
+  const goalText = room.support && room.support.goal ? '🎯 ' + room.support.goal : '';
+  state.remoteGoal = room.support || {};
+  const goalEl = document.getElementById(state.role === 'p1' ? 'p1-goal' : 'p2-goal');
+  if (goalEl) goalEl.textContent = goalText;
   if (state.role !== 'p1') return;
   const support = room.support || {};
   const prompt = String(support.prompt || '').replace(/\s*\[[^\]]*\]/g, '').trim();
@@ -1706,7 +1712,10 @@ function startIntroSequence() {
     { speaker: 'เหตุการณ์ก่อนหน้า', text: 'ขากลับจากงานศพของเพื่อนสนิท... รถของครอบครัวเสียหลักหมุนคว้าง ก่อนทุกอย่างจะดับลงเป็นความมืด' },
     { speaker: getPlayerName(), text: 'อึก... ปวดหัวเหมือนมีใครตอกตะปูอยู่ข้างใน... พ่อครับ? แม่ครับ? มีใครได้ยินผมไหม' },
     { speaker: getPlayerName(), text: 'รอบตัวมีแต่ป่ากับความเงียบ ที่เงียบจนได้ยินเสียงเลือดไหลในหู... ตรงนั้นมีเรือนไทยหลังหนึ่งยังเปิดไฟอยู่ ทั้งที่ไม่มีใครควรอยู่' }
-  ]);
+  ], () => {
+    showChapterCard(1);
+    showControlsTip();
+  });
 }
 
 function queueDialogue(lines, onComplete = null) {
@@ -2268,6 +2277,7 @@ function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดด�
 
 function enterScene(sceneNum, startX) {
   state.scene = sceneNum;
+  setTimeout(() => showChapterCard(sceneNum), 0); // after the scene's own state is set
   setAmbientScene(sceneNum);
   state.player.x = startX;
   state.player.hidden = false;
@@ -2279,7 +2289,9 @@ function enterScene(sceneNum, startX) {
     state.flags.visited2 = true;
     queueDialogue([
       { speaker: getPlayerName(), text: 'เข้ามาแล้ว... แต่ในเรือนกลับหนาวกว่าข้างนอก ไฟที่เห็นจากนอกหน้าต่างก็ดับไปแล้ว' },
-      { speaker: getPlayerName(), text: 'รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้ผมเดินไปแตะ' }
+      { speaker: getPlayerName(), text: 'รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้ผมเดินไปแตะ' },
+      { speaker: 'เสียงกระซิบจากผนัง', text: 'อยากออกไป... ก็คืนสิ่งที่เรือนนี้ขาดไปให้ครบ — ของเซ่นไหว้สามอย่าง กับใบหน้าสามชิ้นที่ถูกฉีกออกจากรูป' },
+      { speaker: getPlayerName(), text: 'ของเซ่นไหว้ 3 ชิ้น กับเศษรูป 3 ชิ้น... หาให้ครบแล้วนำไปที่หิ้งบูชา ประตูหลังเรือนถึงจะเปิดให้ผมออกไป' }
     ]);
   } else if (sceneNum === 3) {
     state.ghost.type = 'samphawesi';
@@ -2624,6 +2636,7 @@ function gameLoop(now) {
     if (state.role === 'host' && state.started) {
       updateGame(dt);
       renderGame();
+      updateObjectiveUi();
     }
   } catch (err) {
     console.error('[gameLoop]', err); // never let one bad frame freeze the game
@@ -2914,6 +2927,7 @@ function renderScene() {
 
   // 7. Hotspot markers
   renderHotspotIndicators();
+  renderObjectiveMarker();
 }
 
 // ---- ghost effects: afterimage trail while hunting, glitch bursts, the dancer's sway ----
@@ -3284,6 +3298,126 @@ function renderHotspotIndicators() {
 
 // ----------------------- Mobile P2 Sixth-Sense Radar Renderer -----------------------
 let lastRadarDraw = 0;
+
+// ----------------------- Objectives: always say what to do next -----------------------
+// Playtesters understood the controls but not the goal. One plain-language objective is
+// derived from the game state every frame, shown at the top of the screen, pointed at with
+// a golden arrow in the room, announced with a chapter card, and mirrored on both phones.
+const CHAPTERS = {
+  1: 'บทที่ 1 · ป่ามืดหลังอุบัติเหตุ',
+  2: 'บทที่ 2 · โถงรูปถ่าย',
+  3: 'บทที่ 3 · ห้องเครื่องเซ่น',
+  4: 'บทที่ 4 · พิธีปลดผนึก',
+  5: 'บทสุดท้าย · รุ่งอรุณ'
+};
+
+function currentObjective() {
+  const inv = state.inventory;
+  const f = state.flags;
+  const s = state.scene;
+  const has = (o) => inv.offerings.includes(o);
+  const photo = (n) => inv.photos.includes(n);
+  const hideTip = state.ghost.active && (s === 3 || s === 4) ? ' — ถ้าผีมา ซ่อนในตู้/ตุ่มแล้วปิดไฟฉาย' : '';
+  if (s === 1) return { text: 'เดินไปทางขวา แล้วขอความช่วยเหลือที่ประตูเรือนไทย', target: 'mansion_front_door' };
+  if (s === 2) {
+    if (!photo(1)) return { text: 'สำรวจตู้ไม้สักกลางห้อง (มีบางอย่างซ่อนอยู่)', target: 'hiding_cabinet_2' };
+    if (!has('garland')) return { text: 'หาของเซ่นไหว้ชิ้นแรกบนโต๊ะริมหน้าต่าง', target: 'table_offering_1' };
+    return { text: 'ตามเสียงกุกกักไปที่ประตูทางขวา', target: 'door_to_scene3' };
+  }
+  if (s === 3) {
+    if (!photo(1) || !has('garland')) return { text: 'ยังเก็บของในโถงรูปถ่ายไม่ครบ — ย้อนกลับทางประตูซ้าย', target: 'door_back_scene2' };
+    if (!f.samphawesiTriggered) return { text: 'เข้าไปดูว่าใครนั่งอยู่กลางห้อง', target: 'samphawesi_offering_spot' };
+    if (!has('incense')) return { text: 'หาธูปเทียนข้างตุ่มน้ำทางซ้าย' + hideTip, target: 'hiding_jar_3' };
+    if (!photo(2)) return { text: 'เอาเศษรูปชิ้นที่ 2 บนโต๊ะมุมขวา' + hideTip, target: 'photo_piece_2_spot' };
+    return { text: 'ไปประตูทางขวาสุด เข้าโถงด้านใน', target: 'door_to_scene4' };
+  }
+  if (s === 4) {
+    if (!has('dessert')) return { text: 'หาพานขนมในตู้ไม้ทางซ้าย' + hideTip, target: 'hiding_cabinet_4' };
+    if (!photo(3)) return { text: 'สำรวจหิ้งบูชากลางห้อง (เศษรูปชิ้นสุดท้ายอยู่ที่นั่น)' + hideTip, target: 'shrine_altar_spot' };
+    if (inv.offerings.length < 3 || inv.photos.length < 3) {
+      return { text: `ยังขาดของ (ของเซ่น ${inv.offerings.length}/3 · เศษรูป ${inv.photos.length}/3) — ย้อนกลับไปหาในห้องก่อนหน้า`, target: 'door_back_scene3' };
+    }
+    if (!f.offeringsPlaced) return { text: 'นำของเซ่นไหว้ทั้ง 3 ชิ้นไปถวายที่หิ้งบูชา', target: 'shrine_altar_spot' };
+    if (!f.photosRestored) return { text: 'ต่อเศษรูปให้ครบ: ที่หิ้งบูชา หรือปุ่ม 🖼️ ดูกรอบรูป แล้วแตะรูปทั้ง 3 ชิ้น', target: 'shrine_altar_spot' };
+    return { text: 'ประตูหลังเรือนเปิดแล้ว — ออกไปทางขวาสุด', target: 'back_exit_door' };
+  }
+  if (s === 5) return { text: 'คุยกับคุณลุงที่ยืนรออยู่', target: 'uncle_raj_pattern' };
+  return { text: '', target: null };
+}
+
+let lastObjectiveText = '';
+let objectiveSince = 0;
+
+function updateObjectiveUi() {
+  const bar = document.getElementById('objective-bar');
+  if (!bar) return;
+  const show = state.role === 'host' && state.started && !state.flags.victory && !state.flags.cutscenePlaying && !isDialogueOpen();
+  bar.classList.toggle('hidden', !show);
+  const obj = currentObjective();
+  if (obj.text !== lastObjectiveText) {
+    lastObjectiveText = obj.text;
+    objectiveSince = performance.now();
+    document.getElementById('objective-text').textContent = obj.text;
+    bar.classList.remove('obj-new');
+    void bar.offsetWidth; // restart the "new objective" glow
+    bar.classList.add('obj-new');
+  }
+}
+
+// Golden arrow over the next target; it grows and spells out the action if the player
+// has been on the same step for a while.
+const IS_TOUCH = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+function renderObjectiveMarker() {
+  if (state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen()) return;
+  const obj = currentObjective();
+  if (!obj.target) return;
+  const spot = getSceneHotspots(state.scene).find((sp) => sp.id === obj.target);
+  if (!spot) return;
+  const now = performance.now();
+  const stuck = now - objectiveSince > 15000;
+  const bob = REDUCED_MOTION ? 0 : Math.sin(now / 220) * 6;
+  const size = stuck ? 16 : 11;
+  const y = 318 + bob;
+  ctx.save();
+  ctx.fillStyle = '#ffd36b';
+  ctx.shadowColor = 'rgba(255, 200, 90, 0.9)';
+  ctx.shadowBlur = stuck ? 18 : 10;
+  ctx.beginPath();
+  ctx.moveTo(spot.x - size, y - size);
+  ctx.lineTo(spot.x + size, y - size);
+  ctx.lineTo(spot.x, y + size * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  if (stuck) {
+    ctx.font = 'bold 18px Sarabun';
+    ctx.textAlign = 'center';
+    ctx.fillText(IS_TOUCH ? 'แตะ 🔍 สำรวจ ที่นี่' : 'มาที่นี่ แล้วกด E', spot.x, y - size - 10);
+  }
+  ctx.restore();
+}
+
+// Chapter card when a scene is entered for the first time: name + what to do here.
+function showChapterCard(scene) {
+  if (!state.seenChapters) state.seenChapters = new Set();
+  if (state.seenChapters.has(scene) || !CHAPTERS[scene]) return;
+  state.seenChapters.add(scene);
+  const card = document.getElementById('chapter-card');
+  if (!card) return;
+  document.getElementById('chapter-title').textContent = CHAPTERS[scene];
+  document.getElementById('chapter-goal').textContent = '🎯 ' + currentObjective().text;
+  card.classList.remove('hidden', 'play');
+  void card.offsetWidth;
+  card.classList.add('play');
+  clearTimeout(showChapterCard.timer);
+  showChapterCard.timer = setTimeout(() => card.classList.add('hidden'), 4200);
+}
+
+function showControlsTip() {
+  showToast(IS_TOUCH
+    ? '👆 แตะ ◀ ▶ เพื่อเดิน · เจอจุดแสงสีทองให้แตะ 🔍 สำรวจ · ทำตาม 🎯 เป้าหมาย ด้านบนจอ'
+    : '⌨️ เดิน A/D หรือ ← → · เจอจุดแสงสีทองกด E · ทำตาม 🎯 เป้าหมาย ด้านบนจอ', '', 8000);
+}
+
 // Names on P2's map, and when each spot is finished (shown greyed with ✓).
 const RADAR_INFO = {
   forest_sign: { label: 'เสาไฟ' },
@@ -3352,6 +3486,14 @@ function renderP2RadarLoop(now = performance.now()) {
       const done = info.done ? info.done() : false;
       rctx.fillStyle = done ? '#4a5652' : (s.isHidingSpot ? '#4da6ff' : '#ffd166');
       rctx.fillRect(rx - 8, 165, 16, 26);
+      if (state.remoteGoal && state.remoteGoal.target === s.id) {
+        // the current objective: a pulsing gold ring
+        rctx.strokeStyle = '#ffd36b';
+        rctx.lineWidth = 3;
+        rctx.beginPath();
+        rctx.arc(rx, 178, 22 + Math.sin(performance.now() / 200) * 3, 0, Math.PI * 2);
+        rctx.stroke();
+      }
       // The canvas is shown at ~55% on phones, so text is drawn large and kept inside the edges.
       rctx.font = '600 19px Sarabun';
       rctx.fillStyle = done ? '#7d8a85' : '#f3e5c8';
@@ -3395,7 +3537,9 @@ function renderP2RadarLoop(now = performance.now()) {
       dangerEl.textContent = high ? '⚠️ อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : '🕯️ เปลวเทียนสงบ (ปลอดภัย)';
       dangerEl.className = high ? 'warn-text' : 'safe-text';
     }
-    if (clueEl) {
+    if (clueEl && state.remoteGoal && state.remoteGoal.goal) {
+      clueEl.textContent = 'นิมิตบอกทาง: ' + state.remoteGoal.goal + ' — บอก P1 ด้วย!';
+    } else if (clueEl) {
       if (state.scene === 1) clueEl.textContent = 'นิมิตบอกทาง: ให้ P1 เดินไปขวาสุดเพื่อสำรวจประตูเรือนไทย';
       if (state.scene === 2) clueEl.textContent = 'นิมิตบอกทาง: เศษรูปชิ้นที่ 1 อยู่ในตู้ไม้สัก และพวงมาลัยอยู่บนโต๊ะริมหน้าต่างขวา';
       if (state.scene === 3) clueEl.textContent = 'นิมิตบอกทาง: ธูปเทียนอยู่ข้างตุ่มน้ำซ้าย เศษรูปชิ้นที่ 2 อยู่บนโต๊ะขวา (ระวังสัมภเวสี!)';

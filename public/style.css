@@ -1734,3 +1734,124 @@ body,
 #settings-modal {
   z-index: 60;
 }
+
+
+/* ======================== Objectives & chapter cards ======================== */
+.objective-bar {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 16;
+  max-width: min(92%, 860px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 18px;
+  border-radius: 999px;
+  background: rgba(14, 12, 19, 0.88);
+  border: 1px solid rgba(235, 185, 99, 0.75);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  color: #f6ead2;
+  font-size: 15px;
+  line-height: 1.35;
+  pointer-events: none;
+}
+
+.objective-label {
+  color: #ebb963;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.objective-bar.obj-new {
+  animation: objPulse 1.4s ease-out;
+}
+
+@keyframes objPulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 211, 107, 0.9); border-color: #ffd36b; }
+  40% { box-shadow: 0 0 0 10px rgba(255, 211, 107, 0); }
+  100% { box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7); }
+}
+
+/* the sixth-sense label sits under the objective bar */
+.sixth-sense-overlay {
+  padding-top: 58px;
+}
+
+.chapter-card {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 24;
+  width: min(90%, 760px);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.chapter-card.play {
+  animation: chapterIn 4.2s ease forwards;
+}
+
+.chapter-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: #f3dfb0;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.95), 0 0 30px rgba(200, 60, 60, 0.45);
+}
+
+.chapter-goal {
+  margin-top: 8px;
+  font-size: 18px;
+  color: #f6ead2;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.95);
+}
+
+@keyframes chapterIn {
+  0% { opacity: 0; transform: translate(-50%, 8px); }
+  12% { opacity: 1; transform: translate(-50%, 0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.mobile-goal {
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid #ebb963;
+  border-radius: 6px;
+  background: rgba(235, 185, 99, 0.08);
+  color: #f6ead2;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.mobile-goal:empty {
+  display: none;
+}
+
+@media (max-width: 760px), (max-height: 520px) {
+  .objective-bar {
+    top: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+  .sixth-sense-overlay {
+    padding-top: 40px;
+  }
+  .chapter-title {
+    font-size: 22px;
+  }
+  .chapter-goal {
+    font-size: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .objective-bar.obj-new {
+    animation: none;
+  }
+}

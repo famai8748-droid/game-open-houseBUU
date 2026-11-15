@@ -215,6 +215,16 @@
       <div id="danger-overlay" class="danger-overlay hidden"></div>
 
       <!-- Prompt Floating Pill -->
+      <!-- Current objective (always visible during play) + chapter card on entering a scene -->
+      <div id="objective-bar" class="objective-bar hidden" aria-live="polite">
+        <span class="objective-label">🎯 เป้าหมาย</span>
+        <span id="objective-text"></span>
+      </div>
+      <div id="chapter-card" class="chapter-card hidden" aria-hidden="true">
+        <div id="chapter-title" class="chapter-title"></div>
+        <div id="chapter-goal" class="chapter-goal"></div>
+      </div>
+
       <div id="interact-prompt" class="interact-prompt hidden">
         กด <strong>[E]</strong> หรือปุ่ม <strong>สำรวจ</strong>
       </div>
@@ -342,6 +352,7 @@
       <span id="p1-room-label">ห้อง ----</span>
     </div>
     <div id="p1-status" class="mobile-status">⏳ กำลังเชื่อมต่อ...</div>
+    <div id="p1-goal" class="mobile-goal"></div>
     <div class="p1-pad-layout">
       <div class="p1-dpad">
         <button class="big-pad-btn" data-remote-move="-1">◀ ซ้าย</button>

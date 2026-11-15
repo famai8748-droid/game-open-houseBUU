@@ -97,7 +97,9 @@ const PATCH_SCHEMA = {
   support: (v) => pick(v, {
     bellCooldown: (n) => num(n, 0, 60),
     context: (c) => oneOf(c, CONTEXTS),
-    prompt: (t) => shortText(t, 80)
+    prompt: (t) => shortText(t, 80),
+    goal: (t) => shortText(t, 160),
+    target: (t) => shortText(t, 40)
   })
 };
 
