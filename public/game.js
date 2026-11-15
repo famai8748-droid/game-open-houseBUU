@@ -3009,6 +3009,25 @@ window.addEventListener('keyup', (e) => {
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
 let lastTime = performance.now();
+let loopErrorStreak = 0;
+
+// One bad frame is skipped, but an error on every frame would leave a frozen picture at the
+// booth with nobody to fix it. First repair the usual culprit (a position that became NaN);
+// if the frames keep failing for ~3 s, reload: the checkpoint survives and "เล่นต่อ" resumes.
+function recoverFromLoopError() {
+  loopErrorStreak++;
+  const p = state.player;
+  const g = state.ghost;
+  if (!Number.isFinite(p.x)) p.x = 640;
+  if (!Number.isFinite(g.x)) placeGhostAwayFromPlayer();
+  if (!Number.isFinite(g.x)) g.x = 1100;
+  if (!Number.isFinite(g.alpha)) g.alpha = 0;
+  if (loopErrorStreak === 180) {
+    try { saveCheckpoint(); } catch (_) {}
+    showToast('เกิดข้อผิดพลาด กำลังโหลดเกมใหม่จากจุดบันทึก...', 'warn', 3000);
+    setTimeout(() => { window.location.href = window.location.pathname; }, 1500);
+  }
+}
 
 function gameLoop(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
@@ -3020,10 +3039,13 @@ function gameLoop(now) {
       syncHidingMuffle();
       renderGame();
       updateObjectiveUi();
+      tickStuckHint(dt);
       if (!isPaused() && !state.flags.victory && !isStoryIntroOpen()) state.playTime = (state.playTime || 0) + dt;
     }
+    loopErrorStreak = 0;
   } catch (err) {
     console.error('[gameLoop]', err); // never let one bad frame freeze the game
+    recoverFromLoopError();
   }
   requestAnimationFrame(gameLoop);
 }
@@ -4529,6 +4551,48 @@ function currentObjective() {
 
 let lastObjectiveText = '';
 let objectiveSince = 0;
+
+// When the same objective has gone unsolved for a while of real play (dialogue, pauses and
+// cutscenes do not count), the friend's whisper gives a plainer, more concrete hint. At the
+// booth this keeps the queue moving without someone leaning over to explain.
+const STUCK_HINT_AFTER = 45; // seconds; then again every 35 s, at most three times per step
+const STUCK_HINTS = {
+  mansion_front_door: () => 'เดินไปทางขวาเรื่อยๆ... เรือนไทยอยู่สุดทาง ยืนหน้าประตูแล้วกดสำรวจ',
+  hiding_cabinet_2: () => 'ตู้ไม้สักบานใหญ่กลางห้อง... ยืนตรงหน้าตู้แล้วกดสำรวจ ของซ่อนอยู่ในซอก',
+  table_offering_1: () => 'โต๊ะเล็กข้างหน้าต่างทางขวา มีพวงมาลัยวางอยู่ข้างตะเกียง',
+  door_to_scene3: () => 'ประตูอยู่สุดทางขวาของห้อง เดินไปจนสุดแล้วกดสำรวจ',
+  door_back_scene2: () => 'ยังเก็บของในโถงรูปถ่ายไม่ครบ... ย้อนกลับทางประตูซ้ายสุด',
+  samphawesi_offering_spot: () => 'เดินเข้าไปกลางห้อง... ไม่ต้องกลัว เราอยู่ตรงนี้',
+  hiding_jar_3: () => 'ตุ่มน้ำใบใหญ่ทางซ้าย ธูปเทียนอยู่ใต้ฐาน — ถ้าได้ยินมันคลานใกล้ หยุดเดินก่อน',
+  photo_piece_2_spot: () => 'โต๊ะมุมขวาของห้อง... เดินทีละช่วง ได้ยินมันใกล้ให้หยุดนิ่ง',
+  door_to_scene4: () => 'ครบแล้ว ไปประตูขวาสุดของห้อง',
+  yantra_code: () => 'เปิดไฟฉาย แล้วหันไปทางยันต์แดงบนผนังข้างตู้ ยืนตรงนั้นแล้วกดสำรวจ',
+  hiding_cabinet_4: () => `รหัสคือ ${thaiCode()} — ไปที่ตู้ทางซ้าย กดตัวเลขตามนั้น`,
+  shrine_altar_spot: () => (state.inventory.photos.includes(3)
+    ? 'หิ้งบูชากลางห้อง... ถวายธูปเทียนก่อน แล้วพวงมาลัย ปิดท้ายด้วยพานขนม'
+    : 'หิ้งบูชากลางห้อง เศษรูปชิ้นสุดท้ายอยู่ใต้ฐาน — ส่องไฟใส่ผีนางรำไว้ระหว่างเดิน'),
+  door_back_scene3: () => 'ยังขาดของ... ย้อนกลับทางประตูซ้ายสุด ไปหาในห้องก่อนหน้า',
+  back_exit_door: () => 'ประตูหลังเรือนเปิดแล้ว อยู่ขวาสุดของห้อง',
+  uncle_raj_pattern: () => 'มีคนยืนรออยู่ทางขวา... ไปคุยกับท่าน'
+};
+const stuckHint = { text: '', time: 0, count: 0 };
+
+function tickStuckHint(dt) {
+  if (state.flags.victory || isWorldFrozen() || isStoryIntroOpen() || state.player.hidden) return;
+  const obj = currentObjective();
+  if (obj.target !== stuckHint.text) {
+    stuckHint.text = obj.target;
+    stuckHint.time = 0;
+    stuckHint.count = 0;
+    return;
+  }
+  stuckHint.time += dt;
+  const due = STUCK_HINT_AFTER + stuckHint.count * 35;
+  if (stuckHint.count >= 3 || stuckHint.time < due || !STUCK_HINTS[obj.target]) return;
+  stuckHint.count++;
+  playSound('whisper', { gain: 0.8 });
+  showToast('เสียงกระซิบ: ' + STUCK_HINTS[obj.target](), 'hint', 7000);
+}
 
 function updateObjectiveUi() {
   const bar = document.getElementById('objective-bar');

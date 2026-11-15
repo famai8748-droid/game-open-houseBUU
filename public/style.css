@@ -1035,6 +1035,15 @@ button:disabled {
   border-color: #e06666;
 }
 
+/* the friend's whisper when the player is stuck: quieter, teal like the sixth sense */
+.toast.hint {
+  border-color: rgba(89, 223, 183, 0.6);
+  color: #dff5ec;
+  font-style: italic;
+  font-size: 16px;
+  box-shadow: 0 0 18px rgba(89, 223, 183, 0.18), 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
 .mobile-status {
   margin: 8px 12px 0;
   padding: 8px 12px;
