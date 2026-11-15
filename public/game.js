@@ -5017,6 +5017,111 @@ function boothIdleTick() {
 }
 setInterval(boothIdleTick, 500);
 
+// ----------------------- Attract mode -----------------------
+// Nobody has touched the title screen for a while: play a slow loop of the game's scenes
+// with one-line hooks, so people walking past the booth see what the game is. Any key or
+// touch closes it (that press does not also pick a menu item). Only on the title screen,
+// never over an open window, and never on the phones.
+const ATTRACT_AFTER = 40; // seconds of no input on the title screen
+const ATTRACT_SLIDE_MS = 7500;
+const ATTRACT_SLIDES = [
+  { bg: 'assets/bg_scene1_forest.jpg', kicker: 'คืนนั้น', line: 'รถคว่ำกลางป่า... แล้วคุณตื่นขึ้นหน้าเรือนไทยที่ไม่ควรมีอยู่' },
+  { bg: 'assets/bg_scene2_hallway.jpg', kicker: 'ปริศนา', line: 'รูปทั้งผนังหันมามองคุณ — ตามหาเศษรูปและของเซ่นที่หายไป', pan: 'l' },
+  { bg: 'assets/bg_scene3_room.jpg', fig: 'assets/ghost_samphawesi_1.png', side: 'right', ghost: true, kicker: 'สัมภเวสี', line: 'มันตาบอด ล่าด้วยเสียงฝีเท้า... ได้ยินมันใกล้ ให้หยุดนิ่ง' },
+  { bg: 'assets/bg_scene4_room.jpg', fig: 'assets/ghost_dancer_2.png', side: 'left', ghost: true, kicker: 'ผีนางรำ', line: 'เธอขยับได้เฉพาะตอนไม่มีใครมอง... อย่าหันหลังให้เธอ', pan: 'l' },
+  { bg: 'assets/bg_scene5_dawn.jpg', fig: 'assets/uncle_0.png', side: 'right', kicker: 'รุ่งอรุณ', line: 'หนีออกมาให้ทันฟ้าสาง แล้วจารึกชื่อในหอเกียรติยศของบูธ', best: true }
+];
+const attract = { on: false, idx: 0, layer: 0, timer: null };
+
+function titleHasWindowOpen() {
+  return !!document.querySelector('.modal:not(.hidden)') || pressStartVisible() || isStoryIntroOpen();
+}
+
+function showAttractSlide() {
+  const root = document.getElementById('attract');
+  const slide = ATTRACT_SLIDES[attract.idx % ATTRACT_SLIDES.length];
+  const layers = root.querySelectorAll('.at-slide');
+  attract.layer = 1 - attract.layer; // crossfade between two layers
+  const el = layers[attract.layer];
+  el.className = 'at-slide' + (slide.pan === 'l' ? ' pan-l' : '');
+  el.querySelector('.at-bg').src = slide.bg;
+  const fig = el.querySelector('.at-fig');
+  if (slide.fig) {
+    fig.src = slide.fig;
+    fig.className = `at-fig ${slide.side}${slide.ghost ? ' ghost' : ''}${slide.side === 'left' ? ' flip' : ''}`;
+    fig.style.display = '';
+  } else {
+    fig.style.display = 'none';
+  }
+  void el.offsetWidth; // restart the CSS animations
+  el.classList.add('on');
+  layers[1 - attract.layer].classList.remove('on');
+
+  const cap = root.querySelector('.at-caption');
+  cap.querySelector('.at-kicker').textContent = slide.kicker;
+  cap.querySelector('.at-line').textContent = slide.line;
+  let best = '';
+  if (slide.best) {
+    const top = loadHof().sort((a, b) => hofScore(a) - hofScore(b))[0];
+    if (top) best = `สถิติวันนี้: ${top.name} · ${formatTime(top.time)} — ลองทำลายสถิติดูไหม?`;
+  }
+  cap.querySelector('.at-best').textContent = best;
+  restartAnimation(cap, 'swap');
+
+  attract.idx++;
+  attract.timer = setTimeout(showAttractSlide, ATTRACT_SLIDE_MS);
+}
+
+function startAttract() {
+  if (attract.on) return;
+  attract.on = true;
+  attract.idx = 0;
+  const root = document.getElementById('attract');
+  root.classList.remove('hidden');
+  restartAnimation(root, 'in');
+  showAttractSlide();
+}
+
+function stopAttract() {
+  if (!attract.on) return;
+  attract.on = false;
+  clearTimeout(attract.timer);
+  const root = document.getElementById('attract');
+  root.classList.add('hidden');
+  root.querySelectorAll('.at-slide').forEach((el) => el.classList.remove('on'));
+  const first = document.querySelector('#title-screen .t-nav .t-item:not(.hidden)');
+  if (first) first.focus();
+}
+
+function attractTick() {
+  if (attract.on) {
+    if (!isTitleActive()) stopAttract();
+    return;
+  }
+  if (state.role !== 'host') return;
+  if (!isTitleActive() || state.started || titleHasWindowOpen()) return;
+  if ((performance.now() - boothLastActivity) / 1000 >= ATTRACT_AFTER) startAttract();
+}
+setInterval(attractTick, 1000);
+
+// The press that closes attract mode is swallowed so it does not also start a game.
+['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
+  window.addEventListener(ev, (e) => {
+    if (!attract.on) return;
+    e.preventDefault();
+    e.stopPropagation();
+    attract.swallowClickUntil = performance.now() + 800;
+    stopAttract();
+  }, { capture: true });
+});
+// the overlay is gone by the time the mouse comes up, so the click would land on a menu item
+window.addEventListener('click', (e) => {
+  if (performance.now() < (attract.swallowClickUntil || 0)) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, { capture: true });
+
 // Leave the game for the title screen. A fresh page load is the cleanest reset of every
 // timer, sound and room; the checkpoint survives it, so "เล่นต่อ" can pick up again.
 function exitToTitle({ keepSave }) {

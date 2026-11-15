@@ -3480,3 +3480,151 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .hud-bump { animation: none; }
 }
+
+/* ==================== Attract mode (idle title screen) ==================== */
+.attract {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  background: #050304;
+  cursor: pointer;
+  user-select: none;
+  animation: at-in 1.2s ease both;
+}
+.attract.hidden { display: none; }
+@keyframes at-in { from { opacity: 0; } to { opacity: 1; } }
+.at-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+.at-slide.on { opacity: 1; }
+.at-bg {
+  position: absolute;
+  inset: -4%;
+  width: 108%;
+  height: 108%;
+  object-fit: cover;
+  filter: brightness(0.62) saturate(0.8) contrast(1.08);
+}
+.at-slide.on .at-bg { animation: at-kenburns 7.5s linear both; }
+.at-slide.pan-l.on .at-bg { animation-name: at-kenburns-l; }
+@keyframes at-kenburns { from { transform: scale(1) translateX(0); } to { transform: scale(1.09) translateX(-1.5%); } }
+@keyframes at-kenburns-l { from { transform: scale(1.09) translateX(-1.5%); } to { transform: scale(1) translateX(1%); } }
+.at-fig {
+  position: absolute;
+  bottom: 9%;
+  height: 62%;
+  image-rendering: pixelated;
+  opacity: 0;
+}
+.at-fig.right { right: 14%; }
+.at-fig.left { left: 18%; }
+.at-fig.flip { transform: scaleX(-1); }
+.at-slide.on .at-fig { animation: at-fig 7.5s ease both; }
+.at-slide.on .at-fig.ghost { animation-name: at-ghost; }
+/* a figure that is just there, quietly */
+@keyframes at-fig { 0%, 20% { opacity: 0; } 45%, 100% { opacity: 0.9; } }
+/* a ghost: a flicker in the dark, a stillness, then it is suddenly closer */
+@keyframes at-ghost {
+  0%, 30% { opacity: 0; filter: brightness(0.2); }
+  33% { opacity: 0.8; filter: brightness(0.4); }
+  35% { opacity: 0; }
+  38%, 70% { opacity: 0.85; filter: brightness(0.55) drop-shadow(0 0 18px rgba(160, 30, 30, 0.5)); }
+  72% { opacity: 0; }
+  76%, 100% { opacity: 1; height: 78%; filter: brightness(0.75) drop-shadow(0 0 26px rgba(190, 30, 30, 0.6)); }
+}
+.at-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 45%, transparent 35%, rgba(0, 0, 0, 0.85) 100%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent 42%);
+  pointer-events: none;
+}
+.at-brand {
+  position: absolute;
+  top: 6%;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.at-title {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-weight: 700;
+  font-size: clamp(30px, 5.5vw, 64px);
+  color: #f6dda9;
+  text-shadow: 0 0 24px rgba(200, 52, 40, 0.55), 0 2px 0 #000;
+  letter-spacing: 0.02em;
+}
+.at-sub {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: clamp(11px, 1.3vw, 15px);
+  letter-spacing: 0.4em;
+  color: rgba(240, 207, 149, 0.7);
+}
+.at-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 17%;
+  transform: translateX(-50%);
+  width: min(88vw, 760px);
+  text-align: center;
+}
+.at-caption.swap { animation: at-cap 7.5s ease both; }
+@keyframes at-cap { 0% { opacity: 0; transform: translate(-50%, 10px); } 12%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+.at-kicker {
+  display: inline-block;
+  padding: 2px 10px;
+  margin-bottom: 8px;
+  border-top: 2px solid;
+  border-image: linear-gradient(90deg, #c83428, #f0cf95) 1;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: clamp(12px, 1.4vw, 15px);
+  letter-spacing: 0.18em;
+  color: #f0cf95;
+}
+.at-line {
+  font-family: 'Sarabun', sans-serif;
+  font-size: clamp(18px, 2.6vw, 30px);
+  font-weight: 600;
+  line-height: 1.45;
+  color: #f6ead2;
+  text-shadow: 0 2px 10px #000;
+}
+.at-best {
+  margin-top: 8px;
+  font-size: clamp(14px, 1.6vw, 18px);
+  color: #f0cf95;
+}
+.at-best:empty { display: none; }
+.at-cta {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-size: clamp(16px, 2vw, 22px);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 14px rgba(200, 52, 40, 0.9);
+  animation: at-blink 1.6s ease-in-out infinite;
+}
+.at-cta small {
+  font-family: 'Sarabun', sans-serif;
+  font-size: clamp(12px, 1.3vw, 15px);
+  font-weight: 400;
+  color: rgba(246, 234, 210, 0.75);
+  text-shadow: none;
+}
+@keyframes at-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .at-slide.on .at-bg, .at-slide.on .at-fig, .at-slide.on .at-fig.ghost { animation: none; opacity: 0.9; }
+  .at-cta { animation: none; }
+}
