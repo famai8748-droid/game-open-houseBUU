@@ -1786,14 +1786,20 @@ function startIntroSequence() {
   setAmbientScene(1);
   state.player.x = 160;
   updateHud();
-  queueDialogue([
-    { speaker: 'เหตุการณ์ก่อนหน้า', text: 'ขากลับจากงานศพของเพื่อนสนิท... รถของครอบครัวเสียหลักหมุนคว้าง ก่อนทุกอย่างจะดับลงเป็นความมืด' },
-    { speaker: getPlayerName(), text: 'อึก... ปวดหัวเหมือนมีใครตอกตะปูอยู่ข้างใน... พ่อครับ? แม่ครับ? มีใครได้ยินผมไหม' },
-    { speaker: getPlayerName(), text: 'รอบตัวมีแต่ป่ากับความเงียบ ที่เงียบจนได้ยินเสียงเลือดไหลในหู... ตรงนั้นมีเรือนไทยหลังหนึ่งยังเปิดไฟอยู่ ทั้งที่ไม่มีใครควรอยู่' }
-  ], () => {
+  startStoryIntro(() => {
     showChapterCard(1);
     showControlsTip();
   });
+}
+
+// The animated prologue lives in story-intro.js; fall back to the chapter card
+// if it cannot run (older cache, blocked script).
+function startStoryIntro(onDone) {
+  if (typeof window.playStoryIntro === 'function') {
+    window.playStoryIntro(onDone);
+    return;
+  }
+  if (onDone) onDone();
 }
 
 function queueDialogue(lines, onComplete = null) {

@@ -519,6 +519,21 @@
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
+  <!-- STORY INTRO CUTSCENE -->
+  <div id="story-intro" class="story-intro hidden" onclick="advanceStory()">
+    <canvas id="story-canvas" width="960" height="540" class="story-canvas" aria-label="ฉากเปิดเรื่อง"></canvas>
+    <div class="story-tag" id="story-scene-tag"></div>
+    <div class="story-sub">
+      <div class="story-speaker" id="story-speaker"></div>
+      <p class="story-line" id="story-line"></p>
+      <div class="story-hint">
+        <span id="story-step">คลิก / E เพื่อไปต่อ · ESC ข้ามฉาก</span>
+        <span class="story-skip" onclick="skipStoryIntro()">ข้ามอินทโร ⏭</span>
+      </div>
+    </div>
+  </div>
+
   <script src="game.js"></script>
+  <script src="story-intro.js"></script>
 </body>
 </html>
