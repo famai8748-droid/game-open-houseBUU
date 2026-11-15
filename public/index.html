@@ -38,6 +38,8 @@
       <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
       <symbol id="i-sound" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></g></symbol>
       <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></g></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
+      <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 5l7 7-7 7M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
       <symbol id="i-pause" viewBox="0 0 24 24"><g fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></g></symbol>
       <symbol id="i-frame" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="1"/><path d="M7 17l3.5-4.5 2.5 3 2-2 2 3.5"/><circle cx="14.5" cy="8.5" r="1.4"/></g></symbol>
       <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -542,10 +544,10 @@
         <div class="story-hint">
           <span class="story-press-prompt" id="story-press-prompt">คลิกกรอบ / กด E หรือ Space เพื่อไปต่อ · ESC ข้ามฉาก</span>
           <div class="story-controls" onclick="event.stopPropagation()">
-            <button type="button" class="story-ctrl-btn" onclick="prevStoryLine()">⏮ ย้อนกลับ</button>
-            <button type="button" id="story-pause-btn" class="story-ctrl-btn" onclick="togglePauseStory()">▶ อัตโนมัติ: ปิด</button>
-            <button type="button" class="story-ctrl-btn primary" onclick="advanceStory()">ถัดไป ▶</button>
-            <button type="button" class="story-ctrl-btn skip" onclick="skipStoryIntro()">ข้ามคัทซีน ⏭</button>
+            <button type="button" class="story-ctrl-btn" onclick="prevStoryLine()"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg><span>ย้อนกลับ</span></button>
+            <button type="button" id="story-pause-btn" class="story-ctrl-btn" onclick="togglePauseStory()"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg><span>อัตโนมัติ: เปิด</span></button>
+            <button type="button" class="story-ctrl-btn primary" onclick="advanceStory()"><span>ถัดไป</span><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
+            <button type="button" class="story-ctrl-btn skip" onclick="skipStoryIntro()"><span>ข้ามคัทซีน</span><svg class="i" aria-hidden="true"><use href="#i-skip"/></svg></button>
           </div>
         </div>
       </div>

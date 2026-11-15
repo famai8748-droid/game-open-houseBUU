@@ -3321,6 +3321,14 @@ body,
   border-color: #ffe39b;
 }
 
+.story-ctrl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.story-ctrl-btn .i { width: 13px; height: 13px; flex: none; }
+
 .story-ctrl-btn.skip {
   color: #f0c45a;
 }

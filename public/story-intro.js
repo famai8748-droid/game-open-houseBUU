@@ -74,7 +74,7 @@
   }
 
   function getProtagonist() {
-    const isFemale = typeof state !== 'undefined' && state && state.gender === 'female';
+    const isFemale = typeof state !== 'undefined' && state && state.character === 'female';
     return isFemale
       ? { name: 'ริน', role: 'female', blip: 'blip_female' }
       : { name: 'นนท์', role: 'male', blip: 'blip_male' };
@@ -102,7 +102,7 @@
 
   function getLines() {
     const p = getProtagonist();
-    const callMe = p.role === 'female' ? 'เธอ' : 'มึง';
+    const callMe = p.role === 'female' ? 'เธอ' : 'นาย';
     const polite = p.role === 'female' ? 'ค่ะ' : 'ครับ';
     const friendCall = p.role === 'female' ? 'ริน' : 'นนท์';
 
@@ -1003,7 +1003,9 @@
   function updateControlsUI() {
     const pauseBtn = el('story-pause-btn');
     if (pauseBtn) {
-      pauseBtn.textContent = story.autoPlay ? '⏸ อัตโนมัติ: เปิด' : '▶ อัตโนมัติ: ปิด';
+      pauseBtn.innerHTML = story.autoPlay
+        ? '<svg class="i" aria-hidden="true"><use href="#i-pause"/></svg><span>อัตโนมัติ: เปิด</span>'
+        : '<svg class="i" aria-hidden="true"><use href="#i-play"/></svg><span>อัตโนมัติ: ปิด</span>';
       pauseBtn.classList.toggle('active', story.autoPlay);
     }
     const prompt = el('story-press-prompt');
@@ -1221,7 +1223,7 @@
     story.lines = getLines();
     story.done = onDone;
     story.active = true;
-    story.autoPlay = false; // Manual step-by-step progression by default
+    story.autoPlay = true; // Booth default: runs by itself; any key / click still skips ahead
     story.playedSfxIdx = -1;
     story.startTime = performance.now();
     story.lastTs = 0;
@@ -1235,6 +1237,7 @@
     story.rafId = requestAnimationFrame(frameLoop);
   }
 
+  window.isStoryIntroOpen = () => story.active;
   window.playStoryIntro = playStoryIntro;
   window.advanceStory = advanceStory;
   window.prevStoryLine = prevStoryLine;

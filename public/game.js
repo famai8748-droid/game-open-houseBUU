@@ -1437,6 +1437,10 @@ function handleRemoteInputs(list) {
 function handleIncomingRemoteInput({ action, value, seq }) {
   if (state.role !== 'host') return;
   if (isPaused()) return; // nothing moves while the main screen is paused
+  if (isStoryIntroOpen()) { // during the prologue the phones only step it forward
+    if (action === 'interact') window.advanceStory();
+    return;
+  }
   if (action === 'move') {
     const s = Number(seq) || 0;
     if (s < net.lastMoveSeq) return; // out-of-order packet
@@ -2649,6 +2653,7 @@ function leaveHiding() {
 function triggerInteract() {
   if (isPaused()) return;
   if (state.flags.cutscenePlaying) return skipCutscene();
+  if (isStoryIntroOpen()) return window.advanceStory(); // P1's phone button / E steps the prologue
   if (state.flags.victory) return;
   // P1 on a phone (or E on the keyboard) can continue without touching the main screen:
   if (state.flags.gameOver) {
@@ -2816,7 +2821,7 @@ function gameLoop(now) {
       updateGame(dt);
       renderGame();
       updateObjectiveUi();
-      if (!isPaused() && !state.flags.victory) state.playTime = (state.playTime || 0) + dt;
+      if (!isPaused() && !state.flags.victory && !isStoryIntroOpen()) state.playTime = (state.playTime || 0) + dt;
     }
   } catch (err) {
     console.error('[gameLoop]', err); // never let one bad frame freeze the game
@@ -3767,7 +3772,12 @@ function checkLock() {
 }
 
 function isOverlayOpen() {
-  return isPhotoModalOpen() || isRitualOpen() || isLockOpen();
+  return isStoryIntroOpen() || isPhotoModalOpen() || isRitualOpen() || isLockOpen();
+}
+
+// The animated prologue (story-intro.js) sits on top of chapter 1: the world waits behind it.
+function isStoryIntroOpen() {
+  return typeof window.isStoryIntroOpen === 'function' && window.isStoryIntroOpen();
 }
 
 // Nothing in the room moves or reacts: used by every input path and the pause menu.
