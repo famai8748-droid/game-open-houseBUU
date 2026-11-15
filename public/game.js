@@ -826,7 +826,7 @@ function buildSceneHotspots(sceneNum) {
         onInteract: () => {
           queueDialogue([
             { speaker: getPlayerName(), text: 'กลับจากงานศพเพื่อนแท้ๆ... จู่ๆ รถก็เสียหลัก ท้องฟ้ากลับหัว และทุกอย่างก็เงียบลง' },
-            { speaker: getPlayerName(), text: 'พ่อครับ! แม่ครับ!... ทำไมป่ากลางคืนถึงเงียบได้ขนาดนี้ เงียบจนได้ยินเสียงลมหายใจตัวเองชัดเกินไป' }
+            { speaker: getPlayerName(), text: `พ่อ${pWord('ครับ', 'คะ')}! แม่${pWord('ครับ', 'คะ')}!... ทำไมป่ากลางคืนถึงเงียบได้ขนาดนี้ เงียบจนได้ยินเสียงลมหายใจตัวเองชัดเกินไป` }
           ]);
         }
       },
@@ -839,9 +839,9 @@ function buildSceneHotspots(sceneNum) {
           if (!state.flags.door1Opened) {
             state.flags.door1Opened = true;
             queueDialogue([
-              { speaker: getPlayerName(), text: 'ขอโทษนะครับ! มีใครอยู่ไหม... รถผมคว่ำ ขอความช่วยเหลือหน่อยครับ!' },
+              { speaker: getPlayerName(), text: `ขอโทษนะ${pWord('ครับ', 'คะ')}! มีใครอยู่ไหม... รถ${pWord('ผม', 'หนู')}คว่ำ ขอความช่วยเหลือหน่อย${pWord('ครับ', 'ค่ะ')}!` },
               { speaker: 'เสียงจากเรือนไม้', text: 'แอ๊ดดดดด... (บานประตูแง้มออกเองช้าๆ ราวกับมีมือหนึ่งผลักจากด้านใน)' },
-              { speaker: getPlayerName(), text: 'ประตูเปิดเอง... เมื่อกี้ยังเห็นเงาคนยืนอยู่ตรงหน้าต่าง ระหว่างที่ผมกะพริบตา มันหายไปไหน' }
+              { speaker: getPlayerName(), text: `ประตูเปิดเอง... เมื่อกี้ยังเห็นเงาคนยืนอยู่ตรงหน้าต่าง ระหว่างที่${pWord('ผม', 'ฉัน')}กะพริบตา มันหายไปไหน` }
             ], () => {
               playDoorCutscene(2, 160, 'ก้าวเข้าสู่เรือนไทย...');
             });
@@ -877,11 +877,11 @@ function buildSceneHotspots(sceneNum) {
           state.flags.inspectedPortraits = true;
           if (state.flags.photosRestored) {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'รูปที่ต่อครบแล้ว... และคนที่ยืนซ้อนอยู่ข้างหลังในรูป ก็คือตัวผมเอง' }
+              { speaker: getPlayerName(), text: `รูปที่ต่อครบแล้ว... และคนที่ยืนซ้อนอยู่ข้างหลังในรูป ก็คือตัว${pWord('ผม', 'ฉัน')}เอง` }
             ]);
           } else {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'รูปคนทั้งตระกูลเรียงเต็มผนัง... ทุกดวงตาเอียงมาทางผมพร้อมกัน ทั้งที่รูปพวกนี้ไม่มีชีวิต' },
+              { speaker: getPlayerName(), text: `รูปคนทั้งตระกูลเรียงเต็มผนัง... ทุกดวงตาเอียงมาทาง${pWord('ผม', 'ฉัน')}พร้อมกัน ทั้งที่รูปพวกนี้ไม่มีชีวิต` },
               { speaker: getPlayerName(), text: 'กรอบกลางผนังถูกฉีกหายไปสามชิ้น เหมือนมีใครจงใจฉีกหน้าใครบางคนออกจากความทรงจำ' }
             ], () => {
               showPhotoPuzzleModal();
@@ -931,7 +931,7 @@ function buildSceneHotspots(sceneNum) {
             playSound('rustle');
           } else {
             queueDialogue([
-              { speaker: getPlayerName(), text: 'เสียงกุกกักยังไม่หยุด... หรือมันขยับตามผมทุกก้าว' }
+              { speaker: getPlayerName(), text: `เสียงกุกกักยังไม่หยุด... หรือมันขยับตาม${pWord('ผม', 'ฉัน')}ทุกก้าว` }
             ]);
           }
         }
@@ -1079,7 +1079,7 @@ function buildSceneHotspots(sceneNum) {
             playSound('pickup');
             updateHud();
             queueDialogue([
-              { speaker: getPlayerName(), text: 'เศษรูปชิ้นสุดท้ายซ่อนใต้ฐานหิ้งบูชา... ครบสามชิ้นแล้ว แต่มือผมสั่นกว่าที่คิด' }
+              { speaker: getPlayerName(), text: `เศษรูปชิ้นสุดท้ายซ่อนใต้ฐานหิ้งบูชา... ครบสามชิ้นแล้ว แต่มือ${pWord('ผม', 'ฉัน')}สั่นกว่าที่คิด` }
             ], () => {
               // scare: the altar candle gutters out and the ankle bells ring right behind you
               triggerBlackout(1100);
@@ -1090,7 +1090,7 @@ function buildSceneHotspots(sceneNum) {
 
           if (state.inventory.offerings.length < 3) {
             queueDialogue([
-              { speaker: getPlayerName(), text: `ยังขาดของเซ่นไหว้ (ตอนนี้มี ${state.inventory.offerings.length}/3 ชิ้น) ท่านคงไม่พอใจถ้าผมไปมือเปล่า` }
+              { speaker: getPlayerName(), text: `ยังขาดของเซ่นไหว้ (ตอนนี้มี ${state.inventory.offerings.length}/3 ชิ้น) ท่านคงไม่พอใจถ้า${pWord('ผม', 'ฉัน')}ไปมือเปล่า` }
             ]);
             return;
           }
@@ -1148,6 +1148,11 @@ function buildSceneHotspots(sceneNum) {
 
 function getPlayerName() {
   return state.character === 'female' ? 'ริน (นักเรียนหญิง)' : 'นนท์ (นักเรียนชาย)';
+}
+
+// Gendered Thai voice helper: male uses ผม/ครับ; female uses หนู/ฉัน and คะ (questions/vocatives) vs ค่ะ (statements).
+function pWord(male, female) {
+  return state.character === 'female' ? female : male;
 }
 
 // ----------------------- UI & Character / Mode Selection -----------------------
@@ -2639,9 +2644,9 @@ function enterScene(sceneNum, startX) {
     state.flags.visited2 = true;
     queueDialogue([
       { speaker: getPlayerName(), text: 'เข้ามาแล้ว... แต่ในเรือนกลับหนาวกว่าข้างนอก ไฟที่เห็นจากนอกหน้าต่างก็ดับไปแล้ว' },
-      { speaker: getPlayerName(), text: 'รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้ผมเดินไปแตะ' },
+      { speaker: getPlayerName(), text: `รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้${pWord('ผม', 'ฉัน')}เดินไปแตะ` },
       { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'อยากออกไป... ก็คืนสิ่งที่เรือนนี้ขาดไปให้ครบ — ของเซ่นไหว้สามอย่าง กับใบหน้าสามชิ้นที่ถูกฉีกออกจากรูป' },
-      { speaker: getPlayerName(), text: 'ของเซ่นไหว้ 3 ชิ้น กับเศษรูป 3 ชิ้น... หาให้ครบแล้วนำไปที่หิ้งบูชา ประตูหลังเรือนถึงจะเปิดให้ผมออกไป' }
+      { speaker: getPlayerName(), text: `ของเซ่นไหว้ 3 ชิ้น กับเศษรูป 3 ชิ้น... หาให้ครบแล้วนำไปที่หิ้งบูชา ประตูหลังเรือนถึงจะเปิดให้${pWord('ผม', 'ฉัน')}ออกไป` }
     ]);
   } else if (sceneNum === 3) {
     state.ghost.type = 'samphawesi';
@@ -2663,7 +2668,7 @@ function enterScene(sceneNum, startX) {
       state.flags.visited4 = true;
       queueDialogue([
         { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... กริ๊ง... (ช้าๆ เหมือนมีคนเต้นรำอยู่ในความมืด ทั้งที่พื้นไม่สั่นเลย)' },
-        { speaker: getPlayerName(), text: 'ผีนางรำ... เธอไม่วิ่ง แต่ทุกครั้งที่ผมกะพริบตา เธอใกล้ขึ้นอีกก้าว รีบหาของเซ่นให้ครบแล้วซ่อนในตู้ไม้!' },
+        { speaker: getPlayerName(), text: `ผีนางรำ... เธอไม่วิ่ง แต่ทุกครั้งที่${pWord('ผม', 'ฉัน')}กะพริบตา เธอใกล้ขึ้นอีกก้าว รีบหาของเซ่นให้ครบแล้วซ่อนในตู้ไม้!` },
         { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'เธอจะขยับได้ก็ต่อเมื่อไม่มีใครมอง... หันไฟฉายใส่เธอไว้ แล้วค่อยๆ ทำสิ่งที่ต้องทำ' }
       ]);
     }
@@ -2737,16 +2742,16 @@ function triggerSamphawesiEncounter() {
 function triggerEndingDialogue() {
   queueDialogue([
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ออกมาได้แล้วสินะ... เรือนหลังนั้นไม่ใช่ที่ของคนเป็น มันไม่เคยเป็น' },
-    { speaker: getPlayerName(), text: 'คุณลุงเป็นใครครับ... แล้วพ่อกับแม่ผม—' },
+    { speaker: getPlayerName(), text: `คุณลุงเป็นใคร${pWord('ครับ', 'คะ')}... แล้วพ่อกับแม่${pWord('ผม', 'หนู')}—` },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ปลอดภัยแล้ว อยู่ที่โรงพยาบาล... แต่เอ็งน่ะ ตอนรถคว่ำดวงจิตหลุดออกจากร่าง ก่อนที่หมอจะได้พูดคำว่า "ช่วยไม่ได้"' },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ข้าจะพาเอ็งกลับเข้าร่าง... แต่ต้องแลกด้วยสัญญา เอ็งต้องไปที่หนึ่งให้ได้ ไม่อย่างนั้น มันจะดึงเอ็งกลับมาทุกคืน' },
-    { speaker: getPlayerName(), text: 'ที่ไหนครับ... ผมสัญญา' },
+    { speaker: getPlayerName(), text: `ที่ไหน${pWord('ครับ', 'คะ')}... ${pWord('ผม', 'หนู')}สัญญา${pWord('ครับ', 'ค่ะ')}` },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' },
-    { speaker: getPlayerName(), text: 'คุณลุงครับ... แล้วเสียงกระซิบที่คอยบอกทางผมตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน' },
+    { speaker: getPlayerName(), text: `คุณลุง${pWord('ครับ', 'คะ')}... แล้วเสียงกระซิบที่คอยบอกทาง${pWord('ผม', 'หนู')}ตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน` },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ก็เพื่อนเอ็งไง... คนที่เอ็งเพิ่งไปงานศพมาเมื่อหัวค่ำ มันเดินตามเอ็งมาตลอดทาง ไม่ยอมให้เอ็งหลงอยู่ที่นี่' },
     { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' },
     ...(loreFound() === 3 ? [
-      { speaker: getPlayerName(), text: 'คุณลุงครับ... ลายมือในบันทึกพวกนั้น คุณลุงคือหลวงสุนทร เจ้าของเรือนใช่ไหมครับ' },
+      { speaker: getPlayerName(), text: `คุณลุง${pWord('ครับ', 'คะ')}... ลายมือในบันทึกพวกนั้น คุณลุงคือหลวงสุนทร เจ้าของเรือนใช่ไหม${pWord('ครับ', 'คะ')}` },
       { speaker: 'คุณลุงชุดราชปะแตน', text: '...ร้อยปีแล้วที่ข้ายืนรอตรงนี้ ขอบใจเอ็งที่ทำให้แม่จันทร์ได้รำจบ และให้ตาเหมือนได้กินอิ่มเสียที' },
       { speaker: 'คุณลุงชุดราชปะแตน', text: 'ถึงเวลาข้าจะได้ตามลูกไปบ้างแล้ว... เอ็งเองก็อย่ามัวหันหลังกลับมาที่นี่ล่ะ' }
     ] : [])
@@ -2823,10 +2828,10 @@ function placePhotoPiece(num) {
     updateHud();
     closePhotoPuzzleModal();
     queueDialogue([
-      { speaker: getPlayerName(), text: 'ครบทั้งสามชิ้น... ภาพชัดขึ้นเรื่อยๆ และคนที่ยืนอยู่ข้างหลังในรูปก็คือผมเอง' },
-      { speaker: getPlayerName(), text: 'ผมไม่ได้อยู่ในรูป... ผมไม่ได้อยู่ที่ไหนเลย ผมนอนหมดสติอยู่ระหว่างความเป็นกับความตาย' },
+      { speaker: getPlayerName(), text: `ครบทั้งสามชิ้น... ภาพชัดขึ้นเรื่อยๆ และคนที่ยืนอยู่ข้างหลังในรูปก็คือ${pWord('ผม', 'ฉัน')}เอง` },
+      { speaker: getPlayerName(), text: `${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ในรูป... ${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ที่ไหนเลย ${pWord('ผม', 'ฉัน')}นอนหมดสติอยู่ระหว่างความเป็นกับความตาย` },
       state.flags.offeringsPlaced
-        ? { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้ผมออกไป' }
+        ? { speaker: getPlayerName(), text: `รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้${pWord('ผม', 'ฉัน')}ออกไป` }
         : { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ถ้าถวายของเซ่นครบสามชิ้นที่หิ้งบูชา ประตูหลังเรือนจะยอมเปิด' }
     ], checkRitualComplete);
   } else {

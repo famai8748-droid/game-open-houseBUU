@@ -102,9 +102,13 @@
 
   function getLines() {
     const p = getProtagonist();
-    const callMe = p.role === 'female' ? 'เธอ' : 'นาย';
-    const polite = p.role === 'female' ? 'ค่ะ' : 'ครับ';
-    const friendCall = p.role === 'female' ? 'ริน' : 'นนท์';
+    const isF = p.role === 'female';
+    const selfElder = isF ? 'หนู' : 'ผม';
+    const selfMind = isF ? 'ฉัน' : 'ผม';
+    const politeAsk = isF ? 'คะ' : 'ครับ';
+    const politeTell = isF ? 'ค่ะ' : 'ครับ';
+    const callMe = isF ? 'เธอ' : 'นาย';
+    const friendCall = isF ? 'ริน' : 'นนท์';
 
     return [
       // --- Scene 0: Altar & Keepsake ("สัญญาณแรก" หน้าโลง) (Beats 0..4, 5 beats) ---
@@ -151,7 +155,7 @@
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'PROTAGONIST',
-        text: `"ขอบคุณ${polite}... ทั้งที่ควันธูปดับหายไปแล้ว ทำไมยังรู้สึกเหมือนมีสายตาจ้องมาจากข้างหลังไม่ยอมไปไหน..."`,
+        text: `"ขอบคุณ${politeTell}... ต่อให้มืดแค่ไหน ${selfElder}จะเก็บไฟฉายกับสายสิญจน์เส้นนี้ติดตัวไว้ตลอดไป${politeTell} — แต่ทำไมทั้งที่ควันธูปจางหายไปแล้ว ยังรู้สึกหนาวเหมือนมีสายตาจ้องมาจากข้างหลัง..."`,
         frame: 'intro_s1_f5',
         showKeepsake: true,
         slowType: true,
@@ -195,7 +199,7 @@
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"${polite}แม่... ดูในกระจกนั่นสิ ข้างหลังไกลๆ เหมือนมีประกายไฟต่ำๆ กระพริบตามมา... แต่มองไม่ออกเลยว่าเป็นอะไร"`,
+        text: `"แม่${politeAsk}... ดูในกระจกนั่นสิ ข้างหลังไกลๆ เหมือนมีประกายไฟต่ำๆ กระพริบตามมา... แต่มองไม่ออกเลยว่าเป็นอะไร"`,
         frame: 'intro_s2_f3',
         wipers: true,
         roadRumble: true,
@@ -224,7 +228,7 @@
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"พ่อครับ!! แสงไฟสูงมันสว่างจ้ากลืนกระจกหมดแล้ว—ระวัง——!!"`,
+        text: `"พ่อ${politeAsk}!! แสงไฟสูงมันสว่างจ้ากลืนกระจกหมดแล้ว—ระวัง——!!"`,
         frame: 'intro_s2_f6',
         shake: 17,
         mirrorMode: 'blinding',
@@ -291,7 +295,7 @@
         scene: 3,
         tag: 'บทนำ ๔/๖ · ห้วงจิตระหว่างความเป็นตาย',
         speaker: 'PROTAGONIST',
-        text: `"เสียงนายเหรอ?! เกิดอะไรขึ้น... เมื่อกี้รถเพิ่งคว่ำ ทำไมเราถึงมาอยู่ที่มืดๆ แบบนี้ล่ะ?"`,
+        text: `"เสียงนายเหรอ?! เกิดอะไรขึ้น... เมื่อกี้รถเพิ่งคว่ำ ทำไม${selfMind}ถึงมาอยู่ที่มืดๆ แบบนี้ล่ะ?"`,
       },
       {
         scene: 3,
@@ -328,7 +332,7 @@
         scene: 4,
         tag: 'บทนำ ๕/๖ · ฟื้นกลางดงต้นกล้วย',
         speaker: 'PROTAGONIST',
-        text: `"ไฟฉายของเพื่อน... ยังอยู่ในมือเราจริงๆ ด้วย! แล้วสายสิญจน์ที่ข้อมือนี่ก็ยังอยู่..."`,
+        text: `"ไฟฉายของเพื่อน... ยังอยู่ในมือ${selfMind}จริงๆ ด้วย! แล้วสายสิญจน์ที่ข้อมือนี่ก็ยังอยู่..."`,
         frame: 'intro_s4_f2',
         heldFlashlight: true,
       },
