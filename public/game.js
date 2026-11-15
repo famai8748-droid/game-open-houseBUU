@@ -1432,6 +1432,9 @@ const net = {
   radarRunning: false
 };
 
+// Booth staff panel (Ctrl+Shift+K, at the end of this file). Declared up here because isPaused() reads it.
+const staff = { open: false, errors: 0, lastError: '', timer: null, fps: 0, fpsFrames: 0, fpsSince: 0 };
+
 async function apiGet(path) {
   const r = await fetch(`/api/${path}`, { cache: 'no-store' });
   const data = await r.json().catch(() => ({}));
@@ -1665,6 +1668,7 @@ function updateRemoteMoveTimeout() {
 
 function updateLobbyPlayerStatus(players) {
   if (!players) return;
+  net.players = players; // the booth staff panel shows who is connected
   const s1 = document.getElementById('status-p1');
   const s2 = document.getElementById('status-p2');
   if (s1) {
@@ -3016,6 +3020,7 @@ let loopErrorStreak = 0;
 // if the frames keep failing for ~3 s, reload: the checkpoint survives and "เล่นต่อ" resumes.
 function recoverFromLoopError() {
   loopErrorStreak++;
+  staff.errors++;
   const p = state.player;
   const g = state.ghost;
   if (!Number.isFinite(p.x)) p.x = 640;
@@ -4951,7 +4956,7 @@ function handleTitleMenuKey(e) {
 
 // ----------------------- Pause menu -----------------------
 function isPaused() {
-  return !!state.paused;
+  return !!state.paused || staff.open; // the booth staff panel freezes the game too
 }
 
 function openPause() {
@@ -5158,3 +5163,228 @@ function openSettingsFromPause() {
 }
 
 
+
+// ----------------------- Booth staff panel -----------------------
+// Ctrl+Shift+K opens a hidden menu for whoever runs the booth: reset for the next visitor,
+// carry a stuck player into the next room, hold the ghost, change the volume, and see at a
+// glance what the game and the phones are doing. Players never see it; the game is paused
+// while it is open. Number keys pick an action, Esc or 0 closes it.
+const STAFF_STEP_HINT = {
+  1: 'ฉาก 1 → 2: เปิดประตูเรือนให้',
+  2: 'ฉาก 2 → 3: ให้เศษรูป 1 กับพวงมาลัย',
+  3: 'ฉาก 3 → 4: ให้ธูปเทียนกับเศษรูป 2 (ข้ามผีสัมภเวสี)',
+  4: 'ฉาก 4 → 5: ทำพิธีและต่อรูปให้ครบ ไปฉากจบ'
+};
+
+window.addEventListener('error', (e) => {
+  staff.errors++;
+  staff.lastError = String((e && e.message) || 'error').slice(0, 120);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  staff.errors++;
+  const r = e && e.reason;
+  staff.lastError = String((r && r.message) || r || 'promise').slice(0, 120);
+});
+
+function openStaffPanel() {
+  if (staff.open) return;
+  staff.open = true;
+  state.moveInput = 0;
+  net.remoteMoving = false;
+  document.getElementById('staff-modal').classList.remove('hidden');
+  staff.fps = 0;
+  staff.fpsFrames = 0;
+  staff.fpsSince = performance.now();
+  refreshStaffPanel();
+  staff.timer = setInterval(refreshStaffPanel, 500);
+  requestAnimationFrame(countStaffFps);
+  if (!net.info) getServerInfo().then(() => { if (staff.open) refreshStaffPanel(); }); // is the booth server up?
+  broadcastState(); // phones show "paused"
+}
+
+function closeStaffPanel() {
+  if (!staff.open) return;
+  staff.open = false;
+  clearInterval(staff.timer);
+  staff.timer = null;
+  document.getElementById('staff-modal').classList.add('hidden');
+  broadcastState();
+}
+
+function countStaffFps(now) {
+  if (!staff.open) return;
+  staff.fpsFrames++;
+  if (now - staff.fpsSince >= 1000) {
+    staff.fps = Math.round((staff.fpsFrames * 1000) / (now - staff.fpsSince));
+    staff.fpsFrames = 0;
+    staff.fpsSince = now;
+  }
+  requestAnimationFrame(countStaffFps);
+}
+
+function staffScreenName() {
+  if (!state.started) return attract.on ? 'หน้าแรก (โหมดโชว์)' : 'หน้าแรก';
+  if (state.flags.victory) return 'ฉากจบ (หน้าสรุปผล)';
+  if (isStoryIntroOpen()) return 'บทนำ (คัตซีนเปิดเรื่อง)';
+  if (state.flags.gameOver) return `${SCENE_TITLES[state.scene]} · โดนผีจับ`;
+  return SCENE_TITLES[state.scene] || `ฉาก ${state.scene}`;
+}
+
+function staffServerText() {
+  const info = net.info;
+  if (!info) return { text: 'ยังไม่ได้เช็ก (เปิดห้อง co-op แล้วจะรู้)', cls: '' };
+  if (info.isVercel) {
+    return info.sharedStore
+      ? { text: 'Vercel (มีที่เก็บห้อง)', cls: '' }
+      : { text: 'Vercel (ไม่มีที่เก็บห้อง co-op อาจหลุด)', cls: 'bad' };
+  }
+  if (info.lanIp) return { text: `เครื่องบูธ · http://${info.lanIp}:${info.port}`, cls: 'ok' };
+  return { text: 'ติดต่อเซิร์ฟเวอร์ไม่ได้', cls: 'bad' };
+}
+
+function refreshStaffPanel() {
+  const rows = [];
+  const add = (k, v, cls = '') => rows.push({ k, v, cls });
+  add('หน้าจอ', staffScreenName());
+  if (state.started) {
+    add('เวลาเล่น / ตาย', `${formatTime(state.playTime || 0)} · ${state.deaths || 0} ครั้ง`);
+    add('ของเซ่น / เศษรูป', `${state.inventory.offerings.length}/3 · ${state.inventory.photos.length}/3`
+      + (state.flags.offeringsPlaced ? ' · ทำพิธีแล้ว' : '') + (state.flags.photosRestored ? ' · ต่อรูปแล้ว' : ''));
+    const g = state.ghost;
+    const ghostName = g.type === 'dancer' ? 'นางรำ' : 'สัมภเวสี';
+    add('ผี', !g.active ? 'ไม่มี' : g.stunTimer > 0 ? `${ghostName} หยุดอยู่ ${Math.ceil(g.stunTimer)} วิ` : `${ghostName} กำลังตามหา`);
+  }
+  if (state.roomCode) {
+    const pl = net.players || {};
+    const lost = net.failures >= 4;
+    add('ห้อง co-op', `${state.roomCode} · P1 ${pl.p1 ? 'ต่อแล้ว' : 'ยังไม่ต่อ'} · P2 ${pl.p2 ? 'ต่อแล้ว' : 'ยังไม่ต่อ'}${lost ? ' · สัญญาณขาด' : ''}`,
+      lost ? 'bad' : (pl.p1 || pl.p2) ? 'ok' : '');
+  } else {
+    add('ห้อง co-op', 'ไม่ได้เปิด (เล่นคนเดียว)');
+  }
+  const srv = staffServerText();
+  add('เซิร์ฟเวอร์', srv.text, srv.cls);
+  add('เสียง', audioMuted ? 'ปิดเสียงอยู่' : `${Math.round(audioVolume * 100)}%`, audioMuted ? 'bad' : '');
+  add('ความลื่น', staff.fps ? `${staff.fps} fps` : 'กำลังวัด...', staff.fps && staff.fps < 30 ? 'bad' : '');
+  add('ข้อผิดพลาด', staff.errors ? `${staff.errors} ครั้ง · ${staff.lastError || 'ในลูปเกม'}` : 'ไม่มี', staff.errors ? 'bad' : 'ok');
+
+  const dl = document.getElementById('staff-status');
+  dl.textContent = '';
+  rows.forEach(({ k, v, cls }) => {
+    const dt = document.createElement('dt');
+    dt.textContent = k;
+    const dd = document.createElement('dd');
+    dd.textContent = v;
+    if (cls) dd.className = cls;
+    dl.append(dt, dd);
+  });
+
+  const inGame = state.started && !state.flags.victory;
+  const btn = (n) => document.querySelector(`#staff-modal [data-staff="${n}"]`);
+  const skip = btn(2);
+  skip.disabled = !inGame || state.scene >= 5;
+  skip.title = inGame ? (STAFF_STEP_HINT[state.scene] || '') : 'ใช้ได้ระหว่างเล่นเท่านั้น';
+  btn(3).disabled = !inGame || !state.ghost.active;
+  btn(7).disabled = state.started;
+}
+
+// Put the game where a player would be on entering `target` having done everything before it.
+function grantProgressUpTo(target) {
+  const inv = state.inventory;
+  const f = state.flags;
+  const give = (list, item) => { if (!list.includes(item)) list.push(item); };
+  if (target >= 2) f.door1Opened = true;
+  if (target >= 3) { f.visited2 = true; give(inv.photos, 1); give(inv.offerings, 'garland'); }
+  if (target >= 4) { f.samphawesiTriggered = true; give(inv.photos, 2); give(inv.offerings, 'incense'); }
+  if (target >= 5) {
+    f.visited4 = true;
+    f.codeRead = true;
+    f.cabinetUnlocked = true;
+    give(inv.offerings, 'dessert');
+    give(inv.photos, 3);
+    inv.placedPhotos = [1, 2, 3];
+    f.offeringsPlaced = true;
+    f.photosRestored = true;
+  }
+}
+
+// Close whatever is on screen (conversation, puzzle windows, game over, prologue) without
+// running the callbacks that would have followed: the staff skip replaces them.
+function clearScreenForStaff() {
+  if (isStoryIntroOpen() && typeof window.skipStoryIntro === 'function') window.skipStoryIntro();
+  finishTyping();
+  state.dialogueQueue = [];
+  state.dialogueOnComplete = null;
+  document.getElementById('dialogue-box').classList.add('hidden');
+  closePhotoPuzzleModal();
+  if (isRitualOpen()) closeRitual();
+  if (isLockOpen()) closeLock();
+  if (state.flags.gameOver) retryFromCheckpoint();
+  if (state.player.hidden) leaveHiding();
+}
+
+function staffSkipScene() {
+  if (state.role !== 'host' || !state.started || state.flags.victory || state.scene >= 5) return false;
+  if (state.flags.cutscenePlaying) {
+    showToast('รอคัตซีนนี้จบก่อน แล้วค่อยกดข้ามอีกครั้ง', 'warn');
+    return false;
+  }
+  const target = state.scene + 1;
+  clearScreenForStaff();
+  grantProgressUpTo(target);
+  enterScene(target, target === 5 ? 220 : 150);
+  updateHud();
+  return true;
+}
+
+function staffAction(n) {
+  switch (n) {
+    case 0: closeStaffPanel(); return;
+    case 1: closeStaffPanel(); exitToTitle({ keepSave: false }); return;
+    case 2: if (staffSkipScene()) closeStaffPanel(); return;
+    case 3:
+      if (state.started && state.ghost.active) {
+        state.ghost.stunTimer = Math.max(state.ghost.stunTimer, 20);
+        closeStaffPanel();
+        showToast('ผีหยุดนิ่ง 20 วินาที');
+      }
+      return;
+    case 4: toggleAudioMute(); break;
+    case 5: setVolume(Math.round(audioVolume * 100) - 10); break;
+    case 6: setVolume(Math.round(audioVolume * 100) + 10); break;
+    case 7:
+      if (state.started) return;
+      closeStaffPanel();
+      startAttract();
+      return;
+    default: return;
+  }
+  refreshSettingsUi();
+  refreshStaffPanel();
+}
+
+// Capture phase on window, registered before the prologue's own listener, so it works on every
+// screen (title, prologue, game, ending) and its keys never reach the game underneath.
+// Main screen only: a phone has no keyboard and the panel would mean nothing there.
+window.addEventListener('keydown', (e) => {
+  if (state.role !== 'host') return;
+  if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyK') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (!e.repeat) {
+      if (staff.open) closeStaffPanel();
+      else openStaffPanel();
+    }
+    return;
+  }
+  if (!staff.open) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  if (e.repeat) return;
+  if (e.key === 'Escape') {
+    staffAction(0);
+    return;
+  }
+  const n = /^(?:Digit|Numpad)([0-9])$/.exec(e.code);
+  if (n) staffAction(Number(n[1]));
+}, { capture: true });

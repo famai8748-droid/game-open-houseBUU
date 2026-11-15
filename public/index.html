@@ -216,6 +216,25 @@
     </div>
   </div>
 
+  <!-- ======================== BOOTH STAFF PANEL (Ctrl+Shift+K) ======================== -->
+  <div id="staff-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="เมนูเจ้าหน้าที่บูธ" onclick="if (event.target === this) closeStaffPanel()">
+    <div class="pause-panel staff-panel">
+      <div class="pause-title">เมนูเจ้าหน้าที่บูธ</div>
+      <div class="pause-sub">Ctrl+Shift+K เปิด/ปิด · กดตัวเลขเลือกคำสั่ง · เกมหยุดระหว่างเปิดเมนูนี้</div>
+      <dl class="staff-status" id="staff-status"></dl>
+      <div class="staff-actions">
+        <button class="btn-primary" data-staff="1" onclick="staffAction(1)"><kbd>1</kbd> ล้างเซฟ กลับหน้าแรก (ให้คนถัดไป)</button>
+        <button class="btn-secondary" data-staff="2" onclick="staffAction(2)"><kbd>2</kbd> ข้ามไปฉากถัดไป (ช่วยคนที่ติด)</button>
+        <button class="btn-secondary" data-staff="3" onclick="staffAction(3)"><kbd>3</kbd> ให้ผีหยุด 20 วินาที</button>
+        <button class="btn-secondary" data-staff="4" onclick="staffAction(4)"><kbd>4</kbd> ปิด / เปิดเสียง</button>
+        <button class="btn-secondary" data-staff="5" onclick="staffAction(5)"><kbd>5</kbd> เสียงเบาลง</button>
+        <button class="btn-secondary" data-staff="6" onclick="staffAction(6)"><kbd>6</kbd> เสียงดังขึ้น</button>
+        <button class="btn-secondary" data-staff="7" onclick="staffAction(7)"><kbd>7</kbd> เปิดโหมดโชว์หน้าบูธ (หน้าแรก)</button>
+        <button class="btn-ghost" data-staff="0" onclick="staffAction(0)"><kbd>0</kbd> ปิดเมนู (Esc)</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================== QR CO-OP LOBBY MODAL ======================== -->
   <div id="coop-modal" class="modal hidden">
     <div class="modal-box">
