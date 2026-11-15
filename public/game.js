@@ -2561,6 +2561,7 @@ function updateHud() {
 window.addEventListener('keydown', (e) => {
   if (state.role !== 'host' || !state.started) return;
   if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (isPaused()) return;
   const k = e.key.toLowerCase();
   if (k === 'a' || e.key === 'ArrowLeft') setMove(-1);
   if (k === 'd' || e.key === 'ArrowRight') setMove(1);
@@ -2572,7 +2573,18 @@ window.addEventListener('keydown', (e) => {
     closeSettings();
     return;
   }
-  if (e.key === 'Escape' && isPhotoModalOpen()) closePhotoPuzzleModal();
+  if (e.key === 'Escape') {
+    const pm = document.getElementById('pause-modal');
+    if (!pm.classList.contains('hidden')) {
+      closePause();
+      return;
+    }
+    if (state.role === 'host' && state.started && !state.flags.cutscenePlaying && !state.flags.gameOver && !isPhotoModalOpen() && !isDialogueOpen()) {
+      openPause();
+      return;
+    }
+  }
+  if (isPhotoModalOpen()) closePhotoPuzzleModal();
   if (k === 'e' || e.key === 'Enter') triggerInteract();
   if (k === 'q') toggleHide();
   if (k === 'f') toggleFlashlight();
@@ -3484,3 +3496,44 @@ document.addEventListener('keydown', (e) => {
   const modal = document.getElementById('settings-modal');
   if (modal && !modal.classList.contains('hidden')) closeSettings();
 });
+
+
+// ----------------------- Pause menu -----------------------
+function isPaused() {
+  return !!state.paused;
+}
+
+function openPause() {
+  if (!state.role === 'host') return;
+  if (!state.started) return;
+  if (state.flags.cutscenePlaying || state.flags.gameOver || isPhotoModalOpen() || isDialogueOpen()) return;
+  state.paused = true;
+  document.getElementById('pause-modal').classList.remove('hidden');
+}
+
+function closePause() {
+  if (!isPaused()) return;
+  state.paused = false;
+  document.getElementById('pause-modal').classList.add('hidden');
+}
+
+function togglePause() {
+  if (isPaused()) closePause();
+  else openPause();
+}
+
+function requestPauseExitToTitle() {
+  const pm = document.getElementById('pause-modal');
+  if (pm && !pm.classList.contains('hidden')) pm.classList.add('hidden');
+  requestClearSave();
+}
+
+function requestClearSave() {
+  const hasSave = !!loadCheckpoint();
+  if (hasSave && !window.confirm('ล้างจุดเซฟของคนก่อนหน้าหรือไม่?\nคนเล่นคนถัดไปจะเริ่มเกมใหม่ตั้งแต่ต้น')) return;
+  closePause();
+  clearCheckpoint();
+  const btn = document.getElementById('btn-resume');
+  if (btn) btn.classList.add('hidden');
+  showToast('🧹 ล้างจุดเซฟแล้ว — พร้อมให้คนถัดไปเริ่มใหม่');
+}

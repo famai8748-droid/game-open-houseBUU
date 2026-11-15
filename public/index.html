@@ -125,8 +125,20 @@
       </div>
 
       <div class="settings-footer">
-        <button class="btn-small" onclick="requestClearSave()">ล้างเซฟคนก่อนหน้า</button>
+        <button class="btn-small" onclick="requestPauseExitToTitle()">ล้างเซฟและกลับสู่เกมหลัก</button>
         <button class="btn-primary btn-compact" onclick="closeSettings()">เสร็จสิ้น</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== PAUSE MODAL ======================== -->
+  <div id="pause-modal" class="modal hidden" onclick="if (event.target === this) closePause()">
+    <div class="pause-panel">
+      <div class="pause-title">⏸ พักเกม</div>
+      <div class="pause-sub">เกมหยุดชั่วคราว — Esc เพื่อกลับเข้าเกม / แท็บอื่น ๆ ในเมนูย่อย</div>
+      <div class="pause-actions">
+        <button class="btn-primary" onclick="closePause()">▶ กลับสู่เกม</button>
+        <button class="btn-secondary" onclick="requestPauseExitToTitle()">กลับสู่หน้าแรก (จบเซฟแล้ว)</button>
       </div>
     </div>
   </div>

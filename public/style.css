@@ -1691,3 +1691,41 @@ body,
   78% { transform: scale(0.86); opacity: 1; }
   100% { transform: scale(0.9); opacity: 0; }
 }
+
+/* Pause menu */
+.pause-panel {
+  max-width: 440px;
+  text-align: left;
+  padding: 20px 22px;
+  background: rgba(20, 17, 24, 0.95);
+  border: 1px solid #7a5b37;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85);
+}
+
+.pause-title {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 22px;
+  color: #f6ead5;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.pause-sub {
+  font-size: 13px;
+  color: #9e917d;
+  margin-bottom: 18px;
+  line-height: 1.55;
+}
+
+.pause-actions { display: flex; flex-direction: column; gap: 10px; }
+
+.pause-actions .btn-primary {
+  font-size: 15px;
+  padding: 12px 16px;
+}
+
+.pause-actions .btn-secondary {
+  font-size: 13.5px;
+  padding: 10px 14px;
+}
