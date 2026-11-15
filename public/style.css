@@ -3452,3 +3452,17 @@ body,
 }
 @keyframes ps-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .ps-prompt { animation: none; } }
+
+/* Item counter pops when a picked-up item lands on it (pickupFx in game.js). */
+.hud-bump {
+  display: inline-block;
+  animation: hud-bump 0.45s ease-out;
+}
+@keyframes hud-bump {
+  0% { transform: scale(1); color: #f0cf95; }
+  35% { transform: scale(1.45); color: #fff1cf; text-shadow: 0 0 12px rgba(255, 210, 130, 0.9); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-bump { animation: none; }
+}

@@ -878,7 +878,7 @@ function buildSceneHotspots(sceneNum) {
         isHidingSpot: true,
         onInteract: () => {
           if (!state.inventory.photos.includes(1)) {
-            state.inventory.photos.push(1);
+            state.inventory.photos.push(1); pickupFx('photo1');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -898,7 +898,7 @@ function buildSceneHotspots(sceneNum) {
         isHiddenClue: !state.inventory.offerings.includes('garland'),
         onInteract: () => {
           if (!state.inventory.offerings.includes('garland')) {
-            state.inventory.offerings.push('garland');
+            state.inventory.offerings.push('garland'); pickupFx('garland');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -949,7 +949,7 @@ function buildSceneHotspots(sceneNum) {
         isHidingSpot: true,
         onInteract: () => {
           if (!state.inventory.offerings.includes('incense')) {
-            state.inventory.offerings.push('incense');
+            state.inventory.offerings.push('incense'); pickupFx('incense');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -977,7 +977,7 @@ function buildSceneHotspots(sceneNum) {
         isHiddenClue: !state.inventory.photos.includes(2),
         onInteract: () => {
           if (!state.inventory.photos.includes(2)) {
-            state.inventory.photos.push(2);
+            state.inventory.photos.push(2); pickupFx('photo2');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -1023,7 +1023,7 @@ function buildSceneHotspots(sceneNum) {
             return;
           }
           if (!state.inventory.offerings.includes('dessert')) {
-            state.inventory.offerings.push('dessert');
+            state.inventory.offerings.push('dessert'); pickupFx('dessert');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -1056,7 +1056,7 @@ function buildSceneHotspots(sceneNum) {
         isHiddenClue: !state.flags.offeringsPlaced,
         onInteract: () => {
           if (!state.inventory.photos.includes(3)) {
-            state.inventory.photos.push(3);
+            state.inventory.photos.push(3); pickupFx('photo3');
             playSound('pickup');
             updateHud();
             queueDialogue([
@@ -2602,6 +2602,7 @@ function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดด�
 
 function enterScene(sceneNum, startX) {
   state.scene = sceneNum;
+  fx.sceneZoomAt = performance.now();
   if (sceneNum === 5) setMusicLevel(0.5, 1.8, { restart: true }); // out of the house: the theme returns at dawn
   setTimeout(() => showChapterCard(sceneNum), 0); // after the scene's own state is set
   setAmbientScene(sceneNum);
@@ -3012,6 +3013,7 @@ function updateGame(dt) {
   if (isPaused()) return; // the pause menu freezes everything: ghost, timers, movement
   updateRemoteMoveTimeout();
   if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory) return;
+  if (performance.now() < fx.hitstopUntil) return; // a beat of stillness when you pick something up
 
   const dialogueOpen = isDialogueOpen();
   const paused = dialogueOpen || isOverlayOpen(); // conversations and the puzzle / ritual / lock windows freeze the world
@@ -3030,7 +3032,10 @@ function updateGame(dt) {
     if (state.stepTimer >= 0.11) {
       state.stepTimer = 0;
       state.player.frame = (state.player.frame + 1) % 8;
-      if (state.player.frame % 4 === 0) playSound('footstep');
+      if (state.player.frame % 4 === 0) {
+        playSound('footstep');
+        spawnFootDust(state.player.x - state.player.dir * 14);
+      }
     }
 
     // Auto-trigger Samphawesi if walking right up to it in Scene 3
@@ -3044,12 +3049,9 @@ function updateGame(dt) {
   // Hotspot prompt
   const spot = getActiveHotspot();
   const promptEl = document.getElementById('interact-prompt');
-  if (spot && !paused) {
-    promptEl.innerHTML = `กด <strong>[E]</strong> : ${spot.label}`;
-    promptEl.classList.remove('hidden');
-  } else {
-    promptEl.classList.add('hidden');
-  }
+  // The prompt is drawn in the world above the spot now (renderHotspotPrompt); the old
+  // floating pill stays hidden.
+  if (promptEl) promptEl.classList.add('hidden');
 
   // Ghost AI (Scenes 3 & 4)
   if (state.ghost.active) {
@@ -3208,6 +3210,32 @@ const DUST_MOTES = Array.from({ length: 55 }, () => ({
   phase: Math.random() * Math.PI * 2
 }));
 
+// Little puffs of dust (or splashes in the wet forest) kicked up by footsteps.
+const FOOT_DUST = [];
+function spawnFootDust(x) {
+  if (REDUCED_MOTION || state.scene > 4) return;
+  for (let i = 0; i < 5; i++) {
+    FOOT_DUST.push({ x: x + (Math.random() - 0.5) * 16, y: 612, vx: (Math.random() - 0.5) * 0.9 - state.player.dir * 0.4, vy: -0.25 - Math.random() * 0.5, r: 2 + Math.random() * 2.5, life: 1 });
+  }
+  if (FOOT_DUST.length > 60) FOOT_DUST.splice(0, FOOT_DUST.length - 60);
+}
+function renderFootDust() {
+  const wet = state.scene === 1;
+  for (let i = FOOT_DUST.length - 1; i >= 0; i--) {
+    const d = FOOT_DUST[i];
+    d.x += d.vx;
+    d.y += d.vy;
+    d.vy += 0.012;
+    d.r += 0.05;
+    d.life -= 0.022;
+    if (d.life <= 0) { FOOT_DUST.splice(i, 1); continue; }
+    ctx.fillStyle = wet ? `rgba(170, 195, 220, ${0.22 * d.life})` : `rgba(190, 175, 150, ${0.2 * d.life})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawGroundShadow(cx, cy, rx, ry = 12, alpha = 0.55) {
   ctx.save();
   const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, rx);
@@ -3242,9 +3270,66 @@ function renderGame() {
   const shake = computeShake();
   ctx.save();
   if (shake) ctx.translate((Math.random() - 0.5) * shake * 2, (Math.random() - 0.5) * shake * 2);
+  const zoom = sceneZoom();
+  if (zoom !== 1) {
+    const zx = Math.max(200, Math.min(1080, state.player.x));
+    ctx.translate(zx, 480);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-zx, -480);
+  }
   renderScene();
   ctx.restore();
   renderPostFx();
+  renderPickupFx();
+}
+
+// Walking into a new room the camera starts a touch close and eases back out.
+const SCENE_ZOOM = { amount: 0.05, ms: 1100 };
+function sceneZoom() {
+  if (REDUCED_MOTION || !fx.sceneZoomAt) return 1;
+  const t = (performance.now() - fx.sceneZoomAt) / SCENE_ZOOM.ms;
+  if (t >= 1) return 1;
+  const ease = 1 - Math.pow(1 - t, 3);
+  return 1 + SCENE_ZOOM.amount * (1 - ease);
+}
+
+// ---- pickup feedback: a frozen beat, a warm flash, and the item flying up to its counter ----
+const PICKUP_MS = 650;
+function pickupFx(imgKey) {
+  const now = performance.now();
+  fx.hitstopUntil = now + 70;
+  fx.pickup = { img: imgKey, at: now, x: state.player.x, y: 430, photo: imgKey.startsWith('photo') };
+  const el = document.getElementById(fx.pickup.photo ? 'hud-photos' : 'hud-offerings');
+  setTimeout(() => { if (el) restartAnimation(el, 'hud-bump'); }, PICKUP_MS - 80);
+}
+function renderPickupFx() {
+  const p = fx.pickup;
+  if (!p) return;
+  const t = (performance.now() - p.at) / PICKUP_MS;
+  if (t >= 1) { fx.pickup = null; return; }
+  ctx.save();
+  if (!REDUCED_MOTION && t < 0.35) {
+    ctx.fillStyle = `rgba(255, 214, 140, ${0.22 * (1 - t / 0.35)})`;
+    ctx.fillRect(0, 0, 1280, 720);
+  }
+  const img = IMAGES[p.img];
+  if (isReady(img)) {
+    // rise a little first, then glide up to the counter in the top bar
+    const tx = p.photo ? 700 : 540;
+    const ty = 18;
+    const e = t < 0.25 ? 0 : (t - 0.25) / 0.75;
+    const ease = e * e * (3 - 2 * e);
+    const x = p.x + (tx - p.x) * ease;
+    const y = (p.y - 30 * Math.min(1, t / 0.25)) + (ty - p.y + 30) * ease;
+    const size = 64 * (1 - 0.55 * ease);
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = 1 - Math.max(0, (t - 0.85) / 0.15);
+    ctx.shadowColor = 'rgba(255, 200, 120, 0.9)';
+    ctx.shadowBlur = 18;
+    const w = size * (img.naturalWidth / img.naturalHeight);
+    ctx.drawImage(img, x - w / 2, y - size / 2, w, size);
+  }
+  ctx.restore();
 }
 
 // The camera trembles a little when the ghost is right on top of you (not while safely hidden).
@@ -3278,9 +3363,9 @@ function renderScene() {
 
   // 3. Draw Ghost or NPC (8-frame animation!)
   if (state.scene === 3 && !state.flags.samphawesiTriggered) {
-    drawGroundShadow(765, 608, 70, 14, 0.65);
+    drawGroundShadow(765, 608, 80, 15, 0.65);
     const idleIdx = Math.floor(performance.now() / 320) % 3;
-    drawSpriteProportional(IMAGES[`samAnim${idleIdx}`], 765, 610, 195, false);
+    drawSpriteProportional(IMAGES[`samAnim${idleIdx}`], 765, 610, 230, false);
   } else if (state.ghost.active && (state.scene === 3 || state.scene === 4)) {
     drawGhost();
   } else if (state.scene === 5) {
@@ -3294,6 +3379,7 @@ function renderScene() {
     const sprite = IMAGES[`${prefix}${state.player.frame}`] || IMAGES[`${prefix}0`];
     drawGroundShadow(state.player.x, 614, 48, 12, 0.65);
     drawSpriteProportional(sprite, state.player.x, 616, 238, state.player.dir === -1);
+    renderFootDust();
   } else {
     ctx.fillStyle = '#8cf5d9';
     ctx.font = 'bold 16px Sarabun';
@@ -3301,10 +3387,15 @@ function renderScene() {
     ctx.fillText(state.player.flashlight ? '[ไฟฉายเปิดอยู่! วิญญาณมองเห็นแสง]' : '[กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]', state.player.x, 340);
   }
 
+  // 4b. Something passes the window now and then (behind the darkness, so only the lit
+  // window shows it)
+  renderWindowShadow();
+
   // 5. Dynamic Darkness, Warm Volumetric Flashlight & Environmental Lights (Scenes 1..4)
   if (state.scene < 5) {
     renderDarknessAndFlashlight();
     renderGhostSilhouette();
+    renderRoomGlow();
   }
 
   // 6. Atmospheric Weather / Dust Particles
@@ -3313,9 +3404,12 @@ function renderScene() {
   // 7. Hotspot markers
   renderHotspotIndicators();
   renderObjectiveMarker();
+  renderHotspotPrompt();
 }
 
 // ---- ghost effects: afterimage trail while hunting, glitch bursts, the dancer's sway ----
+// Ghosts stand a head taller than the player (238) so they loom; catching still uses CATCH_DIST.
+const GHOST_H = 300;
 const ghostTrail = [];
 let ghostTrailAt = 0;
 let ghostGlitchUntil = 0;
@@ -3342,15 +3436,15 @@ function drawGhost() {
     ghostTrail.length = 0;
   }
   ghostTrail.forEach((t, i) => {
-    drawGhostSprite(t.img, t.x, t.y, 245, t.flip, 'brightness(0.6) sepia(1) hue-rotate(-40deg) saturate(3)', g.alpha * 0.07 * (i + 1), t.rot);
+    drawGhostSprite(t.img, t.x, t.y, GHOST_H, t.flip, 'brightness(0.6) sepia(1) hue-rotate(-40deg) saturate(3)', g.alpha * 0.07 * (i + 1), t.rot);
   });
 
   if (!REDUCED_MOTION && now > ghostGlitchUntil && Math.random() < (dist < 300 ? 0.025 : 0.006)) {
     ghostGlitchUntil = now + 90 + Math.random() * 120;
   }
   const glitch = now < ghostGlitchUntil && !stunned;
-  if (g.alpha > 0.05) drawGroundShadow(g.x, 610, 68, 14, 0.6 * g.alpha);
-  drawGhostSprite(gImg, g.x + tremble, 612 + bob, 245, g.dir === 1, filter, g.alpha, g.frozen ? 0 : sway, glitch);
+  if (g.alpha > 0.05) drawGroundShadow(g.x, 610, 82, 15, 0.6 * g.alpha);
+  drawGhostSprite(gImg, g.x + tremble, 612 + bob, GHOST_H, g.dir === 1, filter, g.alpha, g.frozen ? 0 : sway, glitch);
 }
 
 function drawGhostSprite(img, x, bottomY, h, flip, filter, alpha, rot = 0, glitch = false) {
@@ -3447,6 +3541,13 @@ function isBeamOn() {
   }
   return now >= flashlightDropUntil;
 }
+// Candle / lantern flicker: two out-of-step waves plus a little jitter, so it never looks
+// like a metronome. Returns a radius offset in px (about +-10).
+function lightFlicker(now, seed = 0) {
+  if (REDUCED_MOTION) return 0;
+  return Math.sin(now / 83 + seed) * 4 + Math.sin(now / 211 + seed * 2.3) * 4 + (Math.random() - 0.5) * 3;
+}
+
 function renderDarknessAndFlashlight() {
   if (!lightCanvas) {
     lightCanvas = document.createElement('canvas');
@@ -3462,7 +3563,7 @@ function renderDarknessAndFlashlight() {
 
   // Inside the house it is properly dark: the ghost is only clearly seen in the flashlight
   // (or with the sixth sense, which lifts the darkness but draws the ghost faster).
-  const DARKNESS = { 1: 0.6, 2: 0.82, 3: 0.9, 4: 0.9 };
+  const DARKNESS = { 1: 0.6, 2: 0.88, 3: 0.94, 4: 0.94 };
   const baseAlpha = isSensing() ? 0.5 : (DARKNESS[state.scene] || 0.8);
   dctx.fillStyle = `rgba(5, 6, 12, ${baseAlpha})`;
   dctx.fillRect(0, 0, 1280, 720);
@@ -3481,7 +3582,7 @@ function renderDarknessAndFlashlight() {
   };
 
   // Ambient scene lights (porch lantern, utility pole, moonlight window, candles)
-  const flicker = Math.sin(performance.now() / 90) * 6;
+  const flicker = lightFlicker(performance.now());
   if (state.scene === 1) {
     punchLight(468, 282, 10, 155 + flicker, 0.85); // Pole bulb
     punchLight(1086, 250, 15, 220 + flicker, 0.95); // Thai house porch lantern
@@ -3492,12 +3593,15 @@ function renderDarknessAndFlashlight() {
     punchLight(670, 560, 12, 120 + flicker, 0.75); // Offering candle glow
   } else if (state.scene === 4) {
     punchLight(640, 370, 15, 140 + flicker, 0.75); // Altar candle glow
+    punchLight(1013, 360, 20, 200, 0.6); // Moonlight window
   }
+  const lamp = ROOM_LIFE[state.scene] && ROOM_LIFE[state.scene].lamp;
+  if (lamp) punchLight(lamp.x, lamp.y, 6, 70 + lightFlicker(performance.now(), 1.7) * 0.6, 0.55); // oil lamp
 
   // Soft ambient halo around player
   const px = state.player.x;
   const py = 490;
-  punchLight(px, py, 18, 115, 0.78);
+  punchLight(px, py, 14, 95, 0.7);
 
   // Directional Flashlight Cone
   if (beamOn) {
@@ -3554,7 +3658,112 @@ function renderGhostSilhouette() {
   if (!g.active || g.alpha < 0.3 || !(state.scene === 3 || state.scene === 4)) return;
   const gKey = g.type === 'dancer' ? `dancerAnim${g.frame}` : `samAnim${g.frame}`;
   const bob = g.type === 'dancer' ? Math.sin(performance.now() / 190) * 8 : 0;
-  drawSpriteProportional(IMAGES[gKey], g.x, 612 + bob, 245, g.dir === 1, 'brightness(0.35) contrast(1.2)', 0.22 * g.alpha);
+  drawSpriteProportional(IMAGES[gKey], g.x, 612 + bob, GHOST_H, g.dir === 1, 'brightness(0.35) contrast(1.2)', 0.22 * g.alpha);
+}
+
+// ---- living rooms: oil-lamp / candle flames, a breathing moon shaft, a shadow at the window ----
+// Positions are in canvas space, measured off the painted backgrounds (960x535 drawn at 1280x720).
+const ROOM_LIFE = {
+  2: { window: { x: 949, y: 231, w: 128, h: 213 }, shaft: { top: [952, 1075], bottom: [1105, 1260], dir: 1 }, lamp: { x: 1120, y: 446 } },
+  3: { window: { x: 200, y: 231, w: 140, h: 213 }, shaft: { top: [205, 338], bottom: [30, 175], dir: -1 }, lamp: { x: 157, y: 446 } },
+  4: { window: { x: 949, y: 231, w: 128, h: 213 }, shaft: { top: [952, 1075], bottom: [1105, 1260], dir: 1 }, lamp: { x: 1120, y: 446 } }
+};
+const CANDLE_FLAMES = { 3: [{ x: 670, y: 548, s: 0.8 }], 4: [{ x: 640, y: 358, s: 1 }] };
+
+// A small teardrop flame with a soft additive halo; it leans and stretches as it flickers.
+function drawFlame(x, y, scale, seed) {
+  const now = performance.now();
+  const f = REDUCED_MOTION ? 0 : lightFlicker(now, seed) / 10;
+  const h = (14 + f * 4) * scale;
+  const lean = REDUCED_MOTION ? 0 : Math.sin(now / 170 + seed) * 2 * scale;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const halo = ctx.createRadialGradient(x, y - h * 0.4, 1, x, y - h * 0.4, 34 * scale);
+  halo.addColorStop(0, 'rgba(255, 180, 90, 0.35)');
+  halo.addColorStop(1, 'rgba(255, 140, 60, 0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath();
+  ctx.arc(x, y - h * 0.4, 34 * scale, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 196, 110, 0.9)';
+  ctx.beginPath();
+  ctx.moveTo(x + lean, y - h);
+  ctx.quadraticCurveTo(x + 5 * scale, y - h * 0.3, x, y);
+  ctx.quadraticCurveTo(x - 5 * scale, y - h * 0.3, x + lean, y - h);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 245, 210, 0.9)';
+  ctx.beginPath();
+  ctx.ellipse(x, y - h * 0.25, 1.6 * scale, h * 0.22, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Drawn after the darkness: the moon shaft slowly breathes and the flames glow through the dark.
+function renderRoomGlow() {
+  const life = ROOM_LIFE[state.scene];
+  if (!life) return;
+  const now = performance.now();
+  const { top, bottom } = life.shaft;
+  const wy = life.window.y + life.window.h;
+  const breathe = REDUCED_MOTION ? 0.07 : 0.06 + Math.sin(now / 1900) * 0.025;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const grad = ctx.createLinearGradient(0, wy - 40, 0, 625);
+  grad.addColorStop(0, `rgba(150, 185, 235, ${breathe * 1.6})`);
+  grad.addColorStop(1, 'rgba(150, 185, 235, 0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(top[0], wy - 40);
+  ctx.lineTo(top[1], wy - 40);
+  ctx.lineTo(bottom[1], 625);
+  ctx.lineTo(bottom[0], 625);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  drawFlame(life.lamp.x, life.lamp.y, 0.6, 1.7);
+  (CANDLE_FLAMES[state.scene] || []).forEach((c, i) => drawFlame(c.x, c.y, c.s, i * 3.1));
+}
+
+// Every so often a figure drifts past the window, outside. Rare (at most once per 40 s) so it
+// stays a "did I just see that?" moment.
+const windowShadow = { nextAt: 0, startAt: -1, dir: 1 };
+const WINDOW_SHADOW_MS = 1600;
+function renderWindowShadow() {
+  const life = ROOM_LIFE[state.scene];
+  const now = performance.now();
+  if (!life || !state.started) return;
+  if (windowShadow.nextAt === 0) windowShadow.nextAt = now + 20000 + Math.random() * 20000;
+  if (windowShadow.startAt < 0) {
+    if (now < windowShadow.nextAt || isWorldFrozen() || state.flags.gameOver) return;
+    windowShadow.startAt = now;
+    windowShadow.dir = Math.random() < 0.5 ? 1 : -1;
+    playSound('creak', { gain: 0.4 });
+  }
+  const t = (now - windowShadow.startAt) / WINDOW_SHADOW_MS;
+  if (t >= 1) {
+    windowShadow.startAt = -1;
+    windowShadow.nextAt = now + 40000 + Math.random() * 30000;
+    return;
+  }
+  const w = life.window;
+  const span = w.w + 120;
+  const cx = windowShadow.dir === 1 ? w.x - 60 + span * t : w.x + w.w + 60 - span * t;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(w.x, w.y, w.w, w.h);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(4, 4, 8, 0.82)';
+  const headY = w.y + 70 + Math.sin(t * Math.PI * 4) * 3; // a slow, swaying walk
+  ctx.beginPath();
+  ctx.ellipse(cx, headY, 17, 21, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - 14, headY + 18);
+  ctx.quadraticCurveTo(cx - 44, headY + 34, cx - 48, w.y + w.h);
+  ctx.lineTo(cx + 48, w.y + w.h);
+  ctx.quadraticCurveTo(cx + 44, headY + 34, cx + 14, headY + 18);
+  ctx.fill();
+  ctx.restore();
 }
 
 // ---- post effects drawn over everything: lightning (forest), floor fog, film grain ----
@@ -3714,6 +3923,59 @@ function renderHotspotIndicators() {
   });
 }
 
+// The "[E] open the cabinet" tag that floats above whatever you are standing at, like in a
+// console game. Same look as the title-screen menus: near-black, thin red-gold line, square corners.
+function shortLabel(text, max = 24) {
+  const g = splitGraphemes(text);
+  return g.length > max ? g.slice(0, max - 1).join('') + '…' : text;
+}
+function renderHotspotPrompt() {
+  if (state.player.hidden || isWorldFrozen() || isDialogueOpen() || state.flags.gameOver) return;
+  const spot = getActiveHotspot();
+  if (!spot) return;
+  const key = IS_TOUCH ? 'แตะ' : 'E';
+  const label = shortLabel(spot.label);
+  const y = 318 + (REDUCED_MOTION ? 0 : Math.sin(performance.now() / 400) * 3);
+  const labelFont = '600 17px Sarabun, sans-serif';
+  const keyFont = 'bold 15px "Chakra Petch", Sarabun, sans-serif';
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.font = labelFont;
+  const tw = ctx.measureText(label).width;
+  ctx.font = keyFont;
+  const kw = Math.max(26, ctx.measureText(key).width + 14);
+  const w = kw + 10 + tw + 22;
+  const h = 36;
+  const x = Math.max(12, Math.min(1268 - w, spot.x - w / 2));
+  ctx.fillStyle = 'rgba(8, 6, 8, 0.88)';
+  ctx.fillRect(x, y - h / 2, w, h);
+  ctx.strokeStyle = 'rgba(240, 207, 149, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y - h / 2 + 0.5, w - 1, h - 1);
+  const line = ctx.createLinearGradient(x, 0, x + w, 0);
+  line.addColorStop(0, 'rgba(200, 52, 40, 0.95)');
+  line.addColorStop(1, 'rgba(240, 207, 149, 0.95)');
+  ctx.fillStyle = line;
+  ctx.fillRect(x, y - h / 2, w, 2);
+  ctx.fillStyle = '#f0cf95'; // key chip
+  ctx.fillRect(x + 8, y - 12, kw, 24);
+  ctx.fillStyle = '#140c08';
+  ctx.font = keyFont;
+  ctx.textAlign = 'center';
+  ctx.fillText(key, x + 8 + kw / 2, y + 1);
+  ctx.fillStyle = '#f6dda9';
+  ctx.font = labelFont;
+  ctx.textAlign = 'left';
+  ctx.fillText(label, x + 8 + kw + 10, y + 1);
+  ctx.fillStyle = 'rgba(240, 207, 149, 0.8)'; // a small notch pointing down at the spot
+  ctx.beginPath();
+  ctx.moveTo(spot.x - 6, y + h / 2);
+  ctx.lineTo(spot.x + 6, y + h / 2);
+  ctx.lineTo(spot.x, y + h / 2 + 7);
+  ctx.fill();
+  ctx.restore();
+}
+
 // ----------------------- Mobile P2 Sixth-Sense Radar Renderer -----------------------
 let lastRadarDraw = 0;
 
@@ -3768,7 +4030,7 @@ function moveBlindGhost(g, p, speed, dt) {
 }
 
 // ---- Scripted scares ----------------------------------------------------------------
-const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null };
+const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null, hitstopUntil: 0, sceneZoomAt: 0, pickup: null };
 
 function triggerBlackout(ms, appear = null) {
   const now = performance.now();
