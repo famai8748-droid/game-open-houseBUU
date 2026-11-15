@@ -1036,6 +1036,11 @@ function selectCharacter(charType) {
   state.character = charType;
   document.getElementById('select-male').classList.toggle('selected', charType === 'male');
   document.getElementById('select-female').classList.toggle('selected', charType === 'female');
+  // The title screen shows the chosen character standing in the rain.
+  const sprite = document.getElementById('t-actor-img');
+  const tag = document.getElementById('t-actor-tag');
+  if (sprite) sprite.src = charType === 'female' ? 'assets/student_female_0.png' : 'assets/student_male_0.png';
+  if (tag) tag.textContent = charType === 'female' ? 'ริน · ผู้หลงในเรือน' : 'นนท์ · ผู้หลงในเรือน';
 }
 
 function switchScreen(screenId) {
@@ -4096,6 +4101,18 @@ function applyAutoFullscreen() {
   toggleFullscreen().catch(() => {});
 }
 
+// ----------------------- How to play (title menu) -----------------------
+function openHowTo() {
+  initAudio();
+  const modal = document.getElementById('howto-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeHowTo() {
+  const modal = document.getElementById('howto-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 // Booth helper: hand the machine to the next visitor with no save left behind.
 function requestClearSave() {
   const hasSave = !!loadCheckpoint();
@@ -4111,6 +4128,8 @@ function requestClearSave() {
 // above only runs once a game has started).
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  const howto = document.getElementById('howto-modal');
+  if (howto && !howto.classList.contains('hidden')) return closeHowTo();
   const modal = document.getElementById('settings-modal');
   if (modal && !modal.classList.contains('hidden')) closeSettings();
 });

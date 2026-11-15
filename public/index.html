@@ -28,62 +28,59 @@
 <body>
   <!-- ======================== TITLE / LOBBY MODAL ======================== -->
   <div id="title-screen" class="screen active">
-    <div class="title-backdrop"></div>
-    <div class="title-container">
-      <div class="badge-horror">THAI PIXEL HORROR • CO-OP &amp; SOLO</div>
-      <h1 class="game-title">เรือนซ่อนวิญญาณ</h1>
-      <p class="game-subtitle">ท่ามกลางความมืดหลังอุบัติเหตุ... เสียงกุกกักในเรือนไทยเก่ากำลังเรียกหาคุณ</p>
+    <img class="t-bg" src="assets/bg_scene1_forest.jpg" alt="" />
+    <div class="t-shade"></div>
+    <div class="t-rain"></div>
+    <div class="t-rain b"></div>
+    <div class="t-fog"></div>
 
-      <!-- Character Selection -->
-      <div class="section-card">
-        <h3>1. เลือกตัวละครผู้เล่น (ชุดนักเรียน)</h3>
-        <div class="char-select-grid">
-          <button id="select-male" class="char-card selected" onclick="selectCharacter('male')">
-            <div class="char-sprite-wrap">
-              <img src="assets/student_male_0.png" alt="นักเรียนชาย" class="pixel-img" />
-            </div>
-            <div class="char-name">นักเรียนชาย (นนท์)</div>
-            <div class="char-desc">ผู้รอดชีวิตจากอุบัติเหตุ มีสัมผัสพิเศษ</div>
-          </button>
-          <button id="select-female" class="char-card" onclick="selectCharacter('female')">
-            <div class="char-sprite-wrap">
-              <img src="assets/student_female_0.png" alt="นักเรียนหญิง" class="pixel-img" />
-            </div>
-            <div class="char-name">นักเรียนหญิง (ริน)</div>
-            <div class="char-desc">ผู้รอดชีวิตจากอุบัติเหตุ มีสัมผัสพิเศษ</div>
-          </button>
-        </div>
+    <div class="t-actor">
+      <div class="t-actor-glow"></div>
+      <img id="t-actor-img" class="t-actor-sprite" src="assets/student_male_0.png" alt="ตัวละครที่เลือก" />
+      <div id="t-actor-tag" class="t-actor-tag">นนท์ · ผู้หลงในเรือน</div>
+    </div>
+
+    <div class="t-menu">
+      <div class="t-sigil-wrap"><img class="t-sigil" src="assets/ghost_dancer_2.png" alt="" /></div>
+      <h1 class="game-title">เรือนซ่อนวิญญาณ</h1>
+      <div class="t-logo-sub">THE VEILED THAI HOUSE</div>
+
+      <nav class="t-nav">
+        <button id="btn-resume" class="t-item hidden" onclick="resumeFromCheckpoint()">เล่นต่อ</button>
+        <button class="t-item" onclick="startSoloGame()">เริ่มเกมใหม่</button>
+        <button id="btn-open-lobby" class="t-item" onclick="openCoopLobby()">เล่น 2 คน (QR Code)</button>
+        <div class="t-divider"></div>
+        <button class="t-item" onclick="openSettings()">ตั้งค่า</button>
+        <button class="t-item" onclick="openHowTo()">วิธีเล่น</button>
+      </nav>
+
+      <div class="t-row">
+        <span class="t-row-label">ตัวละคร</span>
+        <button id="select-male" class="t-chip selected" onclick="selectCharacter('male')">นนท์</button>
+        <button id="select-female" class="t-chip" onclick="selectCharacter('female')">ริน</button>
       </div>
 
-      <!-- Mode Selection -->
-      <div class="section-card">
-        <h3>2. เลือกรูปแบบการเล่น</h3>
-        <div class="mode-buttons">
-          <button id="btn-resume" class="btn-resume hidden" onclick="resumeFromCheckpoint()">
-            ⏯ เล่นต่อจากจุดที่บันทึกไว้
-          </button>
-          <button class="btn-primary" onclick="startSoloGame()">
-            ▶ เล่นคนเดียวทันที (บนคอม / มือถือเครื่องเดียว)
-          </button>
-          <button id="btn-open-lobby" class="btn-secondary" onclick="openCoopLobby()">
-            📱 เปิดห้องสแกน QR Code / เล่น 2 คน (จอกลาง + มือถือ / ระยะไกล)
-          </button>
-        </div>
-        <div class="join-remote-bar">
-          <span>หรือกรอกรหัสห้องเพื่อน (ระยะไกล):</span>
-          <input id="join-code-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="รหัส 4 หลัก" autocomplete="off" />
-          <button class="btn-small" onclick="joinRoomByCode('p2')">เข้าเป็น P2 (ญาณทิพย์)</button>
-          <button class="btn-small" onclick="joinRoomByCode('p1')">เข้าเป็น P1 (จอยเดิน)</button>
-        </div>
+      <div class="t-row">
+        <span class="t-row-label">มีรหัสห้องแล้ว</span>
+        <input id="join-code-input" class="t-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="รหัส 4 หลัก" autocomplete="off" />
+        <button class="t-chip" onclick="joinRoomByCode('p1')">เข้าเป็น P1</button>
+        <button class="t-chip" onclick="joinRoomByCode('p2')">เข้าเป็น P2</button>
       </div>
 
       <div id="title-hof" class="title-hof hidden"></div>
+      <div class="t-version">v1.1.0 · OPEN HOUSE BUU 20–21</div>
+    </div>
 
-      <div class="title-utility-bar">
-        <button class="btn-ghost" onclick="openSettings()">⚙ ตั้งค่า</button>
-        <span class="title-utility-dot">·</span>
-        <button class="btn-ghost" onclick="requestClearSave()">ล้างเซฟสำหรับคนถัดไป</button>
+    <div class="t-scan"></div>
+    <div class="t-vignette"></div>
+
+    <div class="t-foot">
+      <div class="t-keys">
+        <span class="t-key b"><span class="t-badge">B</span> กลับ</span>
+        <span class="t-key a"><span class="t-badge">A</span> ยืนยัน</span>
+        <span class="t-key e"><span class="t-badge">E</span> เลือก</span>
       </div>
+      <div class="t-foot-right">คลิกเมนูเพื่อเริ่ม · ESC ปิดหน้าต่าง</div>
     </div>
   </div>
 
@@ -145,6 +142,24 @@
       <div class="settings-footer">
         <button class="btn-small" onclick="requestPauseExitToTitle()">ล้างเซฟ (ให้คนถัดไป)</button>
         <button class="btn-primary btn-compact" onclick="closeSettings()">เสร็จสิ้น</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== HOW TO PLAY MODAL ======================== -->
+  <div id="howto-modal" class="modal hidden" onclick="if (event.target === this) closeHowTo()">
+    <div class="modal-box howto-box" role="dialog" aria-modal="true" aria-labelledby="howto-title">
+      <h2 id="howto-title">วิธีเล่น</h2>
+      <p class="modal-sub">เล่นคนเดียวบนจอนี้ หรือ 2 คน (จอหลัก + มือถือผ่าน QR)</p>
+      <ul class="howto-list">
+        <li><b>A / D</b> เดินซ้าย–ขวา · <b>E</b> สำรวจ / เปิด / ต่อรูป · <b>Q</b> ซ่อนตัว · <b>F</b> ไฟฉาย · <b>Space</b> สัมผัสพิเศษ</li>
+        <li>เก็บ <b>ของเซ่นไหว้ 3 อย่าง</b> และ <b>เศษรูป 3 ชิ้น</b> ให้ครบ แล้วกลับไปที่ห้องเครื่องเรือน</li>
+        <li>ได้ยินกระพรวนหรือฝีเท้า ให้ซ่อนในตู้/ตุ่มและ<b>ปิดไฟฉาย</b> รอให้ผีผ่านไปก่อน</li>
+        <li>เล่น 2 คน: เปิดห้องแล้วให้เพื่อนสแกน QR หรือกรอกรหัส 4 หลัก (<b>P1</b> เดิน, <b>P2</b> ญาณทิพย์)</li>
+        <li>กด <b>Esc</b> ระหว่างเล่นเพื่อพักเกม · กลับหน้าแรก · หรือล้างเซฟให้คนถัดไป</li>
+      </ul>
+      <div class="modal-actions">
+        <button class="btn-primary" onclick="closeHowTo()">เข้าใจแล้ว</button>
       </div>
     </div>
   </div>
