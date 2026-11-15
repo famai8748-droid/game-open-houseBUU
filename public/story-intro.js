@@ -189,30 +189,33 @@
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'แม่',
-        text: `"คืนนี้ง่วงก็พักสายตาเถอะลูก... เอ๊ะ ในกระจกนั่นแสงไฟท้ายสีแดงของใครวะ แวบอยู่หลังโค้งแล้วก็หายไป..."`,
+        text: `"คืนนี้ง่วงก็พักสายตาเถอะลูก... เอ๊ะ แสงแดงๆ ตรงโค้งข้างหน้านั่นของใครน่ะ แวบขึ้นมาแล้วก็หายไป..."`,
         frame: 'intro_s2_f2',
         wipers: true,
         roadRumble: true,
-        mirrorMode: 'red_flicker',
+        mirrorMode: 'cabin',
+        aheadMode: 'red_flicker',
       },
       {
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"แม่${politeAsk}... ดูในกระจกนั่นสิ ข้างหลังไกลๆ เหมือนมีประกายไฟต่ำๆ กระพริบตามมา... แต่มองไม่ออกเลยว่าเป็นอะไร"`,
+        text: `"แม่${politeAsk}... ดูข้างหน้านั่นสิ ไกลๆ ตรงโค้ง เหมือนมีประกายไฟต่ำๆ กระพริบอยู่... แต่มองไม่ออกเลยว่าเป็นอะไร"`,
         frame: 'intro_s2_f3',
         wipers: true,
         roadRumble: true,
-        mirrorMode: 'low_sparks',
+        mirrorMode: 'cabin',
+        aheadMode: 'low_sparks',
       },
       {
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'แม่',
-        text: `"พ่อ! เงาในกระจกกับโค้งข้างหน้ามันขยายใหญ่ขึ้นเรื่อยๆ แล้ว!! นั่นไฟอะไรพุ่งทะลุความมืดเข้ามาฝั่งเรา?!"`,
+        text: `"พ่อ! แสงตรงโค้งข้างหน้ามันใหญ่ขึ้นเรื่อยๆ แล้ว!! นั่นไฟอะไรพุ่งทะลุความมืดเข้ามาฝั่งเรา?!"`,
         frame: 'intro_s2_f4',
         wipers: true,
-        mirrorMode: 'expanding_glare',
+        mirrorMode: 'cabin',
+        aheadMode: 'expanding_glare',
       },
       {
         scene: 1,
@@ -222,16 +225,16 @@
         frame: 'intro_s2_f5',
         sfx: 'horn',
         shake: 9,
-        mirrorMode: 'blinding',
+        mirrorMode: 'washed',
       },
       {
         scene: 1,
         tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"พ่อ${politeAsk}!! แสงไฟสูงมันสว่างจ้ากลืนกระจกหมดแล้ว—ระวัง——!!"`,
+        text: `"พ่อ${politeAsk}!! แสงไฟสูงมันสว่างจ้ากลืนกระจกหน้าหมดแล้ว—ระวัง——!!"`,
         frame: 'intro_s2_f6',
         shake: 17,
-        mirrorMode: 'blinding',
+        mirrorMode: 'washed',
       },
       {
         scene: 1,
@@ -490,27 +493,18 @@
     const zoom = 1.03 + beatProgress * 0.04;
     drawCoverFrame(ctx, img, t, { zoom, panX: shiverX * 0.45, panY: Math.sin(t * 0.7) * 2 + shiverY * 0.4 });
 
-    // Restless moving player silhouette/shadow (casts across left floor & subtly glances left-right)
-    ctx.save();
-    const glance = Math.sin(t * 0.95) * 7 + (Math.sin(t * 2.8) > 0.9 ? Math.sin(t * 36) * 2.5 : 0);
-    const sx = W * 0.16 + shiverX * 1.3;
-    const sy = H * 0.72 + shiverY;
-    // Long creeping shadow behind player along temple wall/floor
-    ctx.fillStyle = `rgba(3, 2, 4, ${0.46 + uneasy * 0.1})`;
-    ctx.beginPath();
-    ctx.ellipse(sx - 24 + glance * 1.4, sy + 95, 58 + uneasy * 6, 22, -0.18, 0, Math.PI * 2);
-    ctx.fill();
-    // Moving player shoulder/head shadow silhouette trembling unevenly
-    ctx.fillStyle = 'rgba(10, 8, 12, 0.72)';
-    ctx.fillRect(Math.round((sx - 34) / 2) * 2, Math.round((sy - 20) / 2) * 2, 68, 110);
-    // Turning head silhouette glancing side-to-side nervously
-    ctx.fillRect(Math.round((sx - 18 + glance) / 2) * 2, Math.round((sy - 62) / 2) * 2, 34, 38);
-    // Eerie periphery shadow flicker near background doorway ("สัญญาณแรก" something off behind)
-    if (uneasy >= 1.4 && (Math.sin(t * 3.7) > 0.65)) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      ctx.fillRect(W * 0.05, H * 0.16, 46, 175);
+    // Uneasy darkness creeping in from the left edge (soft gradient, never covers the protagonist sprite)
+    if (uneasy >= 1.4) {
+      ctx.save();
+      const breathe = 0.5 + Math.sin(t * 1.3) * 0.5;
+      const reach = W * (0.08 + 0.03 * (uneasy - 1.4) + 0.02 * breathe);
+      const dg = ctx.createLinearGradient(0, 0, reach, 0);
+      dg.addColorStop(0, `rgba(0, 0, 0, ${0.35 + 0.1 * breathe})`);
+      dg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = dg;
+      ctx.fillRect(0, 0, reach, H);
+      ctx.restore();
     }
-    ctx.restore();
 
     // Flickering incense & candle glow (dims subtly as incense smoke fades out)
     const elapsed = meta ? meta.lineElapsed : t;
@@ -568,13 +562,9 @@
     const mode = line.mirrorMode;
     if (!mode) return;
 
-    const elapsed = meta ? meta.lineElapsed : 0;
-    // Mirror gradually enlarges as the distant sparks turn into oncoming high-beams
-    const expand = mode === 'expanding_glare'
-      ? Math.min(1.42, 1.0 + elapsed * 0.14)
-      : (mode === 'blinding' ? 1.44 : 1.0);
-    const mw = Math.round(236 * expand);
-    const mh = Math.round(64 * expand);
+    // The mirror only ever shows what is behind/inside the car; the truck comes from ahead (see drawAheadLights)
+    const mw = 236;
+    const mh = 64;
     const mx = Math.round(W * 0.5 - mw * 0.5 + Math.sin(t * 21) * 1.1);
     const my = Math.round(22 + Math.cos(t * 15) * 1.2);
 
@@ -599,12 +589,17 @@
     ctx.fillStyle = '#0b101c';
     ctx.fillRect(mx + 4, my + mh * 0.48, mw - 8, mh * 0.52);
 
-    if (mode === 'cabin' || mode === 'phone') {
+    if (mode === 'cabin' || mode === 'phone' || mode === 'washed') {
       // Dim cabin silhouettes (Mom left, Dad right) vibrating slightly
       ctx.fillStyle = '#121622';
       ctx.fillRect(mx + 22, my + 24, 28, 36);
       ctx.fillRect(mx + mw - 52, my + 22, 30, 38);
-      if (mode === 'phone') {
+      if (mode === 'washed') {
+        // Oncoming high-beams from the windshield flood the cabin, so the reflection washes out pale
+        const pulse = 0.75 + Math.sin(t * 18) * 0.2;
+        ctx.fillStyle = `rgba(255, 244, 205, ${0.55 * pulse})`;
+        ctx.fillRect(mx + 4, my + 4, mw - 8, mh - 8);
+      } else if (mode === 'phone') {
         // Dad's vibrating phone screen flashing amber-cyan notification in reflection
         const pulse = 0.4 + Math.abs(Math.sin(t * 14)) * 0.6;
         ctx.fillStyle = `rgba(125, 215, 255, ${0.55 * pulse})`;
@@ -612,40 +607,50 @@
         ctx.fillStyle = `rgba(255, 210, 130, ${0.25 * pulse})`;
         ctx.fillRect(mx + 6, my + 6, mw - 12, mh - 12);
       }
-    } else if (mode === 'red_flicker') {
-      // Faint ambiguous red reflection flickering dimly at rear bend
-      const redPulse = Math.max(0, Math.sin(t * 4.8) * Math.cos(t * 2.1));
-      if (redPulse > 0.15) {
-        const rg = ctx.createRadialGradient(mx + mw * 0.48, my + mh * 0.52, 2, mx + mw * 0.48, my + mh * 0.52, 42);
-        rg.addColorStop(0, `rgba(255, 72, 72, ${0.65 * redPulse})`);
-        rg.addColorStop(1, 'rgba(180, 20, 20, 0)');
-        ctx.fillStyle = rg;
-        ctx.fillRect(mx, my, mw, mh);
-      }
-    } else if (mode === 'low_sparks') {
-      // Indeterminate tiny low sparks / red-orange pinpricks trembling in the mirror (not yet a truck)
-      const jitter = Math.sin(t * 19) * 2;
-      const flicker = 0.55 + Math.sin(t * 11.5) * 0.4;
-      const cy = my + mh * 0.62;
-      ctx.fillStyle = `rgba(255, 110, 64, ${0.75 * flicker})`;
-      ctx.fillRect(Math.round(mx + mw * 0.44 + jitter), Math.round(cy), 4, 4);
-      ctx.fillRect(Math.round(mx + mw * 0.53 + jitter), Math.round(cy + 2), 4, 4);
-      ctx.fillStyle = `rgba(255, 232, 160, ${0.55 * flicker})`;
-      ctx.fillRect(Math.round(mx + mw * 0.48 + jitter), Math.round(cy - 1), 3, 3);
-    } else if (mode === 'expanding_glare' || mode === 'blinding') {
-      // Sparks swell into twin blinding high-beam headlamps towering across the mirror
-      const grow = mode === 'blinding' ? 1.0 : Math.min(1.0, 0.25 + elapsed * 0.28);
-      const r = 10 + grow * 54;
-      [0.37, 0.63].forEach((xr) => {
-        const g = ctx.createRadialGradient(mx + mw * xr, my + mh * 0.54, 2, mx + mw * xr, my + mh * 0.54, r);
-        g.addColorStop(0, `rgba(255, 255, 240, ${0.95})`);
-        g.addColorStop(0.35, `rgba(255, 224, 130, ${0.72 * grow})`);
-        g.addColorStop(1, 'rgba(255, 180, 70, 0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(mx, my, mw, mh);
-      });
     }
 
+    ctx.restore();
+  }
+
+  // Lights on the dark bend AHEAD, seen through the windshield (beats 8-10, before the truck's high-beams)
+  function drawAheadLights(ctx, line, t, meta) {
+    const mode = line.aheadMode;
+    if (!mode) return;
+    const elapsed = meta ? meta.lineElapsed : 0;
+    const cx = W * 0.5;
+    const cy = H * 0.36;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (mode === 'red_flicker') {
+      // A faint red glow that blinks on behind the bend and is gone again
+      const redPulse = Math.max(0, Math.sin(t * 4.8) * Math.cos(t * 2.1));
+      if (redPulse > 0.15) {
+        const rg = ctx.createRadialGradient(cx + 6, cy, 2, cx + 6, cy, 46);
+        rg.addColorStop(0, `rgba(255, 72, 72, ${0.55 * redPulse})`);
+        rg.addColorStop(1, 'rgba(180, 20, 20, 0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(cx - 50, cy - 50, 110, 100);
+      }
+    } else if (mode === 'low_sparks') {
+      // Indeterminate low sparks / pinpricks trembling far ahead (not yet recognisable as a truck)
+      const jitter = Math.sin(t * 19) * 2;
+      const flk = 0.5 + Math.sin(t * 12) * 0.35;
+      ctx.fillStyle = `rgba(255, 118, 60, ${0.6 * flk})`;
+      ctx.fillRect(Math.round(cx - 10 + jitter), Math.round(cy), 4, 4);
+      ctx.fillRect(Math.round(cx + 8 + jitter), Math.round(cy + 2), 4, 4);
+      ctx.fillStyle = `rgba(255, 232, 160, ${0.5 * flk})`;
+      ctx.fillRect(Math.round(cx + jitter), Math.round(cy - 1), 3, 3);
+    } else if (mode === 'expanding_glare') {
+      // The lights on the bend swell as they swing into our lane
+      const grow = Math.min(1, 0.25 + elapsed * 0.28);
+      const r = 30 + grow * 150;
+      const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, r);
+      g.addColorStop(0, `rgba(255, 248, 215, ${0.35 * grow})`);
+      g.addColorStop(1, 'rgba(255, 200, 110, 0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
     ctx.restore();
   }
 
@@ -703,16 +708,8 @@
       ctx.restore();
     }
 
-    // Subtle low sparks / headlights growth on Beat 8-9 ahead on dark curve before truck appears
-    if (line.mirrorMode === 'low_sparks') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const flk = 0.5 + Math.sin(t * 12) * 0.35;
-      ctx.fillStyle = `rgba(255, 118, 60, ${0.55 * flk})`;
-      ctx.fillRect(Math.round(W * 0.49), Math.round(H * 0.36), 4, 4);
-      ctx.fillRect(Math.round(W * 0.51), Math.round(H * 0.36), 4, 4);
-      ctx.restore();
-    }
+    // Red flicker / low sparks / swelling glare on the dark bend ahead before the truck appears
+    drawAheadLights(ctx, line, t, meta);
 
     // Blinding high-beam flare on Beat 10-11
     if (line.frame === 'intro_s2_f5' || line.frame === 'intro_s2_f6') {
