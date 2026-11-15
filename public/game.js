@@ -4127,12 +4127,46 @@ function requestClearSave() {
 // Escape closes the settings sheet from the title screen too (the game key handler
 // above only runs once a game has started).
 document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
-  const howto = document.getElementById('howto-modal');
-  if (howto && !howto.classList.contains('hidden')) return closeHowTo();
-  const modal = document.getElementById('settings-modal');
-  if (modal && !modal.classList.contains('hidden')) closeSettings();
+  if (e.key === 'Escape') {
+    const howto = document.getElementById('howto-modal');
+    if (howto && !howto.classList.contains('hidden')) return closeHowTo();
+    const modal = document.getElementById('settings-modal');
+    if (modal && !modal.classList.contains('hidden')) return closeSettings();
+    const lobby = document.getElementById('coop-modal');
+    if (lobby && !lobby.classList.contains('hidden') && !state.started) closeCoopLobby();
+    return;
+  }
+  handleTitleMenuKey(e);
 });
+
+// Title menu keyboard control, matching the key legend in the footer:
+// ↑/↓ (or W/S) moves between menu items, Enter (or E) opens the highlighted one.
+function handleTitleMenuKey(e) {
+  const title = document.getElementById('title-screen');
+  if (!title || !title.classList.contains('active')) return;
+  if (document.querySelector('.modal:not(.hidden)')) return;
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+
+  const items = [...title.querySelectorAll('.t-nav .t-item')].filter((b) => !b.classList.contains('hidden'));
+  if (!items.length) return;
+  const index = items.indexOf(document.activeElement);
+  const k = e.key.toLowerCase();
+  let step = 0;
+  if (e.key === 'ArrowDown' || k === 's') step = 1;
+  else if (e.key === 'ArrowUp' || k === 'w') step = -1;
+
+  if (step) {
+    e.preventDefault();
+    const next = index < 0 ? (step > 0 ? 0 : items.length - 1) : (index + step + items.length) % items.length;
+    items[next].focus();
+  } else if ((e.key === 'Enter' || k === 'e') && !e.repeat) {
+    e.preventDefault(); // stop the browser's own Enter-click so it fires once
+    // The game's window-level handler would otherwise see this same Enter/E as
+    // "interact" on the first frame of the new game.
+    e.stopPropagation();
+    (index >= 0 ? items[index] : items[0]).click();
+  }
+}
 
 
 // ----------------------- Pause menu -----------------------

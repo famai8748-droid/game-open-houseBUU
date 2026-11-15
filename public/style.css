@@ -2378,9 +2378,10 @@ body,
 .t-keys { display: flex; align-items: center; gap: 20px; }
 .t-key { display: flex; align-items: center; gap: 8px; }
 .t-badge {
-  width: 19px;
+  min-width: 19px;
   height: 19px;
-  border-radius: 50%;
+  padding: 0 6px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2392,6 +2393,12 @@ body,
 .t-key.a { color: #6fbe6a; }
 .t-key.e { color: #c9a45a; }
 .t-foot-right { color: #6b6255; }
+.t-hint-touch { display: none; }
+/* Phones and tablets have no keyboard: drop the key legend and say "tap" instead. */
+@media (pointer: coarse) {
+  .t-keys, .t-hint-mouse { display: none; }
+  .t-hint-touch { display: inline; }
+}
 
 @media (max-width: 900px), (max-height: 560px) {
   #title-screen { overflow-y: auto; }
