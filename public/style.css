@@ -1729,3 +1729,8 @@ body,
   font-size: 13.5px;
   padding: 10px 14px;
 }
+
+/* settings can open on top of the pause menu */
+#settings-modal {
+  z-index: 60;
+}

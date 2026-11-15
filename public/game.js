@@ -1262,6 +1262,7 @@ function buildStatePatch() {
 // What the main screen is showing; the P1 phone relabels its big button from this.
 function hostContext() {
   if (!state.started) return 'title';
+  if (isPaused()) return 'paused';
   if (state.flags.victory) return 'victory';
   if (state.flags.gameOver) return 'gameover';
   if (state.flags.cutscenePlaying) return 'cutscene';
@@ -1331,6 +1332,7 @@ function handleRemoteInputs(list) {
 
 function handleIncomingRemoteInput({ action, value, seq }) {
   if (state.role !== 'host') return;
+  if (isPaused()) return; // nothing moves while the main screen is paused
   if (action === 'move') {
     const s = Number(seq) || 0;
     if (s < net.lastMoveSeq) return; // out-of-order packet
@@ -1481,6 +1483,7 @@ function updatePhoneButtons(room) {
   const prompt = String(support.prompt || '').replace(/\s*\[[^\]]*\]/g, '').trim();
   const labels = {
     title: '⏳ รอจอกลางเริ่มเกม',
+    paused: '⏸ จอกลางพักเกมอยู่',
     dialogue: '▶ ไปต่อ (อ่านบทพูดบนจอกลาง)',
     cutscene: '⏭ ข้ามฉาก',
     puzzle: '🖼️ วางเศษรูปลงกรอบ',
@@ -2456,7 +2459,7 @@ function placePhotoPiece(num) {
 // ----------------------- Controls & Actions -----------------------
 function setMove(dir) {
   // Stopping is always allowed; starting to walk is not while something is on screen.
-  if (dir !== 0 && (state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen())) return;
+  if (dir !== 0 && (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen())) return;
   if (state.player.hidden && dir !== 0) leaveHiding(); // stepping out of hiding
   state.moveInput = dir;
   if (dir !== 0) state.player.dir = dir;
@@ -2468,6 +2471,7 @@ function leaveHiding() {
 }
 
 function triggerInteract() {
+  if (isPaused()) return;
   if (state.flags.cutscenePlaying) return skipCutscene();
   if (state.flags.victory) return;
   // P1 on a phone (or E on the keyboard) can continue without touching the main screen:
@@ -2487,7 +2491,7 @@ function triggerInteract() {
 }
 
 function toggleHide() {
-  if (state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen()) return;
+  if (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen()) return;
   const spot = getActiveHotspot();
   if (state.player.hidden) {
     leaveHiding();
@@ -2508,12 +2512,14 @@ function toggleHide() {
 }
 
 function toggleFlashlight() {
+  if (isPaused()) return;
   state.player.flashlight = !state.player.flashlight;
   playSound('step');
   broadcastState();
 }
 
 function toggleSixthSense() {
+  if (isPaused()) return;
   state.player.sixthSense = !state.player.sixthSense;
   document.getElementById('sixth-sense-overlay').classList.toggle('hidden', !state.player.sixthSense);
   playSound('chime');
@@ -2561,7 +2567,14 @@ function updateHud() {
 window.addEventListener('keydown', (e) => {
   if (state.role !== 'host' || !state.started) return;
   if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-  if (isPaused()) return;
+  if (e.key === 'Escape' && !document.getElementById('settings-modal').classList.contains('hidden')) {
+    closeSettings();
+    return;
+  }
+  if (isPaused()) {
+    if (e.key === 'Escape') closePause(); // Esc again resumes; every other key is ignored while paused
+    return;
+  }
   const k = e.key.toLowerCase();
   if (k === 'a' || e.key === 'ArrowLeft') setMove(-1);
   if (k === 'd' || e.key === 'ArrowRight') setMove(1);
@@ -2569,16 +2582,7 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') e.preventDefault();
     return; // held keys must not spam actions or skip whole conversations
   }
-  if (e.key === 'Escape' && !document.getElementById('settings-modal').classList.contains('hidden')) {
-    closeSettings();
-    return;
-  }
   if (e.key === 'Escape') {
-    const pm = document.getElementById('pause-modal');
-    if (!pm.classList.contains('hidden')) {
-      closePause();
-      return;
-    }
     if (state.role === 'host' && state.started && !state.flags.cutscenePlaying && !state.flags.gameOver && !isPhotoModalOpen() && !isDialogueOpen()) {
       openPause();
       return;
@@ -2629,6 +2633,7 @@ function gameLoop(now) {
 requestAnimationFrame(gameLoop);
 
 function updateGame(dt) {
+  if (isPaused()) return; // the pause menu freezes everything: ghost, timers, movement
   updateRemoteMoveTimeout();
   if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory) return;
 
@@ -3504,17 +3509,37 @@ function isPaused() {
 }
 
 function openPause() {
-  if (!state.role === 'host') return;
+  if (state.role !== 'host') return;
   if (!state.started) return;
-  if (state.flags.cutscenePlaying || state.flags.gameOver || isPhotoModalOpen() || isDialogueOpen()) return;
+  if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory || isPhotoModalOpen() || isDialogueOpen()) return;
   state.paused = true;
+  state.moveInput = 0;
+  net.remoteMoving = false;
+  duckAmbient(true);
   document.getElementById('pause-modal').classList.remove('hidden');
+  broadcastState(); // phones show "paused"
 }
 
 function closePause() {
   if (!isPaused()) return;
   state.paused = false;
+  duckAmbient(false);
   document.getElementById('pause-modal').classList.add('hidden');
+  broadcastState();
+}
+
+// Leave the game for the title screen. A fresh page load is the cleanest reset of every
+// timer, sound and room; the checkpoint survives it, so "เล่นต่อ" can pick up again.
+function exitToTitle({ keepSave }) {
+  if (keepSave) saveCheckpoint();
+  else clearCheckpoint();
+  state.paused = false;
+  window.location.href = window.location.pathname;
+}
+
+// Pause menu: back to the title, keeping the save.
+function pauseExitToTitle() {
+  exitToTitle({ keepSave: true });
 }
 
 function togglePause() {
@@ -3522,18 +3547,20 @@ function togglePause() {
   else openPause();
 }
 
+// "Clear save and go back": in a game it confirms, wipes the save and returns to the title;
+// on the title screen it just clears the save. Cancelling changes nothing (the menu stays open).
 function requestPauseExitToTitle() {
-  const pm = document.getElementById('pause-modal');
-  if (pm && !pm.classList.contains('hidden')) pm.classList.add('hidden');
-  requestClearSave();
+  if (!state.started) {
+    requestClearSave();
+    return;
+  }
+  if (!window.confirm('ล้างจุดเซฟแล้วกลับสู่หน้าแรกหรือไม่?\nคนเล่นคนถัดไปจะเริ่มเกมใหม่ตั้งแต่ต้น')) return;
+  exitToTitle({ keepSave: false });
 }
 
-function requestClearSave() {
-  const hasSave = !!loadCheckpoint();
-  if (hasSave && !window.confirm('ล้างจุดเซฟของคนก่อนหน้าหรือไม่?\nคนเล่นคนถัดไปจะเริ่มเกมใหม่ตั้งแต่ต้น')) return;
-  closePause();
-  clearCheckpoint();
-  const btn = document.getElementById('btn-resume');
-  if (btn) btn.classList.add('hidden');
-  showToast('🧹 ล้างจุดเซฟแล้ว — พร้อมให้คนถัดไปเริ่มใหม่');
+// Settings from inside the pause menu (the sheet sits above it).
+function openSettingsFromPause() {
+  openSettings();
 }
+
+

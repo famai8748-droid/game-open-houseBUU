@@ -125,7 +125,7 @@
       </div>
 
       <div class="settings-footer">
-        <button class="btn-small" onclick="requestPauseExitToTitle()">ล้างเซฟและกลับสู่เกมหลัก</button>
+        <button class="btn-small" onclick="requestPauseExitToTitle()">ล้างเซฟ (ให้คนถัดไป)</button>
         <button class="btn-primary btn-compact" onclick="closeSettings()">เสร็จสิ้น</button>
       </div>
     </div>
@@ -135,10 +135,12 @@
   <div id="pause-modal" class="modal hidden" onclick="if (event.target === this) closePause()">
     <div class="pause-panel">
       <div class="pause-title">⏸ พักเกม</div>
-      <div class="pause-sub">เกมหยุดชั่วคราว — Esc เพื่อกลับเข้าเกม / แท็บอื่น ๆ ในเมนูย่อย</div>
+      <div class="pause-sub">เกมหยุดชั่วคราว — กด Esc หรือ "กลับสู่เกม" เพื่อเล่นต่อ</div>
       <div class="pause-actions">
         <button class="btn-primary" onclick="closePause()">▶ กลับสู่เกม</button>
-        <button class="btn-secondary" onclick="requestPauseExitToTitle()">กลับสู่หน้าแรก (จบเซฟแล้ว)</button>
+        <button class="btn-secondary" onclick="openSettingsFromPause()">⚙ ตั้งค่า</button>
+        <button class="btn-secondary" onclick="pauseExitToTitle()">กลับสู่หน้าแรก (เก็บเซฟไว้เล่นต่อ)</button>
+        <button class="btn-ghost" onclick="requestPauseExitToTitle()">ล้างเซฟแล้วกลับหน้าแรก (ให้คนถัดไป)</button>
       </div>
     </div>
   </div>
@@ -195,6 +197,7 @@
           <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute" aria-label="เปิด/ปิดเสียง"><span class="ic">🔊</span><span class="lbl"> เสียง</span></button>
           <input id="volume-slider" class="volume-slider" type="range" min="0" max="100" step="5" value="80" aria-label="ระดับเสียง" oninput="setVolume(this.value)" />
         </div>
+        <button class="btn-hud" onclick="togglePause()" aria-label="พักเกม"><span class="ic">⏸</span><span class="lbl"> พัก</span></button>
         <button class="btn-hud" onclick="showPhotoPuzzleModal()" aria-label="ดูกรอบรูป"><span class="ic">🖼️</span><span class="lbl"> ดูกรอบรูป</span></button>
         <button id="btn-fullscreen" class="btn-hud only-touch" onclick="toggleFullscreen()" aria-label="เต็มจอ"><span class="ic">⛶</span></button>
       </div>
