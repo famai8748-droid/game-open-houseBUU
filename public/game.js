@@ -148,7 +148,7 @@ function updateAudioUi() {
   const off = audioMuted || audioVolume === 0;
   const btn = document.getElementById('btn-mute');
   if (btn) {
-    btn.innerHTML = `<span class="ic">${off ? '🔇' : '🔊'}</span><span class="lbl"> ${off ? 'ปิดเสียง' : 'เสียง'}</span>`;
+    btn.innerHTML = `<span class="ic"><svg class="i" aria-hidden="true"><use href="#i-${off ? 'mute' : 'sound'}"/></svg></span><span class="lbl"> ${off ? 'ปิดเสียง' : 'เสียง'}</span>`;
     btn.setAttribute('aria-pressed', String(off));
   }
   const slider = document.getElementById('volume-slider');
@@ -2896,6 +2896,12 @@ function triggerGameOver() {
   playSound('scare');
   const faceSrc = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
   document.getElementById('jumpscare-img').src = faceSrc;
+  // The caught screen names the ghost and teaches its rule, so the retry goes better.
+  const dancer = state.ghost.type === 'dancer';
+  document.getElementById('gameover-ghost').textContent = dancer ? 'ผีนางรำ' : 'สัมภเวสี';
+  document.getElementById('gameover-tip').innerHTML = dancer
+    ? 'เธอขยับได้เฉพาะตอนไม่มีใครมอง — <b>หันไปส่องไฟฉายใส่</b>แล้วเธอจะหยุดนิ่ง อย่าหันหลังให้ และระวังตอนไฟกะพริบดับ'
+    : 'มันตาบอด ล่าด้วยเสียงฝีเท้า — ได้ยินมันใกล้เข้ามาให้<b>หยุดเดินแล้วยืนนิ่ง</b> หรือซ่อนในตู้/ตุ่มแล้ว<b>ปิดไฟฉาย</b>';
   // Full-screen jumpscare first, then the game-over screen. Intensity follows settings.
   const js = document.getElementById('jumpscare');
   if (settings.jumpscare === 'off') {
@@ -3703,7 +3709,7 @@ function renderHof(el, limit, highlightAt = null) {
   if (!list.length) return;
   const title = document.createElement('div');
   title.className = 'hof-title';
-  title.textContent = '🏯 หอเกียรติยศประจำบูธ';
+  title.textContent = 'หอเกียรติยศประจำบูธ';
   el.appendChild(title);
   const ol = document.createElement('ol');
   list.forEach((e) => {
@@ -3873,7 +3879,7 @@ function showChapterCard(scene) {
   const card = document.getElementById('chapter-card');
   if (!card) return;
   document.getElementById('chapter-title').textContent = CHAPTERS[scene];
-  document.getElementById('chapter-goal').textContent = '🎯 ' + currentObjective().text;
+  document.getElementById('chapter-goal').textContent = currentObjective().text;
   card.classList.remove('hidden');
   restartAnimation(card, 'play');
   clearTimeout(showChapterCard.timer);
@@ -3882,8 +3888,8 @@ function showChapterCard(scene) {
 
 function showControlsTip() {
   showToast(IS_TOUCH
-    ? '👆 แตะ ◀ ▶ เพื่อเดิน · เจอจุดแสงสีทองให้แตะ 🔍 สำรวจ · ทำตาม 🎯 เป้าหมาย ด้านบนจอ'
-    : '⌨️ เดิน A/D หรือ ← → · เจอจุดแสงสีทองกด E · ทำตาม 🎯 เป้าหมาย ด้านบนจอ', '', 8000);
+    ? '👆 แตะ ◀ ▶ เพื่อเดิน · เจอจุดแสงสีทองให้แตะ 🔍 สำรวจ · ทำตามเป้าหมายด้านบนจอ'
+    : '⌨️ เดิน A/D หรือ ← → · เจอจุดแสงสีทองกด E · ทำตามเป้าหมายด้านบนจอ', '', 8000);
 }
 
 // Names on P2's map, and when each spot is finished (shown greyed with ✓).

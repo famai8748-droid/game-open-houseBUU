@@ -27,6 +27,22 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Line icons for the in-game HUD and controls (stroke follows the button's text colour) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></g></symbol>
+      <symbol id="i-hide" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M8 3h8M9 3v3c-3 1.5-4.5 4-4.5 7.5 0 4 2.6 7.5 7.5 7.5s7.5-3.5 7.5-7.5C19.5 10 18 7.5 15 6V3"/><path d="M6 12h12" stroke-dasharray="2 2"/></g></symbol>
+      <symbol id="i-torch" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M7 3h10l-2 6v11a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V9z"/><path d="M8 9h8M12 13v2"/></g></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></g></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></g></symbol>
+      <symbol id="i-mute" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M17 9.5l5 5M22 9.5l-5 5"/></g></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><g fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></g></symbol>
+      <symbol id="i-frame" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="1"/><path d="M7 17l3.5-4.5 2.5 3 2-2 2 3.5"/><circle cx="14.5" cy="8.5" r="1.4"/></g></symbol>
+      <symbol id="i-full" viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    </defs>
+  </svg>
   <!-- ======================== TITLE / LOBBY MODAL ======================== -->
   <div id="title-screen" class="screen active">
     <img class="t-bg" src="assets/bg_scene1_forest.jpg" alt="" />
@@ -154,7 +170,7 @@
       <p class="modal-sub">เล่นคนเดียวบนจอนี้ หรือ 2 คน (จอหลัก + มือถือผ่าน QR)</p>
       <ul class="howto-list">
         <li><b>A / D</b> เดินซ้าย–ขวา · <b>E</b> สำรวจ / เปิด / ต่อรูป · <b>Q</b> ซ่อนตัว · <b>F</b> ไฟฉาย · <b>Space</b> สัมผัสพิเศษ (เห็นในที่มืด แต่ผีเร็วขึ้น)</li>
-        <li>เก็บ <b>ของเซ่นไหว้ 3 อย่าง</b> และ <b>เศษรูป 3 ชิ้น</b> แล้วนำไปที่<b>หิ้งบูชาในห้องเครื่องเซ่น</b> · ทำตามแถบ 🎯 และลูกศรสีทอง</li>
+        <li>เก็บ <b>ของเซ่นไหว้ 3 อย่าง</b> และ <b>เศษรูป 3 ชิ้น</b> แล้วนำไปที่<b>หิ้งบูชาในห้องเครื่องเซ่น</b> · ทำตามแถบเป้าหมายด้านบนและลูกศรสีทอง</li>
         <li><b>ผีนางรำ</b> (เสียงกระพรวน) ขยับเมื่อไม่มีใครมอง — <b>ส่องไฟฉายใส่</b>เธอจะหยุดนิ่ง ห้ามหันหลังให้</li>
         <li><b>สัมภเวสี</b> ตาบอด ฟังเสียงฝีเท้า — <b>ยืนนิ่ง</b>แล้วมันจะหาไม่เจอ</li>
         <li>จนมุม: ซ่อนในตู้/ตุ่มแล้ว<b>ปิดไฟฉาย</b> · ถวายของตามลำดับ <b>ธูปเทียน → พวงมาลัย → พานขนม</b> · รหัสตู้เป็นเลขไทยบนยันต์ ส่องไฟถึงจะอ่านได้</li>
@@ -220,22 +236,22 @@
       </div>
       <div class="hud-center">
         <div class="objective-pill" title="ของเซ่นไหว้">
-          🕯️ <span class="lbl">ของเซ่นไหว้:</span> <strong id="hud-offerings">0/3</strong>
+          <img class="hud-ico pixel-img" src="assets/offering_incense.png" alt="" /> <span class="lbl">ของเซ่นไหว้</span> <strong id="hud-offerings">0/3</strong>
           <span id="hud-offerings-placed" class="tag-done hidden">(ถวายแล้ว!)</span>
         </div>
         <div class="objective-pill" title="เศษรูปภาพ">
-          🖼️ <span class="lbl">เศษรูปภาพ:</span> <strong id="hud-photos">0/3</strong>
+          <img class="hud-ico pixel-img" src="assets/photo_piece_1.png" alt="" /> <span class="lbl">เศษรูปภาพ</span> <strong id="hud-photos">0/3</strong>
           <span id="hud-photos-placed" class="tag-done hidden">(ต่อครบแล้ว!)</span>
         </div>
       </div>
       <div class="hud-right">
         <div class="audio-controls">
-          <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute" aria-label="เปิด/ปิดเสียง"><span class="ic">🔊</span><span class="lbl"> เสียง</span></button>
+          <button class="btn-hud" onclick="toggleAudioMute()" id="btn-mute" aria-label="เปิด/ปิดเสียง"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-sound"/></svg></span><span class="lbl"> เสียง</span></button>
           <input id="volume-slider" class="volume-slider" type="range" min="0" max="100" step="5" value="80" aria-label="ระดับเสียง" oninput="setVolume(this.value)" />
         </div>
-        <button class="btn-hud" onclick="togglePause()" aria-label="พักเกม"><span class="ic">⏸</span><span class="lbl"> พัก</span></button>
-        <button class="btn-hud" onclick="showPhotoPuzzleModal()" aria-label="ดูกรอบรูป"><span class="ic">🖼️</span><span class="lbl"> ดูกรอบรูป</span></button>
-        <button id="btn-fullscreen" class="btn-hud only-touch" onclick="toggleFullscreen()" aria-label="เต็มจอ"><span class="ic">⛶</span></button>
+        <button class="btn-hud" onclick="togglePause()" aria-label="พักเกม"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-pause"/></svg></span><span class="lbl"> พัก</span></button>
+        <button class="btn-hud" onclick="showPhotoPuzzleModal()" aria-label="ดูกรอบรูป"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-frame"/></svg></span><span class="lbl"> ดูกรอบรูป</span></button>
+        <button id="btn-fullscreen" class="btn-hud only-touch" onclick="toggleFullscreen()" aria-label="เต็มจอ"><span class="ic"><svg class="i" aria-hidden="true"><use href="#i-full"/></svg></span></button>
       </div>
     </div>
 
@@ -253,7 +269,7 @@
       <!-- Prompt Floating Pill -->
       <!-- Current objective (always visible during play) + chapter card on entering a scene -->
       <div id="objective-bar" class="objective-bar hidden" aria-live="polite">
-        <span class="objective-label">🎯 เป้าหมาย</span>
+        <span class="objective-label">เป้าหมาย</span>
         <span id="objective-text"></span>
       </div>
       <div id="chapter-card" class="chapter-card hidden" aria-hidden="true">
@@ -339,16 +355,17 @@
       </div>
 
       <!-- ENDING / BUU OPEN HOUSE MODAL -->
-      <div id="ending-modal" class="modal hidden">
+      <div id="ending-modal" class="modal ending-screen hidden">
+        <img class="ending-bg" src="assets/bg_scene5_dawn.jpg" alt="" />
         <div class="modal-box ending-box">
-          <div class="badge-horror">รอดพ้นจากเรือนซ่อนวิญญาณ</div>
+          <div class="ending-kicker">รอดพ้นจากเรือนซ่อนวิญญาณ</div>
           <h2>"อย่าลืมสัญญาของเราล่ะ..."</h2>
           <p class="ending-desc">
             คุณลุงชุดราชปะแตนได้นำทางดวงจิตของคุณกลับคืนสู่ร่างที่โรงพยาบาลอย่างปลอดภัย<br/>
             แต่คำสัญญาที่ได้ให้ไว้หน้าประตูเรือนไทยยังคงก้องอยู่ในความทรงจำ...
           </p>
           <div class="buu-banner">
-            <div class="buu-title">✨ OPEN HOUSE BUU ✨</div>
+            <div class="buu-title">OPEN HOUSE BUU</div>
             <div class="buu-date">วันที่ 20 – 21 นี้</div>
             <div class="buu-sub">แล้วพบกันที่มหาวิทยาลัยบูรพา! (ไม่งั้นระวังจะถูกดึงกลับมาที่เรือนนี้อีกนะ...)</div>
           </div>
@@ -358,7 +375,7 @@
             <button id="hof-save" class="btn-small" onclick="saveToHallOfFame()">บันทึก</button>
           </div>
           <div id="hof-list" class="hof-list"></div>
-          <button class="btn-primary" onclick="restartGame()">🔄 เล่นใหม่อีกครั้ง</button>
+          <button class="gameover-retry ending-again" onclick="restartGame()">เล่นใหม่อีกครั้ง</button>
         </div>
       </div>
 
@@ -369,12 +386,13 @@
       </div>
 
       <!-- JUMPSCARE / GAME OVER MODAL -->
-      <div id="gameover-modal" class="modal hidden">
+      <div id="gameover-modal" class="modal gameover-screen hidden">
         <div class="modal-box gameover-box">
-          <img id="jumpscare-img" src="assets/ghost_dancer_2.png" class="jumpscare-sprite pixel-img" alt="Ghost" />
-          <h2 class="gameover-title">คุณถูกวิญญาณจับตัวได้!</h2>
-          <p>เมื่อได้ยินเสียงฝีเท้าหรือเสียงกระพรวน ให้รีบกด <strong>ซ่อนตัว</strong> ตามตู้ไม้หรือตุ่มน้ำ และ<strong>ห้ามเปิดไฟฉาย</strong> — รอให้วิญญาณหาไม่เจอจนหายไปในความมืด แล้วค่อยออกมา!</p>
-          <button class="btn-primary" onclick="retryFromCheckpoint()">🕯️ ฟื้นสติและลองใหม่ในฉากนี้</button>
+          <img id="jumpscare-img" src="assets/ghost_dancer_2.png" class="jumpscare-sprite pixel-img" alt="" />
+          <div id="gameover-ghost" class="gameover-ghost">ผีนางรำ</div>
+          <h2 class="gameover-title">คุณถูกวิญญาณจับตัวได้</h2>
+          <p id="gameover-tip" class="gameover-tip"></p>
+          <button class="gameover-retry" onclick="retryFromCheckpoint()">ฟื้นสติและลองใหม่ในฉากนี้</button>
         </div>
       </div>
     </div>
@@ -383,24 +401,24 @@
     <div class="controls-bar">
       <div class="dpad-group">
         <button class="ctrl-btn" id="btn-left" data-local-move="-1" aria-label="เดินซ้าย">
-          <span class="ic">◀</span><span class="lbl">เดินซ้าย</span><kbd>A</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg></span><span class="lbl">เดินซ้าย</span><kbd>A</kbd>
         </button>
         <button class="ctrl-btn" id="btn-right" data-local-move="1" aria-label="เดินขวา">
-          <span class="ic">▶</span><span class="lbl">เดินขวา</span><kbd>D</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></span><span class="lbl">เดินขวา</span><kbd>D</kbd>
         </button>
       </div>
       <div class="action-group">
         <button class="ctrl-btn action-primary" id="btn-interact" onclick="triggerInteract()" aria-label="สำรวจ / เปิดประตู">
-          <span class="ic">🔍</span><span class="lbl">สำรวจ</span><kbd>E</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-search"/></svg></span><span class="lbl">สำรวจ</span><kbd>E</kbd>
         </button>
         <button class="ctrl-btn" id="btn-hide" onclick="toggleHide()" aria-label="ซ่อนตัว">
-          <span class="ic">🏺</span><span class="lbl">ซ่อนตัว</span><kbd>Q</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-hide"/></svg></span><span class="lbl">ซ่อนตัว</span><kbd>Q</kbd>
         </button>
         <button class="ctrl-btn" id="btn-flashlight" onclick="toggleFlashlight()" aria-label="ไฟฉาย">
-          <span class="ic">🔦</span><span class="lbl">ไฟฉาย</span><kbd>F</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-torch"/></svg></span><span class="lbl">ไฟฉาย</span><kbd>F</kbd>
         </button>
         <button class="ctrl-btn spiritual-btn" id="btn-sixthsense" onclick="toggleSixthSense()" aria-label="สัมผัสพิเศษ">
-          <span class="ic">👁️</span><span class="lbl">สัมผัสพิเศษ</span><kbd>Space</kbd>
+          <span class="ic"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg></span><span class="lbl">สัมผัสพิเศษ</span><kbd>Space</kbd>
         </button>
       </div>
     </div>

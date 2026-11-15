@@ -2435,3 +2435,377 @@ body,
   line-height: 1.75;
 }
 .howto-list b { color: #f6dda9; }
+
+/* ==================== In-game theme (matches the title screen) ====================
+   Colours/borders only: sizes and positions stay with the responsive rules above. */
+.i {
+  width: 1.15em;
+  height: 1.15em;
+  display: inline-block;
+  vertical-align: -0.2em;
+  flex: none;
+}
+
+.hud-bar {
+  position: relative;
+  background: linear-gradient(180deg, #050407 0%, #0b090d 100%);
+  border-bottom: 0;
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  color: #cec4b4;
+}
+.hud-bar::after,
+.controls-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 60, 50, 0) 0%, rgba(255, 60, 50, 0.55) 30%, rgba(240, 207, 149, 0.25) 70%, rgba(240, 207, 149, 0) 100%);
+  pointer-events: none;
+}
+.hud-bar::after { bottom: 0; }
+.controls-bar::before { top: 0; }
+
+#hud-scene-title {
+  letter-spacing: 0.4px;
+  color: #ddd2be;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+}
+.rec-dot {
+  color: #ff3b30;
+  text-shadow: 0 0 8px rgba(255, 40, 30, 0.9);
+}
+.room-badge {
+  background: none;
+  border: 1px solid rgba(240, 207, 149, 0.35);
+  color: #f0cf95;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+
+.objective-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: #a99c88;
+}
+.objective-pill + .objective-pill {
+  border-left: 1px solid rgba(240, 207, 149, 0.18);
+  padding-left: 14px;
+}
+.objective-pill strong {
+  color: #f0cf95;
+  font-size: 1.12em;
+  letter-spacing: 0.5px;
+}
+.hud-ico {
+  height: 22px;
+  width: auto;
+  filter: drop-shadow(0 0 4px rgba(255, 190, 110, 0.45));
+}
+.tag-done {
+  color: #6fbe6a;
+  font-weight: 600;
+}
+
+.btn-hud {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #cec4b4;
+  border: 1px solid rgba(240, 207, 149, 0.16);
+  border-radius: 3px;
+  font-family: 'Sarabun', sans-serif;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+.btn-hud:hover,
+.btn-hud:focus-visible {
+  color: #f2e8d6;
+  border-color: rgba(255, 60, 50, 0.6);
+  background: rgba(255, 40, 30, 0.08);
+  outline: none;
+}
+.volume-slider { accent-color: #c8453f; }
+
+.controls-bar {
+  position: relative;
+  background: linear-gradient(0deg, #050407 0%, #0b090d 100%);
+  border-top: 0;
+}
+.ctrl-btn {
+  background: rgba(16, 13, 18, 0.9);
+  color: #ddd2be;
+  border: 1px solid rgba(240, 207, 149, 0.16);
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: color 0.12s, border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.ctrl-btn .ic { color: #f0cf95; }
+.ctrl-btn:hover {
+  border-color: rgba(240, 207, 149, 0.45);
+  color: #f2e8d6;
+}
+.ctrl-btn:active {
+  background: rgba(40, 32, 38, 0.95);
+}
+.ctrl-btn kbd {
+  background: none;
+  border-color: rgba(240, 207, 149, 0.22);
+  color: #8b8172;
+  border-radius: 3px;
+}
+.ctrl-btn.action-primary {
+  background: linear-gradient(180deg, rgba(150, 28, 24, 0.75), rgba(90, 14, 12, 0.85));
+  border-color: rgba(255, 70, 60, 0.7);
+  color: #fff1e6;
+  box-shadow: 0 0 14px rgba(255, 40, 30, 0.25);
+}
+.ctrl-btn.action-primary .ic { color: #fff1e6; }
+.ctrl-btn.spiritual-btn {
+  background: rgba(12, 34, 31, 0.85);
+  border-color: rgba(111, 190, 170, 0.45);
+  color: #9fe3cf;
+}
+.ctrl-btn.spiritual-btn .ic { color: #9fe3cf; }
+
+/* Phone held sideways: the round floating buttons keep their glassy look. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .controls-bar::before { display: none; }
+  .controls-bar .ctrl-btn {
+    background: rgba(8, 6, 10, 0.6);
+    border-color: rgba(240, 207, 149, 0.3);
+  }
+  .controls-bar .ctrl-btn.action-primary { background: rgba(130, 22, 18, 0.72); }
+  .controls-bar .ctrl-btn.spiritual-btn { background: rgba(12, 40, 36, 0.66); }
+}
+@media (max-width: 760px), (max-height: 520px) {
+  .hud-ico { height: 18px; }
+  .objective-pill + .objective-pill { padding-left: 8px; }
+}
+
+.objective-bar {
+  border-radius: 2px;
+  border: 0;
+  border-top: 1px solid rgba(240, 207, 149, 0.35);
+  border-bottom: 1px solid rgba(240, 207, 149, 0.35);
+  background: linear-gradient(90deg, rgba(6, 5, 8, 0) 0%, rgba(6, 5, 8, 0.86) 14%, rgba(6, 5, 8, 0.86) 86%, rgba(6, 5, 8, 0) 100%);
+  box-shadow: none;
+  padding-left: 34px;
+  padding-right: 34px;
+  color: #eee3ce;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+.objective-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #ff5a4e;
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  letter-spacing: 1px;
+  text-shadow: 0 0 10px rgba(255, 40, 30, 0.6);
+}
+.objective-label::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  transform: rotate(45deg);
+  background: #ff3b30;
+  box-shadow: 0 0 8px rgba(255, 40, 30, 0.9);
+}
+@media (max-width: 760px), (max-height: 520px) {
+  .objective-bar { padding-left: 22px; padding-right: 22px; }
+}
+
+/* ==================== Caught screen (full-bleed, like the title) ==================== */
+.modal.gameover-screen {
+  background:
+    radial-gradient(ellipse at 50% 38%, rgba(96, 8, 6, 0.94) 0%, rgba(28, 3, 4, 0.97) 55%, #030203 100%);
+  animation: caughtIn 0.5s ease-out;
+}
+.gameover-screen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+}
+.gameover-screen .gameover-box {
+  position: relative;
+  z-index: 1;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  max-width: 640px;
+}
+.gameover-screen .jumpscare-sprite {
+  height: min(40vh, 300px);
+  margin-bottom: 4px;
+  filter: drop-shadow(0 0 26px rgba(255, 30, 20, 0.55)) contrast(1.08);
+  animation: shakeScare 0.16s infinite;
+}
+.gameover-ghost {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #c8a77a;
+  opacity: 0.85;
+}
+.gameover-screen .gameover-title {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 700;
+  font-size: clamp(30px, 5vw, 50px);
+  line-height: 1.15;
+  margin: 2px 0 12px;
+  color: #ff3b30;
+  text-shadow: 0 0 18px rgba(255, 30, 20, 0.75), 3px 3px 0 #2a0000;
+}
+.gameover-tip {
+  color: #ddd2be;
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 520px;
+  margin: 0 auto 22px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(240, 207, 149, 0.2);
+  border-bottom: 1px solid rgba(240, 207, 149, 0.2);
+}
+.gameover-tip b { color: #f6dda9; }
+.gameover-retry {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+  color: #f2e8d6;
+  background: linear-gradient(180deg, rgba(150, 28, 24, 0.75), rgba(90, 14, 12, 0.85));
+  border: 1px solid rgba(255, 70, 60, 0.7);
+  border-radius: 4px;
+  padding: 10px 26px;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(255, 40, 30, 0.3);
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.gameover-retry:hover,
+.gameover-retry:focus-visible {
+  box-shadow: 0 0 26px rgba(255, 40, 30, 0.55);
+  transform: translateY(-1px);
+  outline: none;
+}
+@keyframes caughtIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (max-width: 760px), (max-height: 520px) {
+  .gameover-screen .modal-box { background: none; }
+  .gameover-screen .jumpscare-sprite { height: min(30vh, 200px); }
+  .gameover-tip { font-size: 14px; margin-bottom: 14px; }
+  .gameover-retry { font-size: 16px; padding: 8px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gameover-screen .jumpscare-sprite { animation: none; }
+  .modal.gameover-screen { animation: none; }
+}
+
+/* ==================== Ending (full-bleed dawn, like a film's last shot) ==================== */
+.modal.ending-screen {
+  background: #050407;
+  padding: 0;
+  overflow: hidden;
+  animation: caughtIn 1.2s ease-out;
+}
+.ending-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.9) brightness(0.8);
+  animation: endingDrift 30s ease-out both;
+}
+.ending-screen::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(5, 4, 7, 0.35) 0%, rgba(5, 4, 7, 0.55) 40%, rgba(5, 4, 7, 0.92) 100%),
+    radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.6) 100%);
+  pointer-events: none;
+}
+.ending-screen .ending-box {
+  position: relative;
+  z-index: 2;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  max-width: 640px;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: clamp(18px, 4vh, 40px) 22px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+.ending-kicker {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #ff5a4e;
+  text-shadow: 0 0 10px rgba(255, 40, 30, 0.6);
+  margin-bottom: 6px;
+}
+.ending-screen h2 {
+  font-size: clamp(26px, 4.2vw, 40px);
+  color: #f6dda9;
+  text-shadow: 0 0 22px rgba(255, 190, 110, 0.35), 0 2px 6px rgba(0, 0, 0, 0.9);
+  margin-bottom: 8px;
+}
+.ending-screen .ending-desc {
+  color: #ddd2be;
+  font-size: 15px;
+  line-height: 1.65;
+}
+.ending-screen .buu-banner {
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(240, 207, 149, 0.35);
+  border-bottom: 1px solid rgba(240, 207, 149, 0.35);
+  border-radius: 0;
+  padding: 14px 0;
+  margin: 18px 0 12px;
+}
+.ending-screen .buu-title {
+  font-size: clamp(28px, 4.6vw, 44px);
+  letter-spacing: 4px;
+  color: #ffd479;
+  text-shadow: 0 0 20px rgba(255, 200, 100, 0.55), 0 2px 6px rgba(0, 0, 0, 0.9);
+}
+.ending-screen .buu-date { color: #f2e8d6; }
+.ending-screen .buu-sub { color: #c8bba5; }
+.ending-screen .ending-rank { color: #f6dda9; }
+.ending-screen .hof-entry input {
+  background: rgba(5, 4, 7, 0.7);
+  border-color: rgba(240, 207, 149, 0.3);
+  border-radius: 3px;
+}
+.ending-screen .hof-list {
+  background: rgba(5, 4, 7, 0.55);
+  border-top: 1px solid rgba(240, 207, 149, 0.2);
+  border-bottom: 1px solid rgba(240, 207, 149, 0.2);
+  padding: 8px 14px;
+}
+.ending-screen .hof-list:empty { display: none; }
+.ending-again { margin-top: 4px; }
+@keyframes endingDrift {
+  from { transform: scale(1.12); }
+  to { transform: scale(1); }
+}
+@media (max-width: 760px), (max-height: 520px) {
+  .ending-screen .modal-box { background: none; max-height: 100%; }
+  .ending-screen .buu-banner { margin: 10px 0 8px; padding: 8px 0; }
+  .ending-screen .ending-desc { font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ending-bg, .modal.ending-screen { animation: none; }
+}
