@@ -107,108 +107,133 @@
     const friendCall = p.role === 'female' ? 'ริน' : 'นนท์';
 
     return [
-      // --- Scene 0: Altar & Keepsake (Beats 0..4, 5 beats) ---
+      // --- Scene 0: Altar & Keepsake ("สัญญาณแรก" หน้าโลง) (Beats 0..4, 5 beats) ---
       {
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'บรรยาย',
-        text: 'คืนฝนพรำหลังพิธีสวดอภิธรรม ควันธูปจางลงหน้าโลงไม้สักที่มีรูปถ่ายเพื่อนรักตั้งอยู่',
+        text: 'คืนฝนพรำหลังพิธีสวดอภิธรรม ควันธูปลอยเอื่อยขึ้นจากกระถางหน้าโลงไม้สัก... ท่ามกลางความเงียบที่เหมือนมีอะไรบางอย่างผิดปกติ',
         frame: 'intro_s1_f0',
+        slowType: true,
+        uneasyLevel: 0.9,
       },
       {
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'PROTAGONIST',
-        text: `"...สัญญากันไว้แท้ๆ ว่าจะกลับไปเรียนด้วยกันหลังปิดเทอม ไม่น่าด่วนจากไปเลยนะ..."`,
+        text: `"...สัญญากันไว้แท้ๆ ว่าจะกลับไปเรียนด้วยกันหลังปิดเทอม... เอ๊ะ เมื่อกี้เหมือนเงาข้างโลงมันสั่นไหวไปเอง..."`,
         frame: 'intro_s1_f1',
+        slowType: true,
+        uneasyLevel: 1.5,
+        sfx: 'whisper',
       },
       {
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'แม่',
-        text: `"${friendCall}เอ๊ย... ทางวัดเขามอบของใช้ติดตัวของเพื่อนไว้ให้ แม่เห็นไฟฉายกระบอกนี้มันอยู่บนหิ้ง เลยเอามาให้ลูกเก็บไว้นะ"`,
+        text: `"${friendCall}เอ๊ย... ทำไมทำหน้าตกใจแบบนั้นลูก ทางวัดเขามอบไฟฉายกระบอกนี้ไว้ให้ แม่เห็นอยู่บนหิ้งเลยเอามาให้ลูกเก็บไว้นะ"`,
         frame: 'intro_s1_f2',
+        slowType: true,
+        uneasyLevel: 1.8,
       },
       {
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'บรรยาย',
-        text: `ไฟฉายพกพาสีทึมกับด้ายสายสิญจน์สีขาวนวลขมวดปมติดข้อมือ... ยังคงอุ่นจางๆ อยู่ในอุ้งมือของ${friendCall}`,
+        text: `ไฟฉายพกพาสีทึมกับด้ายสายสิญจน์ขมวดปมติดข้อมือ... ขณะควันธูปสายสุดท้ายค่อยๆ จางหายไปในอากาศเย็นชื้นของคืนฝนพรำ`,
         frame: 'intro_s1_f4',
         showKeepsake: true,
+        slowType: true,
+        uneasyLevel: 2.0,
+        fadeSmoke: 0.45,
       },
       {
         scene: 0,
         tag: 'บทนำ ๑/๖ · งานศพเพื่อนสนิท',
         speaker: 'PROTAGONIST',
-        text: `"ขอบคุณ${polite}... ต่อให้มืดแค่ไหน เราจะเก็บไฟฉายกับสายสิญจน์เส้นนี้ติดตัวไว้ตลอดไป"`,
+        text: `"ขอบคุณ${polite}... ทั้งที่ควันธูปดับหายไปแล้ว ทำไมยังรู้สึกเหมือนมีสายตาจ้องมาจากข้างหลังไม่ยอมไปไหน..."`,
         frame: 'intro_s1_f5',
         showKeepsake: true,
+        slowType: true,
+        uneasyLevel: 2.4,
+        fadeSmoke: 1.0,
       },
 
-      // --- Scene 1: Car Drive (NO truck in 5..8!) & Crash (Beats 5..12, 8 beats) ---
+      // --- Scene 1: Backseat Perspective & Escalating Dread (Beats 5..12, 8 beats) ---
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'บรรยาย',
-        text: 'ขากลับบ้านกลางดึก ฝนโปรยลงกระจกหน้า ถนนลาดยางข้างทางมีเพียงแนวไม้ทึบและความมืดมิดไร้เงารถสวน',
+        text: 'ขากลับบ้านกลางดึก เสียงล้อบดถนนเปียกดังดิบๆ ใต้ท้องรถ ในกระจกมองหลังมีเพียงเงาในห้องโดยสารที่สั่นตามแรงถนนมืด',
         frame: 'intro_s2_f0',
         wipers: true,
+        roadRumble: true,
+        mirrorMode: 'cabin',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'พ่อ',
-        text: `"ฝนตกทางมืดหน่อยนะลูก คาดเข็มขัดดีๆ เดี๋ยวถึงทางแยกหน้าก็ใกล้จะเข้าเขตบ้านแล้ว"`,
+        text: `"ฝนตกทางมืดหน่อยนะลูก คาดเข็มขัดดีๆ..." เสียงโทรศัพท์พ่อสั่นครืดตรงคอนโซล แสงจอวูบสะท้อนกระจกมองหลังก่อนดับวูบ`,
         frame: 'intro_s2_f1',
         wipers: true,
+        sfx: 'phone_vibe',
+        roadRumble: true,
+        mirrorMode: 'phone',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'แม่',
-        text: `"คืนนี้ง่วงก็พักสายตาไปก่อนเถอะลูก พ่อเขาขับระวังอยู่แล้ว... เห็นลูกเงียบมาตั้งแต่หน้างานศพ"`,
+        text: `"คืนนี้ง่วงก็พักสายตาเถอะลูก... เอ๊ะ ในกระจกนั่นแสงไฟท้ายสีแดงของใครวะ แวบอยู่หลังโค้งแล้วก็หายไป..."`,
         frame: 'intro_s2_f2',
         wipers: true,
+        roadRumble: true,
+        mirrorMode: 'red_flicker',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"${polite}แม่... ไม่เป็นไรหรอก เหมือนฝนข้างนอกมันเริ่มเทหนักขึ้นทุกทีแล้วนะพ่อ"`,
+        text: `"${polite}แม่... ดูในกระจกนั่นสิ ข้างหลังไกลๆ เหมือนมีประกายไฟต่ำๆ กระพริบตามมา... แต่มองไม่ออกเลยว่าเป็นอะไร"`,
         frame: 'intro_s2_f3',
         wipers: true,
+        roadRumble: true,
+        mirrorMode: 'low_sparks',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'แม่',
-        text: `"เอ๊ะ... พ่อ! ข้างหน้าทางโค้งนั่นไฟรถใครสาดข้ามเลนมา?! ทำไมมันส่ายเข้ามาฝั่งเราล่ะ!"`,
+        text: `"พ่อ! เงาในกระจกกับโค้งข้างหน้ามันขยายใหญ่ขึ้นเรื่อยๆ แล้ว!! นั่นไฟอะไรพุ่งทะลุความมืดเข้ามาฝั่งเรา?!"`,
         frame: 'intro_s2_f4',
         wipers: true,
+        mirrorMode: 'expanding_glare',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'พ่อ',
-        text: `"เฮ้ย! รถบรรทุกเสียหลักแหกโค้ง! มันเบรกไม่อยู่แล้ว—จับเบาะไว้แน่นๆ!!"`,
+        text: `"เฮ้ย! รถบรรทุกเปิดไฟสูงเสียหลักแหกโค้งเข้ามาแล้ว!! จับเบาะไว้แน่นๆ!!"`,
         frame: 'intro_s2_f5',
         sfx: 'horn',
-        shake: 8,
+        shake: 9,
+        mirrorMode: 'blinding',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'PROTAGONIST',
-        text: `"พ่อครับ!! ระวัง——!!"`,
+        text: `"พ่อครับ!! แสงไฟสูงมันสว่างจ้ากลืนกระจกหมดแล้ว—ระวัง——!!"`,
         frame: 'intro_s2_f6',
-        shake: 16,
+        shake: 17,
+        mirrorMode: 'blinding',
       },
       {
         scene: 1,
-        tag: 'บทนำ ๒/๖ · ถนนสายเปลี่ยวกลางดึก',
+        tag: 'บทนำ ๒/๖ · เบาะหลังกลางดึก',
         speaker: 'บรรยาย',
-        text: 'โครม!! แรงกระแทกมหาศาลฉีกกระจกหน้าแตกกระจาย แสงไฟหน้ารถสว่างวาบก่อนทุกอย่างจะหมุนคว้างลงข้างทาง...',
+        text: 'โครม!! ลำแสงไฟสูงระเบิดสว่างวาบกลืนทุกอย่าง พร้อมเสียงเหล็กบิดเบี้ยวและกระจกหน้าที่แตกกระจายในเสี้ยววินาที...',
         frame: 'intro_s2_f7',
         sfx: 'crash_hit',
         shake: 24,
@@ -447,31 +472,70 @@
   }
 
   /* -------------------- 6 Scene Canvas Drawers -------------------- */
-  function drawAltar(ctx, line, t, beatProgress) {
+  function drawAltar(ctx, line, t, beatProgress, meta) {
     ctx.fillStyle = '#090707';
     ctx.fillRect(0, 0, W, H);
 
-    const img = getImg(line.frame || 'intro_s1_f0') || getImg('intro_panel_1');
-    const zoom = 1.02 + beatProgress * 0.04;
-    drawCoverFrame(ctx, img, t, { zoom, panY: Math.sin(t * 0.7) * 3 });
+    const uneasy = line.uneasyLevel || 1;
+    // Irregular nervous micro-tremor & occasional startled periphery jolt
+    const flinch = Math.sin(t * 2.15 + 1.1) > 0.91 ? Math.sin(t * 47) * 3.2 : 0;
+    const shiverX = Math.sin(t * 17.3) * Math.cos(t * 6.9) * (0.9 * uneasy) + flinch;
+    const shiverY = Math.sin(t * 13.1) * (0.55 * uneasy);
 
-    // Flickering incense & candle glow
+    const img = getImg(line.frame || 'intro_s1_f0') || getImg('intro_panel_1');
+    const zoom = 1.03 + beatProgress * 0.04;
+    drawCoverFrame(ctx, img, t, { zoom, panX: shiverX * 0.45, panY: Math.sin(t * 0.7) * 2 + shiverY * 0.4 });
+
+    // Restless moving player silhouette/shadow (casts across left floor & subtly glances left-right)
+    ctx.save();
+    const glance = Math.sin(t * 0.95) * 7 + (Math.sin(t * 2.8) > 0.9 ? Math.sin(t * 36) * 2.5 : 0);
+    const sx = W * 0.16 + shiverX * 1.3;
+    const sy = H * 0.72 + shiverY;
+    // Long creeping shadow behind player along temple wall/floor
+    ctx.fillStyle = `rgba(3, 2, 4, ${0.46 + uneasy * 0.1})`;
+    ctx.beginPath();
+    ctx.ellipse(sx - 24 + glance * 1.4, sy + 95, 58 + uneasy * 6, 22, -0.18, 0, Math.PI * 2);
+    ctx.fill();
+    // Moving player shoulder/head shadow silhouette trembling unevenly
+    ctx.fillStyle = 'rgba(10, 8, 12, 0.72)';
+    ctx.fillRect(Math.round((sx - 34) / 2) * 2, Math.round((sy - 20) / 2) * 2, 68, 110);
+    // Turning head silhouette glancing side-to-side nervously
+    ctx.fillRect(Math.round((sx - 18 + glance) / 2) * 2, Math.round((sy - 62) / 2) * 2, 34, 38);
+    // Eerie periphery shadow flicker near background doorway ("สัญญาณแรก" something off behind)
+    if (uneasy >= 1.4 && (Math.sin(t * 3.7) > 0.65)) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.fillRect(W * 0.05, H * 0.16, 46, 175);
+    }
+    ctx.restore();
+
+    // Flickering incense & candle glow (dims subtly as incense smoke fades out)
+    const elapsed = meta ? meta.lineElapsed : t;
+    const smokeOpacity = line.fadeSmoke
+      ? Math.max(0, 1 - (line.fadeSmoke * 0.45 + (elapsed / 2.9) * line.fadeSmoke))
+      : 1;
+
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const candle = 0.65 + Math.sin(t * 6.5) * 0.2 + Math.cos(t * 11) * 0.1;
+    const candle = 0.62 + Math.sin(t * 6.5) * 0.2 + Math.cos(t * 11) * 0.1;
     const cg = ctx.createRadialGradient(W * 0.6, H * 0.48, 8, W * 0.6, H * 0.48, 220);
-    cg.addColorStop(0, `rgba(255, 190, 92, ${0.22 * candle})`);
+    cg.addColorStop(0, `rgba(255, 190, 92, ${0.22 * candle * (0.4 + 0.6 * smokeOpacity)})`);
     cg.addColorStop(1, 'rgba(255, 140, 40, 0)');
     ctx.fillStyle = cg;
     ctx.fillRect(0, 0, W, H);
 
-    // Rising incense smoke particles
-    for (let i = 0; i < 12; i++) {
-      const cy = H * 0.62 - ((t * 28 + i * 24) % 210);
-      const cx = W * 0.56 + Math.sin(t * 1.8 + i) * (6 + i * 0.8);
-      const a = Math.max(0, 0.18 - (H * 0.62 - cy) / 900);
-      ctx.fillStyle = `rgba(225, 220, 210, ${a})`;
-      ctx.fillRect(Math.round(cx / 3) * 3, Math.round(cy / 3) * 3, 6, 6);
+    // Slow billowing incense smoke plumes rising gently while typing, then vanishing into damp air
+    if (smokeOpacity > 0.02) {
+      for (let i = 0; i < 20; i++) {
+        const riseSpeed = 16 + (i % 3) * 4;
+        const cycle = (t * riseSpeed + i * 19) % 240;
+        const cy = H * 0.65 - cycle;
+        const cx = W * 0.56 + Math.sin(t * 1.15 + i * 0.65 + cycle * 0.02) * (5 + cycle * 0.075);
+        const edgeFade = Math.max(0, 1 - cycle / 240);
+        const a = edgeFade * 0.22 * smokeOpacity;
+        ctx.fillStyle = `rgba(220, 224, 232, ${a})`;
+        const sz = cycle > 120 ? 8 : 6;
+        ctx.fillRect(Math.round(cx / 2) * 2, Math.round(cy / 2) * 2, sz, sz);
+      }
     }
     ctx.restore();
 
@@ -493,7 +557,92 @@
       ctx.restore();
     }
 
-    drawVignette(ctx, 0.52);
+    drawVignette(ctx, 0.54 + uneasy * 0.04);
+  }
+
+  function drawRearviewMirror(ctx, line, t, meta) {
+    const mode = line.mirrorMode;
+    if (!mode) return;
+
+    const elapsed = meta ? meta.lineElapsed : 0;
+    // Mirror gradually enlarges as the distant sparks turn into oncoming high-beams
+    const expand = mode === 'expanding_glare'
+      ? Math.min(1.42, 1.0 + elapsed * 0.14)
+      : (mode === 'blinding' ? 1.44 : 1.0);
+    const mw = Math.round(236 * expand);
+    const mh = Math.round(64 * expand);
+    const mx = Math.round(W * 0.5 - mw * 0.5 + Math.sin(t * 21) * 1.1);
+    const my = Math.round(22 + Math.cos(t * 15) * 1.2);
+
+    ctx.save();
+    // Mirror stalk & dark casing
+    ctx.fillStyle = '#090b10';
+    ctx.fillRect(Math.round(W * 0.5 - 8), 0, 16, my + 4);
+    ctx.fillStyle = '#151924';
+    ctx.strokeStyle = 'rgba(195, 206, 224, 0.42)';
+    ctx.lineWidth = 2;
+    ctx.fillRect(mx, my, mw, mh);
+    ctx.strokeRect(mx, my, mw, mh);
+
+    // Clip to mirror glass pane
+    ctx.beginPath();
+    ctx.rect(mx + 4, my + 4, mw - 8, mh - 8);
+    ctx.clip();
+
+    // Dark rear road reflection inside mirror
+    ctx.fillStyle = '#050811';
+    ctx.fillRect(mx + 4, my + 4, mw - 8, mh - 8);
+    ctx.fillStyle = '#0b101c';
+    ctx.fillRect(mx + 4, my + mh * 0.48, mw - 8, mh * 0.52);
+
+    if (mode === 'cabin' || mode === 'phone') {
+      // Dim cabin silhouettes (Mom left, Dad right) vibrating slightly
+      ctx.fillStyle = '#121622';
+      ctx.fillRect(mx + 22, my + 24, 28, 36);
+      ctx.fillRect(mx + mw - 52, my + 22, 30, 38);
+      if (mode === 'phone') {
+        // Dad's vibrating phone screen flashing amber-cyan notification in reflection
+        const pulse = 0.4 + Math.abs(Math.sin(t * 14)) * 0.6;
+        ctx.fillStyle = `rgba(125, 215, 255, ${0.55 * pulse})`;
+        ctx.fillRect(mx + mw * 0.52, my + mh - 18, 16, 10);
+        ctx.fillStyle = `rgba(255, 210, 130, ${0.25 * pulse})`;
+        ctx.fillRect(mx + 6, my + 6, mw - 12, mh - 12);
+      }
+    } else if (mode === 'red_flicker') {
+      // Faint ambiguous red reflection flickering dimly at rear bend
+      const redPulse = Math.max(0, Math.sin(t * 4.8) * Math.cos(t * 2.1));
+      if (redPulse > 0.15) {
+        const rg = ctx.createRadialGradient(mx + mw * 0.48, my + mh * 0.52, 2, mx + mw * 0.48, my + mh * 0.52, 42);
+        rg.addColorStop(0, `rgba(255, 72, 72, ${0.65 * redPulse})`);
+        rg.addColorStop(1, 'rgba(180, 20, 20, 0)');
+        ctx.fillStyle = rg;
+        ctx.fillRect(mx, my, mw, mh);
+      }
+    } else if (mode === 'low_sparks') {
+      // Indeterminate tiny low sparks / red-orange pinpricks trembling in the mirror (not yet a truck)
+      const jitter = Math.sin(t * 19) * 2;
+      const flicker = 0.55 + Math.sin(t * 11.5) * 0.4;
+      const cy = my + mh * 0.62;
+      ctx.fillStyle = `rgba(255, 110, 64, ${0.75 * flicker})`;
+      ctx.fillRect(Math.round(mx + mw * 0.44 + jitter), Math.round(cy), 4, 4);
+      ctx.fillRect(Math.round(mx + mw * 0.53 + jitter), Math.round(cy + 2), 4, 4);
+      ctx.fillStyle = `rgba(255, 232, 160, ${0.55 * flicker})`;
+      ctx.fillRect(Math.round(mx + mw * 0.48 + jitter), Math.round(cy - 1), 3, 3);
+    } else if (mode === 'expanding_glare' || mode === 'blinding') {
+      // Sparks swell into twin blinding high-beam headlamps towering across the mirror
+      const grow = mode === 'blinding' ? 1.0 : Math.min(1.0, 0.25 + elapsed * 0.28);
+      const r = 10 + grow * 54;
+      [0.37, 0.63].forEach((xr) => {
+        const g = ctx.createRadialGradient(mx + mw * xr, my + mh * 0.54, 2, mx + mw * xr, my + mh * 0.54, r);
+        g.addColorStop(0, `rgba(255, 255, 240, ${0.95})`);
+        g.addColorStop(0.35, `rgba(255, 224, 130, ${0.72 * grow})`);
+        g.addColorStop(1, 'rgba(255, 180, 70, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(mx, my, mw, mh);
+      });
+    }
+
+    ctx.restore();
   }
 
   function drawCar(ctx, line, t, beatProgress, meta) {
@@ -501,10 +650,19 @@
     ctx.fillRect(0, 0, W, H);
 
     const img = getImg(line.frame || 'intro_s2_f0') || getImg('intro_panel_2_notruck');
-    const roadBump = Math.sin(t * 13) * 1.4 + Math.cos(t * 7.5) * 1.1;
+    const roadBump = Math.sin(t * 14) * 1.6 + Math.cos(t * 8.2) * 1.2;
     const shakeMag = line.shake || 0;
     const sx = shakeMag ? (Math.sin(t * 48) * shakeMag * (1 - beatProgress * 0.45)) : 0;
     const sy = shakeMag ? (Math.cos(t * 53) * shakeMag * 0.7) : roadBump;
+
+    // Raw wet tyre road rumble SFX periodically during drive buildup
+    if (line.roadRumble && meta) {
+      const rumbleTick = Math.floor(t / 1.75);
+      if (meta.lastRumbleTick !== rumbleTick) {
+        meta.lastRumbleTick = rumbleTick;
+        safePlaySound('road_rumble');
+      }
+    }
 
     drawCoverFrame(ctx, img, t, { zoom: 1.03, shakeX: sx, shakeY: sy });
 
@@ -541,19 +699,34 @@
       ctx.restore();
     }
 
-    // Blinding high-beam flare on Beat 10
-    if (line.frame === 'intro_s2_f5') {
+    // Subtle low sparks / headlights growth on Beat 8-9 ahead on dark curve before truck appears
+    if (line.mirrorMode === 'low_sparks') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const pulse = 0.7 + Math.sin(t * 18) * 0.2;
-      const g = ctx.createRadialGradient(W * 0.5, H * 0.38, 10, W * 0.5, H * 0.38, 340);
-      g.addColorStop(0, `rgba(255, 248, 210, ${0.52 * pulse})`);
-      g.addColorStop(0.45, `rgba(255, 225, 130, ${0.24 * pulse})`);
+      const flk = 0.5 + Math.sin(t * 12) * 0.35;
+      ctx.fillStyle = `rgba(255, 118, 60, ${0.55 * flk})`;
+      ctx.fillRect(Math.round(W * 0.49), Math.round(H * 0.36), 4, 4);
+      ctx.fillRect(Math.round(W * 0.51), Math.round(H * 0.36), 4, 4);
+      ctx.restore();
+    }
+
+    // Blinding high-beam flare on Beat 10-11
+    if (line.frame === 'intro_s2_f5' || line.frame === 'intro_s2_f6') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const pulse = 0.72 + Math.sin(t * 18) * 0.22;
+      const beamRadius = line.frame === 'intro_s2_f6' ? 430 : 340;
+      const g = ctx.createRadialGradient(W * 0.5, H * 0.38, 12, W * 0.5, H * 0.38, beamRadius);
+      g.addColorStop(0, `rgba(255, 250, 224, ${0.62 * pulse})`);
+      g.addColorStop(0.45, `rgba(255, 225, 130, ${0.28 * pulse})`);
       g.addColorStop(1, 'rgba(255, 190, 90, 0)');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
     }
+
+    // Draw rearview mirror sequence on top center
+    drawRearviewMirror(ctx, line, t, meta);
 
     // Impact white flash fading into dark crack overlay on Beat 12
     if (line.flashWhite) {
@@ -1038,6 +1211,7 @@
     story.lineElapsed = 0;
     story.lastBlipCharStep = -1;
     story.lastWiperCycle = -1;
+    story.lastRumbleTick = -1;
 
     const line = story.lines[story.idx];
     const speaker = resolveSpeaker(line.speaker);
@@ -1098,7 +1272,7 @@
 
     // Typewriter progression & per-speaker retro voice blips
     if (!story.typeDone) {
-      const speed = 34; // chars/sec
+      const speed = line.slowType ? 22 : 34; // slower deliberate pacing in funeral scene
       story.charShown = Math.min(line.text.length, story.charShown + speed * dt);
       const count = Math.floor(story.charShown);
       const lineEl = el('story-line');

@@ -432,6 +432,12 @@ function playSound(type, opts = {}) {
   } else if (type === 'blip_narrator') {
     const f = 168 + Math.random() * 14;
     tone(now, { type: 'triangle', freq: f, to: f * 0.96, toTime: 0.03, dur: 0.034, peak: 0.022, attack: 0.002, out });
+  } else if (type === 'road_rumble') {
+    tone(now, { type: 'triangle', freq: 58, to: 52, toTime: 1.4, dur: 1.5, peak: 0.045, attack: 0.18, out });
+    noiseHit(now, { dur: 1.45, peak: 0.028, filter: 'lowpass', freq: 240, q: 0.9, attack: 0.2, out });
+  } else if (type === 'phone_vibe') {
+    tone(now, { type: 'triangle', freq: 145, to: 140, toTime: 0.14, dur: 0.15, peak: 0.045, attack: 0.005, out });
+    tone(now + 0.22, { type: 'triangle', freq: 148, to: 142, toTime: 0.16, dur: 0.17, peak: 0.04, attack: 0.005, out });
   }
 }
 
