@@ -1096,6 +1096,71 @@ function switchScreen(screenId) {
   document.querySelectorAll('.screen').forEach((el) => el.classList.remove('active'));
   const target = document.getElementById(screenId);
   if (target) target.classList.add('active');
+  if (screenId === 'title-screen') startTitleMusic();
+  else stopTitleMusic();
+}
+
+// ----------------------- Title-screen music -----------------------
+// One looping track on the main menu only (main screen, not the phones). It goes through the
+// master bus so the volume slider and mute apply, and fades out when a game or the prologue starts.
+// Browsers block sound until the first click / key, so it also starts on that first gesture.
+const titleMusic = { el: null, gain: null, wanted: false };
+
+function isTitleActive() {
+  const t = document.getElementById('title-screen');
+  return !!(t && t.classList.contains('active'));
+}
+
+function startTitleMusic() {
+  if (state.started || !isTitleActive()) return;
+  if (state.role === 'p1' || state.role === 'p2' || initialRoleParam) return; // phones never play it
+  initAudio();
+  if (!audioCtx) return;
+  titleMusic.wanted = true;
+  if (!titleMusic.el) {
+    const el = new Audio('assets/audio/title_theme.mp3');
+    el.loop = true;
+    el.preload = 'auto';
+    titleMusic.el = el;
+    titleMusic.gain = audioCtx.createGain();
+    titleMusic.gain.gain.value = 0;
+    try {
+      audioCtx.createMediaElementSource(el).connect(titleMusic.gain);
+      titleMusic.gain.connect(audioBus.master);
+    } catch (_) {
+      titleMusic.gain = null; // fall back to the element's own volume
+    }
+  }
+  const p = titleMusic.el.play();
+  if (p && p.catch) p.catch(() => {}); // not allowed yet: the first gesture retries
+  if (titleMusic.gain) titleMusic.gain.gain.setTargetAtTime(0.9, audioCtx.currentTime, 0.6);
+  else titleMusic.el.volume = audioMuted ? 0 : audioVolume * 0.9;
+}
+
+function stopTitleMusic() {
+  titleMusic.wanted = false;
+  const el = titleMusic.el;
+  if (!el || el.paused) return;
+  if (titleMusic.gain && audioCtx) {
+    titleMusic.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.35);
+    setTimeout(() => { if (!titleMusic.wanted) el.pause(); }, 1600);
+  } else {
+    el.pause();
+  }
+}
+
+['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
+  window.addEventListener(ev, () => {
+    if (isTitleActive() && !state.started && (!titleMusic.el || titleMusic.el.paused)) startTitleMusic();
+  }, { capture: true, passive: true });
+});
+window.addEventListener('DOMContentLoaded', () => startTitleMusic());
+
+// "Watch the prologue" on the title menu: the music steps aside, then comes back.
+function watchStoryIntro() {
+  stopTitleMusic();
+  if (typeof window.playStoryIntro !== 'function') return;
+  window.playStoryIntro(() => startTitleMusic());
 }
 
 function startSoloGame() {
@@ -1420,7 +1485,7 @@ function broadcastState() {
 function updateConnectionBadge() {
   const badge = document.getElementById('hud-room-badge');
   if (!badge || !state.roomCode) return;
-  badge.textContent = net.failures >= 4 ? `ห้อง: ${state.roomCode} ⚠️ สัญญาณขาด` : `ห้อง: ${state.roomCode}`;
+  badge.textContent = net.failures >= 4 ? `ห้อง: ${state.roomCode} · สัญญาณขาด` : `ห้อง: ${state.roomCode}`;
 }
 
 function handleRemoteInputs(list) {
@@ -1436,6 +1501,7 @@ function handleRemoteInputs(list) {
 
 function handleIncomingRemoteInput({ action, value, seq }) {
   if (state.role !== 'host') return;
+  markBoothActivity(); // a phone pressing anything counts as someone playing
   if (isPaused()) return; // nothing moves while the main screen is paused
   if (isStoryIntroOpen()) { // during the prologue the phones only step it forward
     if (action === 'interact') window.advanceStory();
@@ -1463,7 +1529,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
   if (action === 'sixth_sense_pulse') {
     state.revealTimer = CONFIG.PULSE_DURATION;
     playSound('chime');
-    showToast('👁️ P2 ส่งคลื่นญาณทิพย์ — จุดสำรวจทั้งหมดถูกเปิดเผยชั่วครู่');
+    showToast('P2 ส่งคลื่นญาณทิพย์ — จุดสำรวจทั้งหมดถูกเปิดเผยชั่วครู่');
   }
 }
 
@@ -1472,7 +1538,7 @@ function useBell(source) {
   state.ghost.stunTimer = CONFIG.BELL_STUN;
   state.bellCooldown = CONFIG.BELL_COOLDOWN;
   playSound('chime');
-  showToast(`🔔 ${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! วิญญาณถูกตรึง ${CONFIG.BELL_STUN} วินาที`);
+  showToast(`${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! วิญญาณถูกตรึง ${CONFIG.BELL_STUN} วินาที`);
   broadcastState();
   return true;
 }
@@ -1490,11 +1556,11 @@ function updateLobbyPlayerStatus(players) {
   const s1 = document.getElementById('status-p1');
   const s2 = document.getElementById('status-p2');
   if (s1) {
-    s1.textContent = players.p1 ? '🟢 เชื่อมต่อมือถือ P1 แล้ว!' : '⚪ รอเชื่อมต่อ (หรือบังคับบนคอมได้)';
+    s1.textContent = players.p1 ? 'เชื่อมต่อมือถือ P1 แล้ว!' : 'รอเชื่อมต่อ (หรือบังคับบนคอมได้)';
     s1.classList.toggle('connected', !!players.p1);
   }
   if (s2) {
-    s2.textContent = players.p2 ? '🟢 เชื่อมต่อมือถือ P2 (ญาณทิพย์) แล้ว!' : '⚪ รอเชื่อมต่อ...';
+    s2.textContent = players.p2 ? 'เชื่อมต่อมือถือ P2 (ญาณทิพย์) แล้ว!' : 'รอเชื่อมต่อ...';
     s2.classList.toggle('connected', !!players.p2);
   }
 }
@@ -1525,7 +1591,7 @@ async function mobilePollTick() {
     }
   } catch (_) {
     net.failures++;
-    if (net.failures >= 4) setMobileStatus('📶 สัญญาณขาดหาย กำลังเชื่อมต่อใหม่...', 'warn');
+    if (net.failures >= 4) setMobileStatus('สัญญาณขาดหาย กำลังเชื่อมต่อใหม่...', 'warn');
   } finally {
     mobilePollInFlight = false;
   }
@@ -1534,10 +1600,10 @@ async function mobilePollTick() {
 function handleMobileError(res) {
   if (res.status === 409) {
     stopCoop();
-    setMobileStatus('🔁 มีมือถือเครื่องอื่นเข้ามาใช้ตำแหน่งนี้แทนแล้ว — สแกน QR ใหม่เพื่อกลับมาควบคุม', 'warn');
+    setMobileStatus('มีมือถือเครื่องอื่นเข้ามาใช้ตำแหน่งนี้แทนแล้ว — สแกน QR ใหม่เพื่อกลับมาควบคุม', 'warn');
   } else if (res.status === 404) {
     stopCoop();
-    setMobileStatus('🚪 ห้องนี้ถูกปิดหรือหมดอายุแล้ว — สแกน QR ใหม่จากจอกลาง', 'warn');
+    setMobileStatus('ห้องนี้ถูกปิดหรือหมดอายุแล้ว — สแกน QR ใหม่จากจอกลาง', 'warn');
   } else {
     net.failures++;
   }
@@ -1573,10 +1639,10 @@ function applyRoomStateToClient(room) {
   if (p1Pho) p1Pho.textContent = `${state.inventory.photos.length}/3`;
 
   if (net.closed) return;
-  if (room.hostOnline === false) setMobileStatus('⚠️ จอกลางหลุดการเชื่อมต่อ... รอสักครู่', 'warn');
-  else if (state.flags.victory) setMobileStatus('✨ รอดพ้นจากเรือนซ่อนวิญญาณแล้ว! แล้วพบกันที่ Open House BUU', 'good');
-  else if (state.flags.gameOver) setMobileStatus(state.role === 'p1' ? '💀 ถูกวิญญาณจับได้! กดปุ่ม "ฟื้นสติ" เพื่อเล่นต่อ' : '💀 P1 ถูกวิญญาณจับได้! รอ P1 ฟื้นสติ', 'warn');
-  else if (!state.started) setMobileStatus('⏳ เชื่อมต่อแล้ว — รอจอกลางกด "เริ่มเกม"', 'good');
+  if (room.hostOnline === false) setMobileStatus('จอกลางหลุดการเชื่อมต่อ... รอสักครู่', 'warn');
+  else if (state.flags.victory) setMobileStatus('รอดพ้นจากเรือนซ่อนวิญญาณแล้ว! แล้วพบกันที่ Open House BUU', 'good');
+  else if (state.flags.gameOver) setMobileStatus(state.role === 'p1' ? 'ถูกวิญญาณจับได้! กดปุ่ม "ฟื้นสติ" เพื่อเล่นต่อ' : 'P1 ถูกวิญญาณจับได้! รอ P1 ฟื้นสติ', 'warn');
+  else if (!state.started) setMobileStatus('เชื่อมต่อแล้ว — รอจอกลางกด "เริ่มเกม"', 'good');
   else setMobileStatus('');
 
   updatePhoneButtons(room);
@@ -1601,16 +1667,16 @@ function updatePhoneButtons(room) {
   const support = room.support || {};
   const prompt = String(support.prompt || '').replace(/\s*\[[^\]]*\]/g, '').trim();
   const labels = {
-    title: '⏳ รอจอกลางเริ่มเกม',
-    ritual: '🕯️ เลือกของที่จะวางด้านล่าง',
-    lock: '🔒 ใส่รหัสด้านล่าง',
-    paused: '⏸ จอกลางพักเกมอยู่',
-    dialogue: '▶ ไปต่อ (อ่านบทพูดบนจอกลาง)',
-    cutscene: '⏭ ข้ามฉาก',
-    puzzle: '🖼️ วางเศษรูปลงกรอบ',
-    gameover: '🕯️ ฟื้นสติ ลองใหม่',
-    victory: '✨ รอดแล้ว!',
-    play: prompt ? `🔍 ${prompt}` : '🔍 สำรวจ (ยังไม่มีอะไรใกล้ๆ)'
+    title: 'รอจอกลางเริ่มเกม',
+    ritual: 'เลือกของที่จะวางด้านล่าง',
+    lock: 'ใส่รหัสด้านล่าง',
+    paused: 'จอกลางพักเกมอยู่',
+    dialogue: 'ไปต่อ (อ่านบทพูดบนจอกลาง)',
+    cutscene: 'ข้ามฉาก',
+    puzzle: 'วางเศษรูปลงกรอบ',
+    gameover: 'ฟื้นสติ ลองใหม่',
+    victory: 'รอดแล้ว!',
+    play: prompt ? `${prompt}` : 'สำรวจ (ยังไม่มีอะไรใกล้ๆ)'
   };
   const ib = document.getElementById('p1-btn-interact');
   if (ib) ib.textContent = stripIcon(labels[support.context] || labels.play);
@@ -1702,7 +1768,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (cp && !(initialRoomParam && initialRoleParam)) {
     const btn = document.getElementById('btn-resume');
     if (btn) {
-      btn.textContent = `⏯ เล่นต่อ (${SCENE_TITLES[cp.scene] || 'จุดที่บันทึกไว้'})`;
+      btn.textContent = `เล่นต่อ (${SCENE_TITLES[cp.scene] || 'จุดที่บันทึกไว้'})`;
       btn.classList.remove('hidden');
     }
   }
@@ -1775,7 +1841,7 @@ async function resumeFromCheckpoint() {
     startHostChannel();
   }
   enterScene(cp.scene, cp.x);
-  showToast('⏯ กลับมาเล่นต่อจากจุดที่บันทึกไว้');
+  showToast('กลับมาเล่นต่อจากจุดที่บันทึกไว้');
 }
 
 function restartGame() {
@@ -2586,7 +2652,7 @@ function showPhotoPuzzleModal() {
 
   const status = document.getElementById('photo-puzzle-status');
   if (state.flags.photosRestored) {
-    status.textContent = '✨ ต่อรูปภาพครบสมบูรณ์แล้ว! ความทรงจำกลับคืนมาทั้งหมด';
+    status.textContent = 'ต่อรูปภาพครบสมบูรณ์แล้ว! ความทรงจำกลับคืนมาทั้งหมด';
   } else {
     status.textContent = `แตะที่ชิ้นส่วนรูปภาพที่เก็บมาได้เพื่อวางลงในกรอบ (${state.inventory.placedPhotos.length}/3)`;
   }
@@ -2685,7 +2751,7 @@ function toggleHide() {
     playSound('step');
     if (state.ghost.active && !state.flags.hideHintShown) {
       state.flags.hideHintShown = true;
-      showToast('🤫 กลั้นหายใจ... ห้ามเปิดไฟฉาย แล้ววิญญาณจะหาคุณไม่เจอจนหายไปในความมืด', '', 5500);
+      showToast('กลั้นหายใจ... ห้ามเปิดไฟฉาย แล้ววิญญาณจะหาคุณไม่เจอจนหายไปในความมืด', '', 5500);
     }
   } else {
     showToast('ต้องเดินไปยืนหน้า "ตู้ไม้สัก" หรือ "ตุ่มน้ำ" ก่อน ถึงจะมุดซ่อนตัวได้!');
@@ -2933,7 +2999,7 @@ function updateGhost(dt) {
         g.frozen = true; // pinned by the light
         if (!state.flags.tipDancerFrozen) {
           state.flags.tipDancerFrozen = true;
-          showToast('🔦 ผีนางรำหยุดนิ่งเมื่อถูกไฟฉายส่อง... อย่าหันหลังให้เธอ', '', 5000);
+          showToast('ผีนางรำหยุดนิ่งเมื่อถูกไฟฉายส่อง... อย่าหันหลังให้เธอ', '', 5000);
         }
       } else {
         g.x += Math.sign(dist) * speed * CONFIG.DANCER_UNSEEN_MULT * dt;
@@ -3120,7 +3186,7 @@ function renderScene() {
     ctx.fillStyle = '#8cf5d9';
     ctx.font = 'bold 16px Sarabun';
     ctx.textAlign = 'center';
-    ctx.fillText(state.player.flashlight ? '⚠️ [ไฟฉายเปิดอยู่! วิญญาณมองเห็นแสง]' : '🏺 [กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]', state.player.x, 340);
+    ctx.fillText(state.player.flashlight ? '[ไฟฉายเปิดอยู่! วิญญาณมองเห็นแสง]' : '[กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]', state.player.x, 340);
   }
 
   // 5. Dynamic Darkness, Warm Volumetric Flashlight & Environmental Lights (Scenes 1..4)
@@ -3756,7 +3822,7 @@ function checkLock() {
     state.flags.cabinetUnlocked = true;
     closeLock();
     playSound('creak');
-    showToast('🔓 กลอนตู้ดีดออกเสียงดังกริ๊ก');
+    showToast('กลอนตู้ดีดออกเสียงดังกริ๊ก');
     const cabinet = getSceneHotspots(4).find((sp) => sp.id === 'hiding_cabinet_4');
     if (cabinet) cabinet.onInteract();
     return;
@@ -3777,7 +3843,7 @@ function isOverlayOpen() {
 
 // The animated prologue (story-intro.js) sits on top of chapter 1: the world waits behind it.
 function isStoryIntroOpen() {
-  return typeof window.isStoryIntroOpen === 'function' && window.isStoryIntroOpen();
+  return typeof window.storyIntroActive === 'function' && window.storyIntroActive();
 }
 
 // Nothing in the room moves or reacts: used by every input path and the pause menu.
@@ -3794,10 +3860,10 @@ function formatTime(sec) {
 }
 
 function rankFor(time, deaths) {
-  if (deaths === 0 && time < 300) return '🏆 ผู้กล้าแห่งบูรพา';
-  if (deaths <= 1 && time < 480) return '🥈 ผู้มีสัมผัสพิเศษ';
-  if (deaths <= 3) return '🥉 ผู้รอดชีวิตจากเรือนไทย';
-  return '🕯️ ดวงจิตที่หลงทาง (แต่ก็รอดมาได้!)';
+  if (deaths === 0 && time < 300) return 'ผู้กล้าแห่งบูรพา';
+  if (deaths <= 1 && time < 480) return 'ผู้มีสัมผัสพิเศษ';
+  if (deaths <= 3) return 'ผู้รอดชีวิตจากเรือนไทย';
+  return 'ดวงจิตที่หลงทาง (แต่ก็รอดมาได้!)';
 }
 
 function loadHof() {
@@ -3868,7 +3934,7 @@ function saveToHallOfFame() {
   const btn = document.getElementById('hof-save');
   if (btn) btn.disabled = true;
   renderHof(document.getElementById('hof-list'), 5, entry.at);
-  showToast('🏯 บันทึกชื่อลงหอเกียรติยศแล้ว');
+  showToast('บันทึกชื่อลงหอเกียรติยศแล้ว');
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -3924,7 +3990,7 @@ function currentObjective() {
       return { text: `ยังขาดของ (ของเซ่น ${inv.offerings.length}/3 · เศษรูป ${inv.photos.length}/3) — ย้อนกลับไปหาในห้องก่อนหน้า`, target: 'door_back_scene3' };
     }
     if (!f.offeringsPlaced) return { text: 'ถวายของที่หิ้งบูชาตามธรรมเนียม: ' + RITUAL_HINT, target: 'shrine_altar_spot' };
-    if (!f.photosRestored) return { text: 'ต่อเศษรูปให้ครบ: ที่หิ้งบูชา หรือปุ่ม 🖼️ ดูกรอบรูป แล้วแตะรูปทั้ง 3 ชิ้น', target: 'shrine_altar_spot' };
+    if (!f.photosRestored) return { text: 'ต่อเศษรูปให้ครบ: ที่หิ้งบูชา หรือปุ่ม "ดูกรอบรูป" แล้วแตะรูปทั้ง 3 ชิ้น', target: 'shrine_altar_spot' };
     return { text: 'ประตูหลังเรือนเปิดแล้ว — ออกไปทางขวาสุด', target: 'back_exit_door' };
   }
   if (s === 5) return { text: 'คุยกับคุณลุงที่ยืนรออยู่', target: 'uncle_raj_pattern' };
@@ -3975,7 +4041,7 @@ function renderObjectiveMarker() {
   if (stuck) {
     ctx.font = 'bold 18px Sarabun';
     ctx.textAlign = 'center';
-    ctx.fillText(IS_TOUCH ? 'แตะ 🔍 สำรวจ ที่นี่' : 'มาที่นี่ แล้วกด E', spot.x, y - size - 10);
+    ctx.fillText(IS_TOUCH ? 'แตะปุ่ม "สำรวจ" ที่นี่' : 'มาที่นี่ แล้วกด E', spot.x, y - size - 10);
   }
   ctx.restore();
 }
@@ -3997,8 +4063,8 @@ function showChapterCard(scene) {
 
 function showControlsTip() {
   showToast(IS_TOUCH
-    ? '👆 แตะ ◀ ▶ เพื่อเดิน · เจอจุดแสงสีทองให้แตะ 🔍 สำรวจ · ทำตามเป้าหมายด้านบนจอ'
-    : '⌨️ เดิน A/D หรือ ← → · เจอจุดแสงสีทองกด E · ทำตามเป้าหมายด้านบนจอ', '', 8000);
+    ? 'แตะปุ่มซ้าย/ขวาเพื่อเดิน · เจอจุดแสงสีทองให้แตะปุ่ม "สำรวจ" · ทำตามเป้าหมายด้านบนจอ'
+    : 'เดิน A/D หรือ ← → · เจอจุดแสงสีทองกด E · ทำตามเป้าหมายด้านบนจอ', '', 8000);
 }
 
 // Names on P2's map, and when each spot is finished (shown greyed with ✓).
@@ -4308,6 +4374,49 @@ function closePause() {
   document.getElementById('pause-modal').classList.add('hidden');
   broadcastState();
 }
+
+// ----------------------- Booth: hand the machine to the next person -----------------------
+// If nobody touches anything for a while the main screen goes back to the title by itself and
+// clears the save, so the booth staff never has to. A warning counts down the last seconds and
+// any key / click / phone button cancels it. Cutscenes and the prologue count as activity.
+const BOOTH_IDLE = { play: 180, ending: 75, warn: 15 };
+let boothLastActivity = performance.now();
+
+function markBoothActivity() {
+  boothLastActivity = performance.now();
+  const w = document.getElementById('idle-warning');
+  if (w && !w.classList.contains('hidden')) w.classList.add('hidden');
+}
+
+['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach((ev) => {
+  window.addEventListener(ev, markBoothActivity, { capture: true, passive: true });
+});
+
+function boothIdleTick() {
+  if (state.role !== 'host' || !state.started) return;
+  const watching = state.flags.cutscenePlaying || isStoryIntroOpen();
+  if (watching) { boothLastActivity = performance.now(); return; }
+  const limit = state.flags.victory ? BOOTH_IDLE.ending : BOOTH_IDLE.play;
+  const idle = (performance.now() - boothLastActivity) / 1000;
+  const left = Math.ceil(limit - idle);
+  const w = document.getElementById('idle-warning');
+  if (left <= 0) {
+    if (state.flags.victory) {
+      const input = document.getElementById('hof-name');
+      const btn = document.getElementById('hof-save');
+      if (input && input.value.trim() && btn && !btn.disabled) saveToHallOfFame(); // typed a name but never pressed save
+    }
+    exitToTitle({ keepSave: false });
+    return;
+  }
+  if (w && left <= BOOTH_IDLE.warn) {
+    document.getElementById('idle-title').textContent = state.flags.victory ? 'ขอบคุณที่มาเล่น!' : 'ยังเล่นอยู่ไหม?';
+    document.getElementById('idle-text').textContent = state.flags.victory ? 'จะกลับหน้าแรกให้คนถัดไป' : 'ถ้าไม่มีใครเล่นต่อ จะล้างเซฟแล้วกลับหน้าแรก';
+    document.getElementById('idle-count').textContent = String(left);
+    w.classList.remove('hidden');
+  }
+}
+setInterval(boothIdleTick, 500);
 
 // Leave the game for the title screen. A fresh page load is the cleanest reset of every
 // timer, sound and room; the checkpoint survives it, so "เล่นต่อ" can pick up again.

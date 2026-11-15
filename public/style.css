@@ -2270,7 +2270,7 @@ body,
 }
 
 .t-item::before {
-  content: '▶';
+  content: '\25B6\FE0E'; /* text-style triangle, never the emoji */
   position: absolute;
   left: 0;
   top: 50%;
@@ -3355,4 +3355,39 @@ body,
 @media (max-height: 680px) {
   .story-viewport { max-height: 55vh; }
   .story-line { min-height: 2.5em; }
+}
+
+/* ---- Booth: idle warning before the game returns to the title by itself ---- */
+.idle-warning {
+  position: fixed;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  z-index: 260;
+  min-width: min(520px, 90vw);
+  padding: 14px 22px 16px;
+  background: rgba(10, 7, 7, 0.94);
+  border: 1px solid rgba(240, 207, 149, 0.45);
+  border-top: 2px solid #b3262b;
+  border-radius: 3px;
+  box-shadow: 0 0 40px rgba(179, 38, 43, 0.35);
+  text-align: center;
+  font-family: 'Sarabun', sans-serif;
+  color: #e9dcc6;
+}
+.idle-warning.hidden { display: none; }
+.idle-title {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: #f6dda9;
+  margin-bottom: 4px;
+}
+.idle-text { font-size: 15px; }
+.idle-text b { color: #ff6a5c; font-size: 18px; }
+
+.big-pad-btn .i, .dialogue-next .i, .cutscene-skip .i, .sixth-sense-label .i {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
 }

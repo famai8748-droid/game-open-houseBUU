@@ -21,9 +21,7 @@
   <meta name="twitter:image" content="https://game-open-housebuu.vercel.app/assets/cover.png" />
   <link rel="icon" type="image/png" href="assets/favicon.png" />
   <link rel="apple-touch-icon" href="assets/favicon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&family=Chakra+Petch:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/fonts/fonts.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -68,7 +66,7 @@
         <button id="btn-resume" class="t-item hidden" onclick="resumeFromCheckpoint()">เล่นต่อ</button>
         <button class="t-item" onclick="startSoloGame()">เริ่มเกมใหม่</button>
         <button id="btn-open-lobby" class="t-item" onclick="openCoopLobby()">เล่น 2 คน (QR Code)</button>
-        <button class="t-item" onclick="playStoryIntro()">ดูคัทซีนเปิดเรื่อง (ฉบับเต็ม)</button>
+        <button class="t-item" onclick="watchStoryIntro()">ดูคัทซีนเปิดเรื่อง (ฉบับเต็ม)</button>
         <div class="t-divider"></div>
         <button class="t-item" onclick="openSettings()">ตั้งค่า</button>
         <button class="t-item" onclick="openHowTo()">วิธีเล่น</button>
@@ -212,12 +210,12 @@
         <div class="qr-card">
           <h4>มือถือเครื่องที่ 1: P1 (คนเดินสำรวจ)</h4>
           <img id="qr-p1-img" alt="QR P1" class="qr-img" />
-          <div id="status-p1" class="player-status">⚪ รอเชื่อมต่อ (หรือบังคับบนคีย์บอร์ดคอมได้)</div>
+          <div id="status-p1" class="player-status">รอเชื่อมต่อ (หรือบังคับบนคีย์บอร์ดคอมได้)</div>
         </div>
         <div class="qr-card">
           <h4>มือถือเครื่องที่ 2: P2 (ผู้มีสัมผัสพิเศษ)</h4>
           <img id="qr-p2-img" alt="QR P2" class="qr-img" />
-          <div id="status-p2" class="player-status">⚪ รอเชื่อมต่อ...</div>
+          <div id="status-p2" class="player-status">รอเชื่อมต่อ...</div>
         </div>
       </div>
       <p id="lobby-url-hint" class="url-hint"></p>
@@ -265,7 +263,7 @@
       <!-- CRT / Vignette / Horror Overlays -->
       <div class="vignette-overlay"></div>
       <div id="sixth-sense-overlay" class="sixth-sense-overlay hidden">
-        <div class="sixth-sense-label">👁️ โหมดสัมผัสพิเศษ (ระวัง! ผีจะรับรู้ถึงตัวคุณเร็วขึ้น)</div>
+        <div class="sixth-sense-label"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg> โหมดสัมผัสพิเศษ (ระวัง! ผีจะรับรู้ถึงตัวคุณเร็วขึ้น)</div>
       </div>
       <div id="danger-overlay" class="danger-overlay hidden"></div>
 
@@ -288,7 +286,7 @@
       <div id="dialogue-box" class="dialogue-box hidden" onclick="advanceDialogue()">
         <div class="dialogue-speaker" id="dialogue-speaker">ตัวเอก</div>
         <div class="dialogue-text" id="dialogue-text">...</div>
-        <div class="dialogue-next">คลิกหรือกด [Space / E] เพื่อไปต่อ ▶</div>
+        <div class="dialogue-next">คลิกหรือกด [Space / E] เพื่อไปต่อ <svg class="i" aria-hidden="true"><use href="#i-right"/></svg></div>
       </div>
 
       <!-- FRAME-BY-FRAME PIXEL CUTSCENE OVERLAY -->
@@ -297,7 +295,7 @@
           <canvas id="cutscene-canvas" width="800" height="450" class="cutscene-frame-img pixel-img" aria-label="Cutscene"></canvas>
         </div>
         <div class="door-caption" id="door-caption">แอ๊ดดดดด...</div>
-        <div class="cutscene-skip">แตะหรือกด [E] เพื่อข้าม ▶▶</div>
+        <div class="cutscene-skip">แตะหรือกด [E] เพื่อข้าม <svg class="i" aria-hidden="true"><use href="#i-skip"/></svg></div>
       </div>
 
       <!-- PHOTO PUZZLE MODAL -->
@@ -466,8 +464,8 @@
     </div>
     <div class="p1-pad-layout">
       <div class="p1-dpad">
-        <button class="big-pad-btn" data-remote-move="-1">◀ ซ้าย</button>
-        <button class="big-pad-btn" data-remote-move="1">ขวา ▶</button>
+        <button class="big-pad-btn" data-remote-move="-1"><svg class="i" aria-hidden="true"><use href="#i-left"/></svg> ซ้าย</button>
+        <button class="big-pad-btn" data-remote-move="1">ขวา <svg class="i" aria-hidden="true"><use href="#i-right"/></svg></button>
       </div>
       <div class="p1-actions">
         <button id="p1-btn-interact" class="big-action-btn interact" onclick="sendRemoteInput('interact', true)">สำรวจ / เปิดประตู / ต่อรูป</button>
@@ -518,6 +516,11 @@
         ส่งคลื่นญาณทิพย์ส่องของซ่อนบนจอกลาง
       </button>
     </div>
+  </div>
+
+  <div id="idle-warning" class="idle-warning hidden" role="status" aria-live="polite">
+    <div class="idle-title" id="idle-title">ยังเล่นอยู่ไหม?</div>
+    <div class="idle-text"><span id="idle-text">จะกลับหน้าแรกให้คนถัดไป</span> ใน <b id="idle-count">15</b> วินาที · กดปุ่มใดก็ได้เพื่อเล่นต่อ</div>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>

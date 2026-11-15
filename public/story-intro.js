@@ -1237,7 +1237,7 @@
     story.rafId = requestAnimationFrame(frameLoop);
   }
 
-  window.isStoryIntroOpen = () => story.active;
+  window.storyIntroActive = () => story.active;
   window.playStoryIntro = playStoryIntro;
   window.advanceStory = advanceStory;
   window.prevStoryLine = prevStoryLine;
