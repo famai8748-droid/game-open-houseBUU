@@ -349,6 +349,19 @@ function playSound(type, opts = {}) {
     tone(now, { type: 'sine', freq: 120, to: 62, toTime: 0.22, dur: 0.28, peak: 0.13, attack: 0.003, out });
     tone(now + 0.01, { type: 'sine', freq: 1320, to: 1300, toTime: 0.5, dur: 0.6, peak: 0.03, attack: 0.004, out });
     noiseHit(now, { dur: 0.06, peak: 0.05, filter: 'lowpass', freq: 900, out });
+  } else if (type === 'page') {
+    // brittle old paper unfolding: a few short dry rustles
+    for (let i = 0; i < 3; i++) {
+      noiseHit(now + i * 0.07 + Math.random() * 0.03, { dur: 0.05 + Math.random() * 0.05, peak: 0.07, filter: 'bandpass', freq: 2600 + Math.random() * 1800, q: 0.9, attack: 0.003, out });
+    }
+    noiseHit(now + 0.24, { dur: 0.22, peak: 0.035, filter: 'highpass', freq: 3000, attack: 0.02, out });
+  } else if (type === 'reveal') {
+    // the flashlight lands on a ghost: a high bowed-string screech over a low thud
+    [1480, 1567, 2217].forEach((freq, i) => {
+      tone(now, { type: 'sawtooth', freq, to: freq * 0.97, toTime: 0.5, dur: 0.75 - i * 0.1, peak: 0.022, attack: 0.01, out });
+    });
+    tone(now, { type: 'sine', freq: 70, to: 36, toTime: 0.4, dur: 0.5, peak: 0.28, attack: 0.003, out });
+    noiseHit(now, { dur: 0.3, peak: 0.06, filter: 'bandpass', freq: 5200, q: 2, attack: 0.005, out });
   } else if (type === 'gong') {
     // chapter card: a distant Thai temple gong (inharmonic partials, slow decay)
     [[98, 0.11, 4.2], [196.7, 0.05, 3.0], [263, 0.035, 2.4], [392.5, 0.025, 1.8], [517, 0.014, 1.2]].forEach(([f, p, d]) => {
@@ -791,8 +804,8 @@ const SCENE_TITLES = {
 let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
   const inv = state.inventory;
-  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}`;
-  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum) };
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}`;
+  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum)) };
   return hotspotCache.list;
 }
 
@@ -2679,7 +2692,9 @@ function checkRitualComplete() {
   playSound('chime');
   queueDialogue([
     { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... (แล้วเสียงกระพรวนก็ขาดหายไปกลางอากาศ เหลือแต่กลิ่นธูปที่ค่อยๆ จาง)' },
-    { speaker: getPlayerName(), text: 'วิญญาณท่านสงบแล้ว... หรือแค่กำลังรออยู่หลังประตูบานนั้น' }
+    state.flags.lore4
+      ? { speaker: getPlayerName(), text: 'ในความมืดตรงหน้าหิ้ง เงาผู้หญิงคนหนึ่งรำท่าสุดท้ายจนจบ ยกมือไหว้... แล้วเลือนไปพร้อมกลิ่นมะลิ ไปเถอะนะแม่จันทร์' }
+      : { speaker: getPlayerName(), text: 'วิญญาณท่านสงบแล้ว... หรือแค่กำลังรออยู่หลังประตูบานนั้น' }
   ]);
   broadcastState();
 }
@@ -2719,7 +2734,12 @@ function triggerEndingDialogue() {
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' },
     { speaker: getPlayerName(), text: 'คุณลุงครับ... แล้วเสียงกระซิบที่คอยบอกทางผมตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน' },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ก็เพื่อนเอ็งไง... คนที่เอ็งเพิ่งไปงานศพมาเมื่อหัวค่ำ มันเดินตามเอ็งมาตลอดทาง ไม่ยอมให้เอ็งหลงอยู่ที่นี่' },
-    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' }
+    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' },
+    ...(loreFound() === 3 ? [
+      { speaker: getPlayerName(), text: 'คุณลุงครับ... ลายมือในบันทึกพวกนั้น คุณลุงคือหลวงสุนทร เจ้าของเรือนใช่ไหมครับ' },
+      { speaker: 'คุณลุงชุดราชปะแตน', text: '...ร้อยปีแล้วที่ข้ายืนรอตรงนี้ ขอบใจเอ็งที่ทำให้แม่จันทร์ได้รำจบ และให้ตาเหมือนได้กินอิ่มเสียที' },
+      { speaker: 'คุณลุงชุดราชปะแตน', text: 'ถึงเวลาข้าจะได้ตามลูกไปบ้างแล้ว... เอ็งเองก็อย่ามัวหันหลังกลับมาที่นี่ล่ะ' }
+    ] : [])
   ], () => {
     const endCaptions = [
       'เฟรม 1/6 : เศษรูปทั้งสามประสานกันในกรอบไม้... ภาพสุดท้ายคือใบหน้าของคุณเองที่ยังหลับตาบนเตียงโรงพยาบาล',
@@ -3126,6 +3146,16 @@ function updateGhost(dt) {
 
   const absDist = Math.abs(p.x - g.x);
   const solid = g.alpha > 0.5;
+
+  // The beam finds a ghost after losing it for a while: a sharp sting, like in the movies.
+  const now = performance.now();
+  if (solid && isGhostInBeam() && absDist < 520) {
+    if (now - fx.beamLostAt > 4500 && now - fx.beamSince > 4500) {
+      playSound('reveal', ghostSoundOptions(g.x, p.x));
+      fx.beamSince = now;
+    }
+    fx.beamLostAt = now;
+  }
   g.alertLevel = solid ? Math.max(8, Math.min(100, Math.round(100 - absDist / 9))) : 8;
   document.getElementById('danger-overlay').classList.toggle('hidden', absDist > 260 || hiddenSafe || !solid);
 
@@ -3526,6 +3556,7 @@ function drawSceneProps() {
       drawProp(IMAGES.krathong, 640, 612, 86);
     }
   }
+  drawLorePage();
 }
 
 let lightCanvas = null;
@@ -3844,6 +3875,7 @@ function renderPostFx() {
   }
 
   renderScareFx(now);
+  renderLoreFlash(now);
 
   // Low fog drifting along the floor
   if (state.scene <= 4) {
@@ -4030,7 +4062,7 @@ function moveBlindGhost(g, p, speed, dt) {
 }
 
 // ---- Scripted scares ----------------------------------------------------------------
-const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null, hitstopUntil: 0, sceneZoomAt: 0, pickup: null };
+const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null, hitstopUntil: 0, sceneZoomAt: 0, pickup: null, loreFlashAt: 0, beamSince: 0, beamLostAt: 0 };
 
 function triggerBlackout(ms, appear = null) {
   const now = performance.now();
@@ -4290,8 +4322,14 @@ function showEndingStats() {
     rank.textContent = rankFor(t, d);
     const meta = document.createElement('div');
     meta.className = 'ending-meta';
-    meta.textContent = `เวลา ${formatTime(t)} · ถูกวิญญาณจับ ${d} ครั้ง`;
+    meta.textContent = `เวลา ${formatTime(t)} · ถูกวิญญาณจับ ${d} ครั้ง · บันทึกของเรือน ${loreFound()}/3`;
     stats.append(rank, meta);
+    if (loreFound() === 3) {
+      const badge = document.createElement('div');
+      badge.className = 'ending-meta ending-lore';
+      badge.textContent = 'ผู้ไขความลับแห่งเรือน — อ่านบันทึกของหลวงสุนทรครบทุกหน้า';
+      stats.appendChild(badge);
+    }
   }
   const entry = document.getElementById('hof-entry');
   if (entry) entry.classList.remove('hidden');
@@ -4320,6 +4358,121 @@ window.addEventListener('DOMContentLoaded', () => {
   renderHof(box, 3);
   box.classList.toggle('hidden', !loadHof().length);
 });
+
+// ----------------------- The house diary: optional story pages -----------------------
+// One torn page per room tells who the ghosts were. They are never needed to finish (the
+// objective bar ignores them), but finding all three changes the ending and the title.
+const LORE = {
+  2: {
+    x: 625,
+    lines: [
+      'เรือนหลังนี้เป็นของข้า หลวงสุนทร... ลูกสาวคนเดียวของข้า "แม่จันทร์" รำงามที่สุดในบาง ทุกคืนวันพระนางรำถวายหน้าหิ้งบูชา',
+      'ปีนั้นไข้ป่าระบาด แม่จันทร์จากไปก่อนคืนรำแก้บนเพียงคืนเดียว... ชุดรำกับกระพรวนข้อเท้ายังแขวนอยู่ในตู้ ข้าไม่กล้าเก็บ'
+    ],
+    react: 'กระพรวนข้อเท้า... เสียงกริ๊งที่ได้ยินในเรือนนี้ คือเสียงของเธอ'
+  },
+  3: {
+    x: 560,
+    lines: [
+      'ตาเหมือนเฝ้าเรือนนี้มาตั้งแต่ข้ายังเด็ก ไม่มีลูกไม่มีหลาน ตายเงียบๆ อยู่ในห้องเก็บของเซ่น ไม่มีใครทำบุญกรวดน้ำไปให้แม้แต่ครั้งเดียว',
+      'ตั้งแต่นั้นของเซ่นในห้องนี้หายทุกคืน... ถ้าได้ยินมันคลาน อย่าวิ่ง มันไม่มีตาแล้ว เหลือแต่หูกับความหิว'
+    ],
+    react: 'สัมภเวสี... ไม่ใช่ปีศาจ แค่คนที่ไม่มีใครจำ จนหิวอยู่อย่างนั้นมาหลายสิบปี'
+  },
+  4: {
+    x: 900,
+    lines: [
+      'ข้าเป็นพ่อที่ปล่อยให้ลูกตายทั้งที่ยังรำไม่จบ ดวงจิตนางจึงยังรำวนอยู่ในโถงนี้ทุกคืน รอให้มีใครสักคนมองดูจนจบ',
+      'ใครหลงเข้ามา จงถวายของสามอย่างตามธรรมเนียม ธูปเทียนบอกกล่าว พวงมาลัย แล้วจึงพานขนม... แล้วลูกข้าจะได้รำจบเสียที'
+    ],
+    react: 'นี่คือเหตุผลที่เธอหยุดเมื่อถูกมอง... เธอแค่อยากให้มีคนดูเธอรำ'
+  }
+};
+
+function loreFound() {
+  return [2, 3, 4].filter((n) => state.flags['lore' + n]).length;
+}
+
+function loreHotspots(sceneNum) {
+  const page = LORE[sceneNum];
+  if (!page) return [];
+  const read = !!state.flags['lore' + sceneNum];
+  return [{
+    id: 'lore_page_' + sceneNum,
+    x: page.x,
+    width: 80,
+    label: read ? 'อ่านบันทึกเก่าอีกครั้ง' : 'แผ่นกระดาษเก่าติดผนัง',
+    isHiddenClue: !read,
+    onInteract: () => readLore(sceneNum)
+  }];
+}
+
+function readLore(n) {
+  const page = LORE[n];
+  const first = !state.flags['lore' + n];
+  state.flags['lore' + n] = true;
+  playSound('page');
+  fx.loreFlashAt = performance.now();
+  const idx = [2, 3, 4].indexOf(n) + 1;
+  const lines = page.lines.map((text) => ({ speaker: `บันทึกหลวงสุนทร · หน้า ${idx}/3`, text }));
+  lines.push({ speaker: getPlayerName(), text: page.react });
+  queueDialogue(lines, () => {
+    if (!first) return;
+    const found = loreFound();
+    showToast(found === 3 ? 'พบบันทึกของเรือนครบ 3/3 แล้ว — ตอนจบจะเปลี่ยนไป' : `พบบันทึกของเรือน ${found}/3`, '', 3600);
+  });
+  if (first) saveCheckpoint();
+  broadcastState();
+}
+
+// A yellowed page pinned to the wall: faint in the dark, legible in the flashlight.
+function drawLorePage() {
+  const page = LORE[state.scene];
+  if (!page) return;
+  const read = !!state.flags['lore' + state.scene];
+  const x = page.x;
+  const y = 452;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(state.scene === 3 ? 0.07 : -0.05);
+  ctx.globalAlpha = read ? 0.55 : 0.95;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(-16, -20, 36, 46);
+  ctx.fillStyle = '#c9b27f';
+  ctx.beginPath(); // a torn bottom edge
+  ctx.moveTo(-18, -23);
+  ctx.lineTo(18, -23);
+  ctx.lineTo(18, 18);
+  ctx.lineTo(10, 22);
+  ctx.lineTo(4, 17);
+  ctx.lineTo(-4, 23);
+  ctx.lineTo(-11, 18);
+  ctx.lineTo(-18, 21);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(70, 40, 20, 0.35)';
+  ctx.fillRect(-18, -23, 36, 5);
+  ctx.fillStyle = 'rgba(55, 30, 18, 0.75)';
+  for (let i = 0; i < 6; i++) ctx.fillRect(-12, -13 + i * 5, i === 5 ? 14 : 24 - (i % 2) * 4, 1.5);
+  ctx.fillStyle = '#8a1f17'; // the pin
+  ctx.beginPath();
+  ctx.arc(0, -20, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// Reading a page washes the screen in old-photo sepia for a moment, like a memory.
+function renderLoreFlash(now) {
+  if (!fx.loreFlashAt) return;
+  const t = (now - fx.loreFlashAt) / 1400;
+  if (t >= 1) return;
+  const a = (t < 0.15 ? t / 0.15 : 1 - (t - 0.15) / 0.85) * (REDUCED_MOTION ? 0.18 : 0.32);
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.fillStyle = `rgba(196, 150, 80, ${a})`;
+  ctx.fillRect(0, 0, 1280, 720);
+  ctx.restore();
+}
 
 // ----------------------- Objectives: always say what to do next -----------------------
 // Playtesters understood the controls but not the goal. One plain-language objective is
@@ -4464,7 +4617,10 @@ const RADAR_INFO = {
   yantra_code: { label: 'ยันต์ · รหัส', done: () => state.flags.codeRead || state.flags.cabinetUnlocked },
   shrine_altar_spot: { label: 'หิ้ง · เศษรูป 3', done: () => state.flags.offeringsPlaced && state.flags.photosRestored },
   back_exit_door: { label: 'ทางออก →' },
-  uncle_raj_pattern: { label: 'คุณลุง' }
+  uncle_raj_pattern: { label: 'คุณลุง' },
+  lore_page_2: { label: 'บันทึก', done: () => state.flags.lore2 },
+  lore_page_3: { label: 'บันทึก', done: () => state.flags.lore3 },
+  lore_page_4: { label: 'บันทึก', done: () => state.flags.lore4 }
 };
 
 function renderP2RadarLoop(now = performance.now()) {

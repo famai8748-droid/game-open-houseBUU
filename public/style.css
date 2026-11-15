@@ -1998,6 +1998,11 @@ body,
   margin-top: 4px;
 }
 
+.ending-lore {
+  color: #f0cf95;
+  letter-spacing: 0.02em;
+}
+
 .hof-entry {
   display: flex;
   gap: 8px;
