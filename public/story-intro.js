@@ -175,7 +175,9 @@
 
   // ---------------------------------------------------------------- scene 2
   // Night drive: windshield, rain, headlights, two heads in silhouette.
-  function drawCar(cx, t) {
+  function drawCar(cx, t, phase, lineT) {
+    phase = phase || 0;
+    lineT = lineT || 0;
     const shake = Math.sin(t * 1.7) * 1;
     cx.fillStyle = '#020308';
     cx.fillRect(0, 0, W, H);
@@ -285,39 +287,57 @@
     }
     cx.globalAlpha = 1;
 
-    // the figure on the road
-    const figureIn = smooth((t - 6.2) / 1.8);
-    if (figureIn > 0) {
-      const fx = 560 + Math.sin(t * 0.7) * 3;
-      const feet = 372;
-      cx.globalAlpha = figureIn;
-      cx.fillStyle = '#010207';
+    // the oncoming car — it only shows up after the call with พ่อแม่,
+    // headlights first, then the whole vehicle rushing at us.
+    const carIn = smooth((phase - 3.2) / 1.6);
+    if (carIn > 0) {
+      const k = 0.18 + carIn * 1.15;
+      const cxp = 552 + Math.sin(t * 0.6) * 10 * k;
+      const cyp = 352 - carIn * 26;
+      const alpha = 0.6 + 0.4 * carIn;
+
+      // the glare the headlights throw over our own windshield
+      const glare = cx.createRadialGradient(cxp, cyp, 10, cxp, cyp, 240 * k);
+      glare.addColorStop(0, 'rgba(255, 250, 226, ' + 0.55 * carIn + ')');
+      glare.addColorStop(0.4, 'rgba(255, 244, 206, ' + 0.3 * carIn + ')');
+      glare.addColorStop(1, 'rgba(255, 244, 206, 0)');
+      cx.fillStyle = glare;
+      cx.fillRect(win.x - 20, win.y - 20, win.w + 40, win.h + 40);
+
+      // the vehicle itself, still mostly a silhouette
+      const bw = 150 * k;
+      const bh = 96 * k;
+      cx.globalAlpha = alpha;
+      cx.fillStyle = '#02030a';
       cx.beginPath();
-      cx.arc(fx, feet - 86, 11, 0, Math.PI * 2);
+      if (cx.roundRect) cx.roundRect(cxp - bw / 2, cyp - bh * 0.28, bw, bh, 8 * k);
+      else cx.rect(cxp - bw / 2, cyp - bh * 0.28, bw, bh);
       cx.fill();
-      cx.beginPath();
-      cx.moveTo(fx - 14, feet - 72);
-      cx.lineTo(fx + 14, feet - 72);
-      cx.lineTo(fx + 11, feet - 24);
-      cx.lineTo(fx - 11, feet - 24);
-      cx.closePath();
-      cx.fill();
-      cx.fillRect(fx - 10, feet - 26, 8, 26);
-      cx.fillRect(fx + 2, feet - 26, 8, 26);
+      // windscreen catching the light
+      cx.fillStyle = 'rgba(120, 150, 168, ' + 0.16 * carIn + ')';
+      cx.fillRect(cxp - bw * 0.34, cyp - bh * 0.24, bw * 0.68, bh * 0.34);
+      // grille
+      cx.fillStyle = 'rgba(220, 214, 190, ' + 0.1 * carIn + ')';
+      cx.fillRect(cxp - bw * 0.3, cyp + bh * 0.16, bw * 0.6, 3 * k);
+
+      // headlights
+      [-1, 1].forEach((side) => {
+        const lx = cxp + side * bw * 0.32;
+        const ly = cyp + bh * 0.04;
+        const halo = cx.createRadialGradient(lx, ly, 0, lx, ly, 46 * k);
+        halo.addColorStop(0, 'rgba(255, 255, 250, ' + carIn + ')');
+        halo.addColorStop(0.35, 'rgba(255, 246, 206, ' + 0.72 * carIn + ')');
+        halo.addColorStop(1, 'rgba(255, 236, 176, 0)');
+        cx.fillStyle = halo;
+        cx.beginPath();
+        cx.arc(lx, ly, 46 * k, 0, Math.PI * 2);
+        cx.fill();
+        cx.fillStyle = 'rgba(255, 255, 250, ' + carIn + ')';
+        cx.beginPath();
+        cx.arc(lx, ly, 9 * k, 0, Math.PI * 2);
+        cx.fill();
+      });
       cx.globalAlpha = 1;
-      cx.strokeStyle = 'rgba(255, 240, 200, ' + (0.65 * figureIn) + ')';
-      cx.lineWidth = 1.6;
-      cx.beginPath();
-      cx.arc(fx, feet - 86, 12, Math.PI * 0.5, Math.PI * 1.6);
-      cx.stroke();
-      cx.beginPath();
-      cx.moveTo(fx - 15, feet - 72);
-      cx.lineTo(fx - 12, feet - 26);
-      cx.stroke();
-      cx.fillStyle = 'rgba(0, 0, 0, ' + (0.55 * figureIn) + ')';
-      cx.beginPath();
-      cx.ellipse(fx, feet + 1, 22, 5, 0, 0, Math.PI * 2);
-      cx.fill();
     }
 
     // wipers
@@ -335,7 +355,7 @@
     });
 
     // oncoming headlights that end the scene
-    const flash = smooth((t - 8.4) / 1.3);
+    const flash = phase >= 4 ? smooth((lineT - 1.4) / 1.1) : 0;
     if (flash > 0) {
       cx.fillStyle = 'rgba(255, 252, 240, ' + flash * 0.95 + ')';
       cx.fillRect(win.x - 30, win.y - 30, win.w + 60, win.h + 60);
@@ -789,7 +809,10 @@
 
     { scene: 1, speaker: 'ริน', text: 'เหลืออีกสี่สิบกิโลฯ ก็ถึงเรือนยาย ฝนตกหนักแบบนี้ ขับช้า ๆ นะนนท์' },
     { scene: 1, speaker: 'นนท์', text: 'อือ... ไฟหน้ารถมันสว่างแปลก ๆ ตั้งแต่ผ่านโค้งเมื่อกี้' },
-    { scene: 1, speaker: 'ริน', text: 'นนท์! ข้างหน้ามีคนยืนอยู่กลางถนน!' },
+    { scene: 1, speaker: 'แม่ (สายเข้า)', text: 'นนท์เหรอลูก ถึงไหนแล้ว ฝนตกหนักอย่างนี้ขับดี ๆ นะ อย่าฝืน' },
+    { scene: 1, speaker: 'นนท์', text: 'ใกล้ถึงแล้วแม่ ผมกับรินจะรีบไปจุดธูปให้ยายก่อนเที่ยงคืนครับ' },
+    { scene: 1, speaker: 'พ่อ (เสียงจากสาย)', text: 'ถ้ารถมีปัญหาให้รินขับแทนนะ อย่าเสี่ยว... พ่อเป็นห่วง' },
+    { scene: 1, speaker: 'ริน', text: 'นนท์! ไฟส่องเข้ามา! มีรถพุ่งสวนมาทางเรา!' },
 
     { scene: 2, speaker: 'นนท์', text: 'ริน! จับให้แน่น!' },
     { scene: 2, speaker: 'นนท์', text: 'อึก... ปวดหัวเหมือนมีใครตอกตะปูอยู่ข้างใน... ริน! รินได้ยินผมไหม!' },
@@ -809,6 +832,8 @@
   const SCENE_SOUND = ['chime', 'thunder', 'scare', 'whisper'];
 
   const SPEAKER_COLORS = {
+    "แม่ (สายเข้า)": "#a9c7e8",
+    "พ่อ (เสียงจากสาย)": "#9db8d8",
     'นนท์': '#f0c45a',
     'ริน': '#8fd6c0',
     'เสียงกระพรวน': '#c88a8a'
@@ -854,7 +879,8 @@
       raf: null,
       onDone,
       finished: false,
-      doneAt: 0
+      doneAt: 0,
+      lineInScene: 0
     };
 
     ui.root.classList.remove('hidden');
@@ -880,6 +906,7 @@
         try { playSound(SCENE_SOUND[line.scene] || 'creak', { gain: 0.6 }); } catch (err) { /* audio may be locked */ }
       }
     }
+    story.lineInScene = LINES.slice(0, story.index).filter((l) => l.scene === line.scene).length;
     story.lineStart = performance.now();
     story.ui.speaker.textContent = line.speaker;
     story.ui.speaker.style.color = SPEAKER_COLORS[line.speaker] || '#cbbfae';
@@ -894,7 +921,8 @@
 
     cx.fillStyle = '#000';
     cx.fillRect(0, 0, W, H);
-    DRAW[story.scene](cx, sceneTime);
+    const lineElapsed = (now - story.lineStart) / 1000;
+    DRAW[story.scene](cx, sceneTime, story.lineInScene || 0, lineElapsed);
 
     // letterbox + vignette, so the plate reads like a film still
     const vig = cx.createRadialGradient(W / 2, H / 2, 220, W / 2, H / 2, 620);
@@ -914,7 +942,7 @@
       if (story.ui.line.textContent.length !== shown) {
         story.ui.line.textContent = line.text.slice(0, shown);
       }
-      const full = 1900 + line.text.length * 62;
+      const full = 1400 + line.text.length * 48;
       if (elapsed > full) nextStoryLine();
     }
     story.raf = requestAnimationFrame(tick);
