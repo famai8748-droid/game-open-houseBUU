@@ -2809,3 +2809,275 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .ending-bg, .modal.ending-screen { animation: none; }
 }
+
+/* ==================== Windows & buttons (same family as the title screen) ==================== */
+.modal {
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(40, 6, 6, 0.55) 0%, rgba(4, 3, 6, 0.9) 70%);
+}
+.modal-box,
+.pause-panel {
+  position: relative;
+  background:
+    radial-gradient(ellipse at 50% -20%, rgba(120, 20, 16, 0.18), transparent 60%),
+    linear-gradient(180deg, rgba(16, 13, 16, 0.98), rgba(8, 6, 9, 0.98));
+  border: 1px solid rgba(240, 207, 149, 0.18);
+  border-radius: 3px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), inset 0 0 50px rgba(0, 0, 0, 0.55);
+}
+/* red-to-gold hairline across the top, like the bars in the game */
+.modal-box::before,
+.pause-panel::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 60, 50, 0) 0%, rgba(255, 60, 50, 0.8) 30%, rgba(240, 207, 149, 0.45) 70%, rgba(240, 207, 149, 0) 100%);
+  pointer-events: none;
+}
+.gameover-screen .modal-box::before,
+.ending-screen .modal-box::before { display: none; }
+
+.modal-box h2,
+.modal-box h3,
+.pause-title {
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 700;
+  color: #f6dda9;
+  text-shadow: 0 0 16px rgba(255, 170, 90, 0.25), 0 2px 4px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.2px;
+}
+.modal-box h3 { font-size: 20px; margin-bottom: 2px; }
+.pause-title { font-size: 26px; }
+.modal-sub,
+.pause-sub { color: #9e917d; }
+
+.btn-primary {
+  background: linear-gradient(180deg, rgba(150, 28, 24, 0.85), rgba(90, 14, 12, 0.92));
+  border: 1px solid rgba(255, 70, 60, 0.7);
+  border-radius: 4px;
+  box-shadow: 0 0 16px rgba(255, 40, 30, 0.25);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  filter: none;
+  box-shadow: 0 0 24px rgba(255, 40, 30, 0.5);
+  outline: none;
+}
+.btn-secondary,
+.btn-small {
+  background: rgba(255, 255, 255, 0.02);
+  color: #ddd2be;
+  border: 1px solid rgba(240, 207, 149, 0.22);
+  border-radius: 4px;
+  font-weight: 600;
+}
+.btn-secondary:hover,
+.btn-small:hover,
+.btn-secondary:focus-visible,
+.btn-small:focus-visible {
+  background: rgba(255, 40, 30, 0.08);
+  border-color: rgba(255, 60, 50, 0.55);
+  color: #f2e8d6;
+  outline: none;
+}
+.btn-ghost { border-radius: 3px; }
+
+/* pause menu reads like the title menu */
+.pause-actions .btn-primary,
+.pause-actions .btn-secondary { text-align: left; padding-left: 18px; }
+
+/* settings controls pick up the red/gold accents */
+.toggle { border-color: rgba(240, 207, 149, 0.22); background: rgba(255, 255, 255, 0.04); }
+.toggle.on { background: rgba(150, 28, 24, 0.7); border-color: rgba(255, 70, 60, 0.7); }
+.seg { border-radius: 4px; background: rgba(255, 255, 255, 0.03); }
+.seg button { border-radius: 3px; }
+.seg button.on { background: rgba(150, 28, 24, 0.45); color: #fff1e6; box-shadow: inset 0 0 0 1px rgba(255, 70, 60, 0.55); }
+.settings-range,
+#settings-volume { accent-color: #c8453f; }
+
+/* co-op lobby */
+.room-code-banner {
+  background: none;
+  border: 0;
+  border-top: 1px solid rgba(240, 207, 149, 0.3);
+  border-bottom: 1px solid rgba(240, 207, 149, 0.3);
+  border-radius: 0;
+  font-size: 26px;
+  letter-spacing: 3px;
+  color: #ffd479;
+  text-shadow: 0 0 14px rgba(255, 200, 100, 0.4);
+}
+.qr-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(240, 207, 149, 0.16);
+  border-radius: 3px;
+}
+.qr-card h4 { color: #f0cf95; }
+.qr-img { border-radius: 2px; border-color: rgba(240, 207, 149, 0.3); }
+
+/* ritual, lock, photo frame */
+.ritual-slots span {
+  border-radius: 3px;
+  border-color: rgba(240, 207, 149, 0.35);
+  color: #6b6255;
+}
+.ritual-slots span.filled {
+  border-color: rgba(240, 207, 149, 0.6);
+  background: rgba(240, 207, 149, 0.08);
+  color: #f6dda9;
+}
+.ritual-items button,
+.lock-keys button {
+  border-radius: 3px;
+  border: 1px solid rgba(240, 207, 149, 0.2);
+  background: rgba(255, 255, 255, 0.025);
+  color: #eee3ce;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+}
+.ritual-items button:hover,
+.lock-keys button:hover,
+.ritual-items button:focus-visible,
+.lock-keys button:focus-visible {
+  border-color: rgba(255, 60, 50, 0.6);
+  background: rgba(255, 40, 30, 0.08);
+  outline: none;
+}
+.ritual-items img { filter: drop-shadow(0 0 6px rgba(255, 190, 110, 0.35)); }
+.lock-display {
+  color: #ff5a4e;
+  text-shadow: 0 0 14px rgba(255, 40, 30, 0.6);
+}
+.photo-slot { border-radius: 3px; }
+
+/* rotate prompt */
+.rotate-icon { color: #f0cf95; font-size: 0; }
+.rotate-icon svg { width: 64px; height: 64px; filter: drop-shadow(0 0 10px rgba(255, 190, 110, 0.35)); }
+.rotate-card h3 { color: #f6dda9; }
+
+/* ==================== Phone screens (P1 / P2) ==================== */
+.mobile-controller-screen,
+.mobile-psychic-screen {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(120, 14, 10, 0.35), transparent 55%),
+    linear-gradient(180deg, #0b080b 0%, #050407 100%);
+}
+.mobile-psychic-screen {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(20, 90, 76, 0.32), transparent 55%),
+    linear-gradient(180deg, #070a0a 0%, #040506 100%);
+}
+.mobile-header {
+  position: relative;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 6px 4px 10px;
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-weight: 600;
+  color: #ddd2be;
+  letter-spacing: 0.3px;
+}
+.mobile-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 60, 50, 0.7), rgba(240, 207, 149, 0.25) 70%, rgba(240, 207, 149, 0));
+}
+.mh-title b {
+  color: #ff5a4e;
+  margin-right: 6px;
+  text-shadow: 0 0 10px rgba(255, 40, 30, 0.6);
+}
+#p1-room-label,
+#p2-room-label { color: #f0cf95; font-size: 13px; letter-spacing: 1px; }
+.psychic-header { color: #9fe3cf; }
+.psychic-header::after { background: linear-gradient(90deg, rgba(111, 190, 170, 0.8), rgba(111, 190, 170, 0.2) 70%, rgba(111, 190, 170, 0)); }
+.psychic-header .mh-title b { color: #9fe3cf; text-shadow: 0 0 10px rgba(111, 220, 190, 0.6); }
+
+.mobile-status,
+.mobile-goal { border-radius: 2px; }
+.mobile-status { background: rgba(255, 255, 255, 0.03); border-color: rgba(240, 207, 149, 0.16); }
+.mobile-goal {
+  border-left-color: #ff3b30;
+  background: linear-gradient(90deg, rgba(255, 40, 30, 0.1), rgba(255, 40, 30, 0));
+}
+
+.big-pad-btn,
+.big-action-btn,
+.p1-panel-grid button {
+  border-radius: 4px;
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 600;
+  transition: background 0.1s, border-color 0.1s;
+}
+.big-pad-btn {
+  background: rgba(16, 13, 18, 0.92);
+  border: 1px solid rgba(240, 207, 149, 0.3);
+  color: #f0cf95;
+}
+.big-pad-btn:active { background: rgba(60, 46, 34, 0.95); }
+.big-action-btn {
+  background: rgba(16, 13, 18, 0.92);
+  border: 1px solid rgba(240, 207, 149, 0.2);
+  color: #eee3ce;
+}
+.big-action-btn.interact {
+  background: linear-gradient(180deg, rgba(150, 28, 24, 0.85), rgba(90, 14, 12, 0.92));
+  border-color: rgba(255, 70, 60, 0.7);
+  box-shadow: 0 0 16px rgba(255, 40, 30, 0.25);
+}
+.big-action-btn.hide { background: rgba(14, 26, 20, 0.92); border-color: rgba(120, 180, 140, 0.35); }
+.big-action-btn.light { background: rgba(30, 24, 12, 0.92); border-color: rgba(240, 207, 149, 0.35); }
+.big-action-btn:active { filter: brightness(1.25); }
+
+.p1-panel {
+  background: rgba(10, 8, 11, 0.92);
+  border: 1px solid rgba(240, 207, 149, 0.2);
+  border-radius: 3px;
+}
+.p1-panel-grid button {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(240, 207, 149, 0.22);
+}
+
+.p1-inventory-strip {
+  background: none;
+  border-top: 1px solid rgba(240, 207, 149, 0.16);
+  border-radius: 0;
+  color: #a99c88;
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+}
+.p1-inventory-strip > div { display: inline-flex; align-items: center; gap: 6px; }
+.p1-inventory-strip strong { color: #f0cf95; }
+
+.psychic-meter-card,
+.psychic-map-card {
+  background: rgba(6, 12, 11, 0.85);
+  border: 1px solid rgba(111, 190, 170, 0.22);
+  border-radius: 3px;
+}
+.psychic-map-card h4 { color: #9fe3cf; font-weight: 600; }
+.psychic-map-card h4 small { color: #6a8f85; font-weight: 400; }
+.emf-bar-bg { border-radius: 2px; border-color: rgba(111, 190, 170, 0.25); }
+#p2-radar-canvas { border-radius: 2px; border-color: rgba(111, 190, 170, 0.3); }
+.btn-occult {
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(20, 70, 58, 0.9), rgba(10, 36, 30, 0.95));
+  border-color: rgba(111, 220, 190, 0.6);
+  box-shadow: 0 0 14px rgba(111, 220, 190, 0.18);
+  font-weight: 600;
+}
+.btn-occult small { font-weight: 400; opacity: 0.75; }
+.btn-occult.secondary {
+  background: rgba(16, 13, 18, 0.92);
+  border-color: rgba(240, 207, 149, 0.3);
+}
+.toast { border-radius: 3px; }

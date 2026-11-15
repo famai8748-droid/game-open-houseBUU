@@ -1490,11 +1490,16 @@ function handleMobileError(res) {
   }
 }
 
+// The phone screens use plain text and colour instead of emoji (matches the title screen).
+function stripIcon(text) {
+  return String(text || '').replace(/^[\p{Extended_Pictographic}\u{FE0F}\u{200D}\u23E9-\u23FA\u25B6\s]+/u, '');
+}
+
 function setMobileStatus(text, kind = '') {
   ['p1-status', 'p2-status'].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.textContent = text;
+    el.textContent = stripIcon(text);
     el.className = `mobile-status ${kind}`.trim();
   });
 }
@@ -1535,7 +1540,7 @@ function applyRoomStateToClient(room) {
 
 // The P1 phone's big button says what pressing it will do right now on the main screen.
 function updatePhoneButtons(room) {
-  const goalText = room.support && room.support.goal ? '🎯 ' + room.support.goal : '';
+  const goalText = room.support && room.support.goal ? room.support.goal : '';
   state.remoteGoal = room.support || {};
   const goalEl = document.getElementById(state.role === 'p1' ? 'p1-goal' : 'p2-goal');
   if (goalEl) goalEl.textContent = goalText;
@@ -1555,7 +1560,7 @@ function updatePhoneButtons(room) {
     play: prompt ? `🔍 ${prompt}` : '🔍 สำรวจ (ยังไม่มีอะไรใกล้ๆ)'
   };
   const ib = document.getElementById('p1-btn-interact');
-  if (ib) ib.textContent = labels[support.context] || labels.play;
+  if (ib) ib.textContent = stripIcon(labels[support.context] || labels.play);
   // ritual / lock: swap the pad for the matching buttons
   const ritualPanel = document.getElementById('p1-ritual');
   const lockPanel = document.getElementById('p1-lock');
@@ -1567,7 +1572,7 @@ function updatePhoneButtons(room) {
   const ld = document.getElementById('p1-lock-display');
   if (ld) ld.textContent = support.lockInput || '_ _ _ _';
   const hb = document.getElementById('p1-btn-hide');
-  if (hb) hb.textContent = state.player.hidden ? '🚪 ออกจากที่ซ่อน' : '🏺 ซ่อนตัวในตู้/ตุ่ม';
+  if (hb) hb.textContent = state.player.hidden ? 'ออกจากที่ซ่อน' : 'ซ่อนตัวในตู้/ตุ่ม';
 }
 
 // Phones buzz (Android; iPhone browsers ignore vibration): P2 feels the ghost close by,
@@ -3112,30 +3117,42 @@ function drawGhostSprite(img, x, bottomY, h, flip, filter, alpha, rot = 0, glitc
   ctx.restore();
 }
 
+// The prop sprites are cleaner and brighter than the painted rooms, so they looked pasted on.
+// Grade them toward each room's palette (warm, dim, slightly desaturated). Browsers without
+// canvas filters just draw them as before.
+const PROP_GRADE = {
+  2: 'brightness(0.82) saturate(0.8) sepia(0.12)',
+  3: 'brightness(0.72) contrast(0.95) saturate(0.68) sepia(0.22)',
+  4: 'brightness(0.72) contrast(0.95) saturate(0.68) sepia(0.2)'
+};
+function drawProp(img, x, y, h) {
+  drawSpriteProportional(img, x, y, h, false, PROP_GRADE[state.scene] || null);
+}
+
 function drawSceneProps() {
   if (state.scene === 2) {
     if (!state.inventory.offerings.includes('garland')) {
-      drawSpriteProportional(IMAGES.garland, 1085, 502, 54);
+      drawProp(IMAGES.garland, 1085, 502, 54);
     }
   } else if (state.scene === 3) {
     drawGroundShadow(340, 608, 65, 14, 0.6);
-    drawSpriteProportional(IMAGES.jar, 340, 610, 165);
+    drawProp(IMAGES.jar, 340, 610, 165);
 
     drawGroundShadow(670, 610, 58, 12, 0.6);
-    drawSpriteProportional(IMAGES.krathong, 670, 612, 86);
+    drawProp(IMAGES.krathong, 670, 612, 86);
 
     drawGroundShadow(985, 606, 65, 13, 0.6);
-    drawSpriteProportional(IMAGES.table, 985, 608, 135);
+    drawProp(IMAGES.table, 985, 608, 135);
     if (!state.inventory.photos.includes(2)) {
-      drawSpriteProportional(IMAGES.photo2, 985, 482, 46);
+      drawProp(IMAGES.photo2, 985, 482, 46);
     }
   } else if (state.scene === 4) {
     drawGroundShadow(330, 608, 75, 15, 0.65);
-    drawSpriteProportional(IMAGES.cabinet, 330, 610, 265);
+    drawProp(IMAGES.cabinet, 330, 610, 265);
 
     drawGroundShadow(640, 445, 60, 10, 0.45);
-    drawSpriteProportional(IMAGES.altar, 640, 440, 145);
-    drawSpriteProportional(IMAGES.talisman, 1085, 395, 85);
+    drawProp(IMAGES.altar, 640, 440, 145);
+    drawSpriteProportional(IMAGES.talisman, 1085, 395, 85); // the yantras stay vivid: the code must read
     // the code yantra: red Thai numerals, only legible in the flashlight / sixth sense
     drawSpriteProportional(IMAGES.talisman, 520, 470, 64); // hung low enough for the flashlight beam to reach
     ctx.save();
@@ -3147,7 +3164,7 @@ function drawSceneProps() {
 
     if (state.flags.offeringsPlaced) {
       drawGroundShadow(640, 610, 58, 12, 0.6);
-      drawSpriteProportional(IMAGES.krathong, 640, 612, 86);
+      drawProp(IMAGES.krathong, 640, 612, 86);
     }
   }
 }
@@ -4009,7 +4026,7 @@ function renderP2RadarLoop(now = performance.now()) {
     if (fillEl) fillEl.style.width = `${state.ghost.alertLevel || 8}%`;
     if (dangerEl) {
       const high = (state.ghost.alertLevel || 0) > 55;
-      dangerEl.textContent = high ? '⚠️ อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : '🕯️ เปลวเทียนสงบ (ปลอดภัย)';
+      dangerEl.textContent = high ? 'อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : 'เปลวเทียนสงบ (ปลอดภัย)';
       dangerEl.className = high ? 'warn-text' : 'safe-text';
     }
     const rg = state.remoteGoal || {};
