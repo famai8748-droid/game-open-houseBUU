@@ -104,7 +104,11 @@ function initAudio() {
     audioBus.sfx = audioCtx.createGain();
     audioBus.ambient = audioCtx.createGain();
     audioBus.sfx.connect(audioBus.master);
-    audioBus.ambient.connect(audioBus.master);
+    audioBus.ambientFilter = audioCtx.createBiquadFilter(); // muffles the room while hiding
+    audioBus.ambientFilter.type = 'lowpass';
+    audioBus.ambientFilter.frequency.value = 18000;
+    audioBus.ambient.connect(audioBus.ambientFilter);
+    audioBus.ambientFilter.connect(audioBus.master);
     audioBus.master.connect(comp);
     comp.connect(audioCtx.destination);
     audioBus.master.gain.value = audioMuted ? 0 : audioVolume;
@@ -337,6 +341,53 @@ function playSound(type, opts = {}) {
     } else {
       noiseHit(now, { dur: 1.2, peak: 0.05, filter: 'bandpass', freq: 2400, q: 4, attack: 0.4, out });
     }
+  } else if (type === 'ui_move') {
+    // title menu: a soft wooden tick
+    tone(now, { type: 'triangle', freq: 620, to: 470, toTime: 0.04, dur: 0.05, peak: 0.035, attack: 0.002, out });
+  } else if (type === 'ui_select') {
+    // title menu: a low temple-drum thump with a small bell on top
+    tone(now, { type: 'sine', freq: 120, to: 62, toTime: 0.22, dur: 0.28, peak: 0.13, attack: 0.003, out });
+    tone(now + 0.01, { type: 'sine', freq: 1320, to: 1300, toTime: 0.5, dur: 0.6, peak: 0.03, attack: 0.004, out });
+    noiseHit(now, { dur: 0.06, peak: 0.05, filter: 'lowpass', freq: 900, out });
+  } else if (type === 'gong') {
+    // chapter card: a distant Thai temple gong (inharmonic partials, slow decay)
+    [[98, 0.11, 4.2], [196.7, 0.05, 3.0], [263, 0.035, 2.4], [392.5, 0.025, 1.8], [517, 0.014, 1.2]].forEach(([f, p, d]) => {
+      tone(now, { type: 'sine', freq: f * 1.012, to: f, toTime: 0.6, dur: d, peak: p, attack: 0.012, out });
+    });
+    noiseHit(now, { dur: 0.12, peak: 0.05, filter: 'lowpass', freq: 400, out });
+  } else if (type === 'flash_click') {
+    // flashlight: the switch, two small plastic clicks
+    noiseHit(now, { dur: 0.018, peak: 0.12, filter: 'bandpass', freq: 3200, q: 2, attack: 0.001, out });
+    tone(now, { type: 'square', freq: 1900, to: 1500, toTime: 0.01, dur: 0.012, peak: 0.02, attack: 0.001, out });
+    noiseHit(now + 0.045, { dur: 0.014, peak: 0.07, filter: 'bandpass', freq: 2600, q: 2, attack: 0.001, out });
+  } else if (type === 'hide_in') {
+    // slipping into a cabinet / jar: cloth, then the wooden door pulled shut
+    noiseHit(now, { dur: 0.35, peak: 0.06, filter: 'bandpass', freq: 1400, q: 0.8, attack: 0.05, out });
+    if (samples.creak) playSample('creak', out, { gain: 0.25, rate: 1.35, t: now + 0.12 });
+    tone(now + 0.42, { type: 'triangle', freq: 110, to: 45, toTime: 0.12, dur: 0.16, peak: 0.16, attack: 0.002, out });
+    noiseHit(now + 0.42, { dur: 0.05, peak: 0.06, filter: 'lowpass', freq: 700, out });
+  } else if (type === 'hide_out') {
+    if (samples.creak) playSample('creak', out, { gain: 0.2, rate: 1.5, t: now });
+    noiseHit(now + 0.08, { dur: 0.25, peak: 0.05, filter: 'bandpass', freq: 1300, q: 0.8, attack: 0.03, out });
+  } else if (type === 'lock_digit') {
+    // brass dial of the Thai-numeral lock
+    tone(now, { type: 'triangle', freq: 1250 + Math.random() * 80, to: 900, toTime: 0.03, dur: 0.045, peak: 0.05, attack: 0.001, out });
+    noiseHit(now, { dur: 0.025, peak: 0.05, filter: 'bandpass', freq: 2400, q: 3, attack: 0.001, out });
+  } else if (type === 'lock_wrong') {
+    // the bolt rattles and stays shut
+    for (let i = 0; i < 3; i++) {
+      noiseHit(now + i * 0.07, { dur: 0.04, peak: 0.17, filter: 'bandpass', freq: 900, q: 2.5, attack: 0.001, out });
+    }
+    tone(now, { type: 'sawtooth', freq: 92, to: 80, toTime: 0.3, dur: 0.32, peak: 0.09, attack: 0.005, out });
+  } else if (type === 'lock_open') {
+    // the latch snaps open
+    noiseHit(now, { dur: 0.03, peak: 0.16, filter: 'bandpass', freq: 2800, q: 2, attack: 0.001, out });
+    tone(now, { type: 'triangle', freq: 1500, to: 1100, toTime: 0.05, dur: 0.08, peak: 0.06, attack: 0.001, out });
+    tone(now + 0.09, { type: 'triangle', freq: 140, to: 60, toTime: 0.12, dur: 0.15, peak: 0.14, attack: 0.002, out });
+  } else if (type === 'window_open') {
+    // a window (ritual tray, photo frame, lock) slides in: soft paper-and-wood swish
+    noiseHit(now, { dur: 0.22, peak: 0.045, filter: 'bandpass', freq: 1100, q: 0.7, attack: 0.04, out });
+    tone(now + 0.05, { type: 'sine', freq: 150, to: 95, toTime: 0.12, dur: 0.15, peak: 0.06, attack: 0.004, out });
   } else if (type === 'wiper') {
     tone(now, { type: 'triangle', freq: 195, to: 125, toTime: 0.16, dur: 0.17, peak: 0.024, attack: 0.02, out });
     noiseHit(now + 0.02, { dur: 0.14, peak: 0.032, filter: 'bandpass', freq: 620, q: 2.2, attack: 0.02, out });
@@ -1100,65 +1151,80 @@ function switchScreen(screenId) {
   else stopTitleMusic();
 }
 
-// ----------------------- Title-screen music -----------------------
-// One looping track on the main menu only (main screen, not the phones). It goes through the
-// master bus so the volume slider and mute apply, and fades out when a game or the prologue starts.
-// Browsers block sound until the first click / key, so it also starts on that first gesture.
-const titleMusic = { el: null, gain: null, wanted: false };
+// ----------------------- Music (title theme) -----------------------
+// One track, used where its dreamy / melancholic mood fits: the title menu, the funeral and
+// limbo parts of the prologue, and the dawn ending. Never under the haunted rooms: there the
+// ambience carries the fear. Main screen only, through the master bus (volume / mute apply).
+// Browsers block sound until the first click / key, so the title also retries on that gesture.
+const music = { el: null, gain: null, wanted: false, level: 0 };
 
 function isTitleActive() {
   const t = document.getElementById('title-screen');
   return !!(t && t.classList.contains('active'));
 }
 
-function startTitleMusic() {
-  if (state.started || !isTitleActive()) return;
+function setMusicLevel(level, fade = 0.6, { restart = false } = {}) {
   if (state.role === 'p1' || state.role === 'p2' || initialRoleParam) return; // phones never play it
+  if (level <= 0 && !music.el) return;
   initAudio();
   if (!audioCtx) return;
-  titleMusic.wanted = true;
-  if (!titleMusic.el) {
+  if (!music.el) {
     const el = new Audio('assets/audio/title_theme.mp3');
     el.loop = true;
     el.preload = 'auto';
-    titleMusic.el = el;
-    titleMusic.gain = audioCtx.createGain();
-    titleMusic.gain.gain.value = 0;
+    music.el = el;
+    music.gain = audioCtx.createGain();
+    music.gain.gain.value = 0;
     try {
-      audioCtx.createMediaElementSource(el).connect(titleMusic.gain);
-      titleMusic.gain.connect(audioBus.master);
+      audioCtx.createMediaElementSource(el).connect(music.gain);
+      music.gain.connect(audioBus.master);
     } catch (_) {
-      titleMusic.gain = null; // fall back to the element's own volume
+      music.gain = null; // fall back to the element's own volume
     }
   }
-  const p = titleMusic.el.play();
-  if (p && p.catch) p.catch(() => {}); // not allowed yet: the first gesture retries
-  if (titleMusic.gain) titleMusic.gain.gain.setTargetAtTime(0.9, audioCtx.currentTime, 0.6);
-  else titleMusic.el.volume = audioMuted ? 0 : audioVolume * 0.9;
+  const el = music.el;
+  music.level = level;
+  if (level > 0) {
+    music.wanted = true;
+    if (restart && (el.paused || el.currentTime > 1)) el.currentTime = 0;
+    if (el.paused) {
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {}); // not allowed yet: the next gesture retries
+    }
+  } else {
+    music.wanted = false;
+    setTimeout(() => { if (!music.wanted) el.pause(); }, fade * 4000 + 200);
+  }
+  if (music.gain) music.gain.gain.setTargetAtTime(level, audioCtx.currentTime, fade);
+  else el.volume = audioMuted ? 0 : audioVolume * level;
+}
+window.setMusicLevel = setMusicLevel;
+
+function startTitleMusic() {
+  if (state.started || !isTitleActive()) return;
+  setMusicLevel(0.9);
 }
 
 function stopTitleMusic() {
-  titleMusic.wanted = false;
-  const el = titleMusic.el;
-  if (!el || el.paused) return;
-  if (titleMusic.gain && audioCtx) {
-    titleMusic.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.35);
-    setTimeout(() => { if (!titleMusic.wanted) el.pause(); }, 1600);
-  } else {
-    el.pause();
-  }
+  setMusicLevel(0, 0.35);
 }
 
 ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => {
   window.addEventListener(ev, () => {
-    if (isTitleActive() && !state.started && (!titleMusic.el || titleMusic.el.paused)) startTitleMusic();
+    if (isTitleActive() && !state.started && (!music.el || music.el.paused)) startTitleMusic();
   }, { capture: true, passive: true });
 });
-window.addEventListener('DOMContentLoaded', () => startTitleMusic());
+window.addEventListener('DOMContentLoaded', () => {
+  startTitleMusic();
+  // title menu: a tick on hover, a thump on choosing
+  document.querySelectorAll('#title-screen .t-item').forEach((b) => {
+    b.addEventListener('mouseenter', () => playSound('ui_move'));
+    b.addEventListener('click', () => playSound('ui_select'));
+  });
+});
 
 // "Watch the prologue" on the title menu: the music steps aside, then comes back.
 function watchStoryIntro() {
-  stopTitleMusic();
   if (typeof window.playStoryIntro !== 'function') return;
   window.playStoryIntro(() => startTitleMusic());
 }
@@ -2503,6 +2569,7 @@ function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดด�
 
 function enterScene(sceneNum, startX) {
   state.scene = sceneNum;
+  if (sceneNum === 5) setMusicLevel(0.5, 1.8, { restart: true }); // out of the house: the theme returns at dawn
   setTimeout(() => showChapterCard(sceneNum), 0); // after the scene's own state is set
   setAmbientScene(sceneNum);
   state.player.x = startX;
@@ -2633,6 +2700,7 @@ function triggerEndingDialogue() {
       clearCheckpoint();
       playSound('chime');
       showEndingStats();
+      setMusicLevel(0.85, 1.2);
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
     });
@@ -2641,6 +2709,7 @@ function triggerEndingDialogue() {
 
 // ----------------------- Photo Puzzle Modal -----------------------
 function showPhotoPuzzleModal() {
+  playSound('window_open');
   const modal = document.getElementById('photo-modal');
   [1, 2, 3].forEach((num) => {
     const slot = document.getElementById(`slot-photo-${num}`);
@@ -2711,6 +2780,15 @@ function setMove(dir) {
   if (dir !== 0) state.player.dir = dir;
 }
 
+// Inside a cabinet or jar the rain and the house sound far away; the ghost (sfx bus) does not.
+let muffled = false;
+function syncHidingMuffle() {
+  const want = !!state.player.hidden;
+  if (want === muffled || !audioCtx || !audioBus.ambientFilter) return;
+  muffled = want;
+  audioBus.ambientFilter.frequency.setTargetAtTime(want ? 650 : 18000, audioCtx.currentTime, want ? 0.12 : 0.25);
+}
+
 function leaveHiding() {
   state.player.hidden = false;
   state.unhideGrace = CONFIG.UNHIDE_GRACE;
@@ -2743,12 +2821,12 @@ function toggleHide() {
   const spot = getActiveHotspot();
   if (state.player.hidden) {
     leaveHiding();
-    playSound('step');
+    playSound('hide_out');
   } else if (spot && spot.isHidingSpot) {
     state.player.hidden = true;
     state.player.flashlight = false;
     state.moveInput = 0;
-    playSound('step');
+    playSound('hide_in');
     if (state.ghost.active && !state.flags.hideHintShown) {
       state.flags.hideHintShown = true;
       showToast('กลั้นหายใจ... ห้ามเปิดไฟฉาย แล้ววิญญาณจะหาคุณไม่เจอจนหายไปในความมืด', '', 5500);
@@ -2762,7 +2840,7 @@ function toggleHide() {
 function toggleFlashlight() {
   if (isPaused()) return;
   state.player.flashlight = !state.player.flashlight;
-  playSound('step');
+  playSound('flash_click');
   broadcastState();
 }
 
@@ -2885,6 +2963,7 @@ function gameLoop(now) {
   try {
     if (state.role === 'host' && state.started) {
       updateGame(dt);
+      syncHidingMuffle();
       renderGame();
       updateObjectiveUi();
       if (!isPaused() && !state.flags.victory && !isStoryIntroOpen()) state.playTime = (state.playTime || 0) + dt;
@@ -3694,6 +3773,7 @@ function isRitualOpen() {
 }
 
 function openRitual() {
+  playSound('window_open');
   state.ritual = [];
   state.moveInput = 0;
   refreshRitualUi();
@@ -3785,6 +3865,7 @@ function isLockOpen() {
 }
 
 function openLock() {
+  playSound('window_open');
   state.lockInput = [];
   state.moveInput = 0;
   refreshLockUi();
@@ -3810,7 +3891,7 @@ function lockPress(d) {
   if (isPaused() || !isLockOpen() || !Number.isInteger(d) || d < -1 || d > 9) return;
   if (d === -1) state.lockInput.pop();
   else if (state.lockInput.length < 4) state.lockInput.push(d);
-  playSound('step', { gain: 0.4 });
+  playSound('lock_digit');
   refreshLockUi();
   broadcastState();
   if (state.lockInput.length === 4) setTimeout(checkLock, 250);
@@ -3821,7 +3902,8 @@ function checkLock() {
   if (state.lockInput.join('') === state.lockCode.join('')) {
     state.flags.cabinetUnlocked = true;
     closeLock();
-    playSound('creak');
+    playSound('lock_open');
+    setTimeout(() => playSound('creak'), 180);
     showToast('กลอนตู้ดีดออกเสียงดังกริ๊ก');
     const cabinet = getSceneHotspots(4).find((sp) => sp.id === 'hiding_cabinet_4');
     if (cabinet) cabinet.onInteract();
@@ -3829,7 +3911,7 @@ function checkLock() {
   }
   const box = document.querySelector('#lock-modal .modal-box');
   restartAnimation(box, 'shake');
-  playSound('rustle');
+  playSound('lock_wrong');
   vibrate([80, 40, 80]);
   state.lockInput = [];
   refreshLockUi();
@@ -4057,6 +4139,7 @@ function showChapterCard(scene) {
   document.getElementById('chapter-goal').textContent = currentObjective().text;
   card.classList.remove('hidden');
   restartAnimation(card, 'play');
+  playSound('gong');
   clearTimeout(showChapterCard.timer);
   showChapterCard.timer = setTimeout(() => card.classList.add('hidden'), 4200);
 }
@@ -4340,6 +4423,7 @@ function handleTitleMenuKey(e) {
     e.preventDefault();
     const next = index < 0 ? (step > 0 ? 0 : items.length - 1) : (index + step + items.length) % items.length;
     items[next].focus();
+    playSound('ui_move');
   } else if ((e.key === 'Enter' || k === 'e') && !e.repeat) {
     e.preventDefault(); // stop the browser's own Enter-click so it fires once
     // The game's window-level handler would otherwise see this same Enter/E as

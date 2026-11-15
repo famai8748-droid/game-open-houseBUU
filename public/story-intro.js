@@ -1021,6 +1021,15 @@
     }
   }
 
+  // Music under the prologue: the funeral and the drive carry the theme, it drops out just
+  // before the crash (silence, then the hit), drifts back in limbo, and leaves for the rain.
+  const MUSIC_BY_SCENE = { 0: 0.55, 1: 0.4, 2: 0, 3: 0.35, 4: 0, 5: 0 };
+  function setStoryMusic(scene, restart) {
+    if (typeof window.setMusicLevel !== 'function') return;
+    const level = MUSIC_BY_SCENE[scene] || 0;
+    window.setMusicLevel(level, scene === 2 ? 0.25 : 1.0, { restart });
+  }
+
   function enterLine(index) {
     story.idx = Math.max(0, Math.min(story.lines.length - 1, index));
     story.charShown = 0;
@@ -1032,6 +1041,7 @@
 
     const line = story.lines[story.idx];
     const speaker = resolveSpeaker(line.speaker);
+    setStoryMusic(line.scene, story.idx === 0);
 
     const tagEl = el('story-scene-tag');
     if (tagEl) tagEl.textContent = line.tag || '';
@@ -1190,6 +1200,7 @@
       story.rafId = null;
     }
     window.removeEventListener('keydown', onStoryKeyDown, true);
+    if (typeof window.setMusicLevel === 'function') window.setMusicLevel(0, 0.8);
     const root = el('story-intro');
     if (root) root.classList.add('hidden');
     const cb = story.done;
