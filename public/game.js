@@ -32,6 +32,14 @@ const CONFIG = {
   REMOTE_MOVE_TIMEOUT_MS: 650
 };
 
+// Restart a CSS animation on an element (remove the class, force a reflow, add it back).
+function restartAnimation(el, className) {
+  if (!el) return;
+  el.classList.remove(className);
+  void el.offsetWidth;
+  el.classList.add(className);
+}
+
 // An <img> that finished loading successfully (drawing a broken image throws).
 function isReady(img) {
   return !!(img && img.complete && img.naturalWidth > 0);
@@ -678,7 +686,17 @@ const SCENE_TITLES = {
   5: 'ฉากที่ 5: รุ่งอรุณหน้าประตูเรือน'
 };
 
+// Hotspot lists are read several times per frame; rebuild only when the state their
+// isHiddenClue flags depend on changes (handlers read live state when called).
+let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
+  const inv = state.inventory;
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}`;
+  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum) };
+  return hotspotCache.list;
+}
+
+function buildSceneHotspots(sceneNum) {
   if (sceneNum === 1) {
     return [
       {
@@ -924,6 +942,7 @@ function getSceneHotspots(sceneNum) {
         isHiddenClue: !state.flags.codeRead,
         onInteract: () => {
           state.flags.codeRead = true;
+          saveCheckpoint();
           queueDialogue([
             { speaker: getPlayerName(), text: `ยันต์ผืนนี้ลงเลขไทยไว้สี่ตัวด้วยหมึกแดง... ${thaiCode()} — น่าจะเป็นรหัสของตู้ไม้ที่ถูกล็อก` }
           ]);
@@ -1163,7 +1182,9 @@ const net = {
   info: null,
   hostToken: null,
   playerToken: null,
-  stateSeq: 0,
+  // Time-based so it keeps growing across a host reload + "เล่นต่อ" (the server ignores
+  // patches whose seq is not above the last one it accepted).
+  stateSeq: Date.now(),
   inFlight: false,
   lastSentJson: '',
   lastSentAt: 0,
@@ -1255,6 +1276,8 @@ function stopCoop(message) {
 }
 
 function buildStatePatch() {
+  const nearSpot = getActiveHotspot();
+  const objective = state.started ? currentObjective() : null;
   return {
     scene: state.scene,
     character: state.character,
@@ -1275,11 +1298,11 @@ function buildStatePatch() {
     support: {
       bellCooldown: Math.ceil(state.bellCooldown),
       context: hostContext(),
-      prompt: (state.started && !state.flags.cutscenePlaying && getActiveHotspot()) ? getActiveHotspot().label : '',
-      goal: state.started ? currentObjective().text : '',
+      prompt: (state.started && !state.flags.cutscenePlaying && nearSpot) ? nearSpot.label : '',
+      goal: objective ? objective.text : '',
       code: state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : '',
       lockInput: isLockOpen() ? lockDisplay() : '',
-      target: state.started ? (currentObjective().target || '') : ''
+      target: objective ? (objective.target || '') : ''
     }
   };
 }
@@ -2046,9 +2069,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
     renderCutsceneFrame(off.getContext('2d'), prefix, idx);
     layers.prev = layers.cur;
     layers.cur = { canvas: off, start: performance.now(), pan: step % 2 ? -1 : 1 };
-    captionEl.classList.remove('caption-in');
-    void captionEl.offsetWidth;
-    captionEl.classList.add('caption-in');
+    restartAnimation(captionEl, 'caption-in');
     captionEl.textContent = String(frameCaptions[idx] || '').replace(/^เฟรม\s*\d+\s*\/\s*\d+\s*:\s*/, '');
     if (step === 0) playSound('creak');
     if (idx === 3 && order.length > 2) playSound('chime');
@@ -2110,9 +2131,7 @@ function playDoorTransition(seen, captionText, onComplete) {
     for (let i = 0; i < beats.length; i++) if (t >= beats[i][0]) next = i;
     if (next === captionStep) return;
     captionStep = next;
-    captionEl.classList.remove('caption-in');
-    void captionEl.offsetWidth;
-    captionEl.classList.add('caption-in');
+    restartAnimation(captionEl, 'caption-in');
     captionEl.textContent = beats[next][1];
   }
 
@@ -2524,7 +2543,7 @@ function placePhotoPiece(num) {
 // ----------------------- Controls & Actions -----------------------
 function setMove(dir) {
   // Stopping is always allowed; starting to walk is not while something is on screen.
-  if (dir !== 0 && (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen())) return;
+  if (dir !== 0 && isWorldFrozen()) return;
   if (state.player.hidden && dir !== 0) leaveHiding(); // stepping out of hiding
   state.moveInput = dir;
   if (dir !== 0) state.player.dir = dir;
@@ -2557,7 +2576,7 @@ function triggerInteract() {
 }
 
 function toggleHide() {
-  if (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen()) return;
+  if (isWorldFrozen()) return;
   const spot = getActiveHotspot();
   if (state.player.hidden) {
     leaveHiding();
@@ -2642,12 +2661,14 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (isLockOpen()) {
+    if (e.repeat) return;
     if (/^[0-9]$/.test(e.key)) lockPress(Number(e.key));
     else if (e.key === 'Backspace') lockPress(-1);
     else if (e.key === 'Escape') closeLock();
     return;
   }
   if (isRitualOpen()) {
+    if (e.repeat) return;
     const pick = { 1: 'incense', 2: 'garland', 3: 'dessert' }[e.key];
     if (pick) offerItem(pick);
     else if (e.key === 'Escape') closeRitual();
@@ -2757,7 +2778,8 @@ function updateGame(dt) {
 
   // Ghost AI (Scenes 3 & 4)
   if (state.ghost.active) {
-    if (!paused && !state.flags.cutscenePlaying) updateGhost(dt);
+    // the ghost also holds still during a scripted blackout: no deaths you cannot see coming
+    if (!paused && !state.flags.cutscenePlaying && performance.now() >= fx.blackoutUntil) updateGhost(dt);
   } else {
     state.ghost.alertLevel = 5;
     document.getElementById('danger-overlay').classList.add('hidden');
@@ -2770,6 +2792,7 @@ function updateGhost(dt) {
   const hiddenSafe = p.hidden && !p.flashlight;
   let speed = CONFIG.GHOST_SPEED[g.type] || 100;
   if (p.sixthSense) speed *= CONFIG.SIXTH_SENSE_GHOST_MULT;
+  g.frozen = false; // set again below only while the beam pins her this frame
 
   if (g.stunTimer > 0) {
     g.stunTimer = Math.max(0, g.stunTimer - dt);
@@ -2808,7 +2831,6 @@ function updateGhost(dt) {
     g.phase = 'chase'; // spotted you (or you came out): resume the hunt
     const dist = p.x - g.x;
     g.dir = dist >= 0 ? 1 : -1;
-    g.frozen = false;
     if (g.type === 'dancer') {
       if (isGhostInBeam()) {
         g.frozen = true; // pinned by the light
@@ -2875,11 +2897,10 @@ function triggerGameOver() {
     if (state.flags.gameOver) document.getElementById('gameover-modal').classList.remove('hidden');
   } else {
     document.getElementById('jumpscare-face').src = faceSrc;
-    js.classList.remove('hidden', 'play', 'soft');
-    void js.offsetWidth; // restart the CSS animation
     const soft = settings.jumpscare === 'soft';
-    if (soft) js.classList.add('soft');
-    js.classList.add('play');
+    js.classList.remove('hidden');
+    js.classList.toggle('soft', soft);
+    restartAnimation(js, 'play');
     setTimeout(() => {
       js.classList.add('hidden');
       js.classList.remove('play', 'soft');
@@ -3424,7 +3445,8 @@ function isGhostInBeam() {
 // around (never deliberately onto a player who is standing still).
 function moveBlindGhost(g, p, speed, dt) {
   const now = performance.now();
-  const walking = state.moveInput !== 0 && !p.hidden;
+  const againstWall = (p.x <= 80 && state.moveInput < 0) || (p.x >= 1200 && state.moveInput > 0);
+  const walking = state.moveInput !== 0 && !p.hidden && !againstWall;
   if (walking) {
     g.heardX = p.x;
     g.heardAt = now;
@@ -3516,7 +3538,7 @@ function refreshRitualUi() {
 }
 
 function offerItem(item) {
-  if (!isRitualOpen() || !OFFER_NAMES[item] || state.ritual.includes(item) || !state.inventory.offerings.includes(item)) return;
+  if (isPaused() || !isRitualOpen() || !OFFER_NAMES[item] || state.ritual.includes(item) || !state.inventory.offerings.includes(item)) return;
   const expected = RITUAL_ORDER[state.ritual.length];
   if (item === expected) {
     state.ritual.push(item);
@@ -3532,11 +3554,7 @@ function offerItem(item) {
   playSound('scare', { gain: 0.45 });
   vibrate([120, 60, 120]);
   const box = document.querySelector('#ritual-modal .modal-box');
-  if (box) {
-    box.classList.remove('shake');
-    void box.offsetWidth;
-    box.classList.add('shake');
-  }
+  restartAnimation(box, 'shake');
   angerDancer();
   showToast(`ผิดธรรมเนียม! ของเซ่นร่วงกระจาย... ต้องวาง${OFFER_NAMES[expected]}ก่อน`, 'warn', 4200);
   broadcastState();
@@ -3608,7 +3626,7 @@ function refreshLockUi() {
 }
 
 function lockPress(d) {
-  if (!isLockOpen() || !Number.isInteger(d) || d < -1 || d > 9) return;
+  if (isPaused() || !isLockOpen() || !Number.isInteger(d) || d < -1 || d > 9) return;
   if (d === -1) state.lockInput.pop();
   else if (state.lockInput.length < 4) state.lockInput.push(d);
   playSound('step', { gain: 0.4 });
@@ -3629,11 +3647,7 @@ function checkLock() {
     return;
   }
   const box = document.querySelector('#lock-modal .modal-box');
-  if (box) {
-    box.classList.remove('shake');
-    void box.offsetWidth;
-    box.classList.add('shake');
-  }
+  restartAnimation(box, 'shake');
   playSound('rustle');
   vibrate([80, 40, 80]);
   state.lockInput = [];
@@ -3644,6 +3658,11 @@ function checkLock() {
 
 function isOverlayOpen() {
   return isPhotoModalOpen() || isRitualOpen() || isLockOpen();
+}
+
+// Nothing in the room moves or reacts: used by every input path and the pause menu.
+function isWorldFrozen() {
+  return isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen();
 }
 
 // ---- Timer, ranks and the booth's hall of fame ----------------------------------------
@@ -3805,9 +3824,7 @@ function updateObjectiveUi() {
     lastObjectiveText = obj.text;
     objectiveSince = performance.now();
     document.getElementById('objective-text').textContent = obj.text;
-    bar.classList.remove('obj-new');
-    void bar.offsetWidth; // restart the "new objective" glow
-    bar.classList.add('obj-new');
+    restartAnimation(bar, 'obj-new');
   }
 }
 
@@ -3852,9 +3869,8 @@ function showChapterCard(scene) {
   if (!card) return;
   document.getElementById('chapter-title').textContent = CHAPTERS[scene];
   document.getElementById('chapter-goal').textContent = '🎯 ' + currentObjective().text;
-  card.classList.remove('hidden', 'play');
-  void card.offsetWidth;
-  card.classList.add('play');
+  card.classList.remove('hidden');
+  restartAnimation(card, 'play');
   clearTimeout(showChapterCard.timer);
   showChapterCard.timer = setTimeout(() => card.classList.add('hidden'), 4200);
 }
@@ -4108,7 +4124,7 @@ function isPaused() {
 function openPause() {
   if (state.role !== 'host') return;
   if (!state.started) return;
-  if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory || isPhotoModalOpen() || isDialogueOpen()) return;
+  if (state.flags.victory || isWorldFrozen()) return; // no pausing on top of another window
   state.paused = true;
   state.moveInput = 0;
   net.remoteMoving = false;
