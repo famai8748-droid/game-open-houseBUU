@@ -1855,3 +1855,203 @@ body,
     animation: none;
   }
 }
+
+
+/* ======================== Ritual, lock, ranks, hall of fame ======================== */
+.ritual-box,
+.lock-box {
+  max-width: 520px;
+}
+
+.ritual-slots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.ritual-slots span {
+  padding: 10px 4px;
+  border-radius: 8px;
+  border: 1px dashed rgba(235, 185, 99, 0.5);
+  color: #8f8474;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 18px;
+}
+
+.ritual-slots span.filled {
+  border-style: solid;
+  color: #f5d393;
+  background: rgba(235, 185, 99, 0.12);
+  font-family: 'Sarabun', sans-serif;
+  font-size: 15px;
+}
+
+.ritual-items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ritual-items button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #231f2e;
+  color: #eee3ce;
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ritual-items img {
+  height: 56px;
+  image-rendering: pixelated;
+}
+
+.lock-display {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 34px;
+  letter-spacing: 6px;
+  color: #ffd36b;
+  margin: 10px 0 14px;
+}
+
+.lock-keys,
+.p1-panel-grid.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.lock-keys button,
+.p1-panel-grid button {
+  padding: 12px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #231f2e;
+  color: #f6ead2;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-box.shake {
+  animation: boxShake 0.4s;
+}
+
+@keyframes boxShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  40% { transform: translateX(9px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(4px); }
+}
+
+.p1-panel {
+  margin: 10px 12px 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(235, 185, 99, 0.55);
+  background: rgba(24, 21, 34, 0.95);
+  text-align: center;
+}
+
+.p1-panel-title {
+  color: #f5d393;
+  font-weight: 700;
+  margin-bottom: 10px;
+  font-size: 15px;
+}
+
+.p1-panel-grid.three {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.p1-panel-grid.three button {
+  font-size: 17px;
+  padding: 22px 4px;
+}
+
+.ending-stats {
+  margin: 12px 0;
+}
+
+.ending-rank {
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #ffd36b;
+}
+
+.ending-meta {
+  color: #cfc3ad;
+  font-size: 15px;
+  margin-top: 4px;
+}
+
+.hof-entry {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.hof-entry input {
+  background: #100e14;
+  border: 1px solid rgba(217, 184, 130, 0.4);
+  color: #f3e5c8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 15px;
+  width: min(240px, 60vw);
+}
+
+.hof-list,
+.title-hof {
+  margin: 10px auto 14px;
+  max-width: 360px;
+  text-align: left;
+}
+
+.hof-title {
+  text-align: center;
+  color: #ebb963;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.hof-list ol,
+.title-hof ol {
+  margin: 0;
+  padding-left: 22px;
+  color: #eee3ce;
+}
+
+.hof-list li,
+.title-hof li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.hof-list li.me {
+  color: #ffd36b;
+  font-weight: 700;
+}
+
+.hof-meta {
+  color: #9e917d;
+  font-size: 13px;
+  white-space: nowrap;
+}

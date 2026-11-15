@@ -18,6 +18,9 @@ const CONFIG = {
   GHOST_VANISH_TIME: 1.2,       // ...then fades away...
   GHOST_FADE_IN_TIME: 1.0,      // ...and slowly re-forms off-screen, away from you
   GHOST_REENTER_MARGIN: 70,
+  DANCER_UNSEEN_MULT: 1.35,     // the dancer moves faster when nobody is looking at her
+  SAMPHAWESI_HEAR_SPEED: 105,   // ...the blind samphawesi rushes toward footsteps
+  SAMPHAWESI_WANDER_SPEED: 38,  // ...and drifts slowly when it hears nothing
   BELL_STUN: 4.0,
   BELL_COOLDOWN: 12,
   PULSE_DURATION: 3.5,
@@ -657,6 +660,11 @@ const state = {
   remoteBellCooldown: 0, // same value as seen by the P2 phone
   revealTimer: 0,        // P2's sixth-sense pulse (reveals hotspots, no ghost penalty)
   seenDoors: new Set(),  // doorway transitions already shown in full
+  lockCode: makeLockCode(), // the scene-4 cabinet code (Thai numerals on the wall / P2's phone)
+  lockInput: [],
+  ritual: [],            // offerings placed so far, in order
+  playTime: 0,           // seconds played (pause excluded) for the end-of-game rank
+  deaths: 0,
   unhideGrace: 0,
   dialogueQueue: []
 };
@@ -779,7 +787,10 @@ function getSceneHotspots(sceneNum) {
               { speaker: getPlayerName(), text: 'พวงมาลัยดอกไม้แห้งกรอบวางอยู่ข้างตะเกียง... กลิ่นยังหอมเหมือนเพิ่งร้อยเมื่อวาน (1/3)' },
               { speaker: 'เสียงปริศนา', text: 'กุกกัก... กุกกัก... (เหมือนเล็บยาวๆ ขูดอยู่หลังบานประตูฝั่งขวา)' },
               { speaker: getPlayerName(), text: 'มีบางอย่างอยู่ข้างในจริงๆ... แต่ทำไมเสียงนั้นเหมือนดังจากในกำแพง มากกว่าจากห้องถัดไป' }
-            ]);
+            ], () => {
+              // scare: the lamp dies, a face presses against the moonlit window, then it's gone
+              triggerBlackout(1700, { img: 'samAnim0', x: 990, bottom: 470, h: 170, at: 1000, dur: 380 });
+            });
             playSound('rustle');
           } else {
             queueDialogue([
@@ -889,6 +900,10 @@ function getSceneHotspots(sceneNum) {
         label: 'ตู้ไม้สัก (ซ่อนตัวหนีผีนางรำ [Q])',
         isHidingSpot: true,
         onInteract: () => {
+          if (!state.inventory.offerings.includes('dessert') && !state.flags.cabinetUnlocked) {
+            openLock(); // locked with the code written on the yantra
+            return;
+          }
           if (!state.inventory.offerings.includes('dessert')) {
             state.inventory.offerings.push('dessert');
             playSound('pickup');
@@ -899,6 +914,19 @@ function getSceneHotspots(sceneNum) {
           } else {
             toggleHide();
           }
+        }
+      },
+      {
+        id: 'yantra_code',
+        x: 520,
+        width: 90,
+        label: 'ยันต์ลงอักขระบนผนัง (อ่านรหัส)',
+        isHiddenClue: !state.flags.codeRead,
+        onInteract: () => {
+          state.flags.codeRead = true;
+          queueDialogue([
+            { speaker: getPlayerName(), text: `ยันต์ผืนนี้ลงเลขไทยไว้สี่ตัวด้วยหมึกแดง... ${thaiCode()} — น่าจะเป็นรหัสของตู้ไม้ที่ถูกล็อก` }
+          ]);
         }
       },
       {
@@ -914,7 +942,11 @@ function getSceneHotspots(sceneNum) {
             updateHud();
             queueDialogue([
               { speaker: getPlayerName(), text: 'เศษรูปชิ้นสุดท้ายซ่อนใต้ฐานหิ้งบูชา... ครบสามชิ้นแล้ว แต่มือผมสั่นกว่าที่คิด' }
-            ]);
+            ], () => {
+              // scare: the altar candle gutters out and the ankle bells ring right behind you
+              triggerBlackout(1100);
+              playSound('chime', { gain: 1.4, pan: -state.player.dir * 0.9 });
+            });
             return;
           }
 
@@ -926,18 +958,7 @@ function getSceneHotspots(sceneNum) {
           }
 
           if (!state.flags.offeringsPlaced) {
-            state.flags.offeringsPlaced = true;
-            playSound('chime');
-            updateHud();
-            queueDialogue([
-              { speaker: getPlayerName(), text: 'ผมวางพวงมาลัย ธูปเทียน และพานขนมลงกระทง... กลิ่นธูปม้วนขึ้นมาเองทั้งที่ไม่มีลม ขอให้ดวงวิญญาณในเรือนนี้ได้ไปเสียที' },
-              state.flags.photosRestored
-                ? { speaker: getPlayerName(), text: 'ของเซ่นครบ รูปก็ครบ... เสียงกระพรวนเงียบลงแล้ว ขอให้ท่านไปสู่สุคติ' }
-                : { speaker: getPlayerName(), text: 'เหลือเพียงเศษรูปอีกสามชิ้น... ประตูหลังเรือนยังไม่ยอมเปิด' }
-            ], () => {
-              if (!state.flags.photosRestored) showPhotoPuzzleModal();
-              else checkRitualComplete();
-            });
+            openRitual(); // place the offerings one by one, in the right order
           } else if (!state.flags.photosRestored) {
             showPhotoPuzzleModal();
           } else {
@@ -1256,6 +1277,8 @@ function buildStatePatch() {
       context: hostContext(),
       prompt: (state.started && !state.flags.cutscenePlaying && getActiveHotspot()) ? getActiveHotspot().label : '',
       goal: state.started ? currentObjective().text : '',
+      code: state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : '',
+      lockInput: isLockOpen() ? lockDisplay() : '',
       target: state.started ? (currentObjective().target || '') : ''
     }
   };
@@ -1268,6 +1291,8 @@ function hostContext() {
   if (state.flags.victory) return 'victory';
   if (state.flags.gameOver) return 'gameover';
   if (state.flags.cutscenePlaying) return 'cutscene';
+  if (isRitualOpen()) return 'ritual';
+  if (isLockOpen()) return 'lock';
   if (isPhotoModalOpen()) return 'puzzle';
   if (isDialogueOpen()) return 'dialogue';
   return 'play';
@@ -1348,6 +1373,8 @@ function handleIncomingRemoteInput({ action, value, seq }) {
     }
     return;
   }
+  if (action === 'offer') return offerItem(value);
+  if (action === 'digit') return lockPress(value);
   if (action === 'interact') triggerInteract();
   if (action === 'hide') toggleHide();
   if (action === 'flashlight') toggleFlashlight();
@@ -1489,6 +1516,8 @@ function updatePhoneButtons(room) {
   const prompt = String(support.prompt || '').replace(/\s*\[[^\]]*\]/g, '').trim();
   const labels = {
     title: '⏳ รอจอกลางเริ่มเกม',
+    ritual: '🕯️ เลือกของที่จะวางด้านล่าง',
+    lock: '🔒 ใส่รหัสด้านล่าง',
     paused: '⏸ จอกลางพักเกมอยู่',
     dialogue: '▶ ไปต่อ (อ่านบทพูดบนจอกลาง)',
     cutscene: '⏭ ข้ามฉาก',
@@ -1499,6 +1528,16 @@ function updatePhoneButtons(room) {
   };
   const ib = document.getElementById('p1-btn-interact');
   if (ib) ib.textContent = labels[support.context] || labels.play;
+  // ritual / lock: swap the pad for the matching buttons
+  const ritualPanel = document.getElementById('p1-ritual');
+  const lockPanel = document.getElementById('p1-lock');
+  const pad = document.querySelector('#p1-screen .p1-pad-layout');
+  const mode = support.context === 'ritual' ? 'ritual' : support.context === 'lock' ? 'lock' : '';
+  if (ritualPanel) ritualPanel.classList.toggle('hidden', mode !== 'ritual');
+  if (lockPanel) lockPanel.classList.toggle('hidden', mode !== 'lock');
+  if (pad) pad.classList.toggle('hidden', !!mode);
+  const ld = document.getElementById('p1-lock-display');
+  if (ld) ld.textContent = support.lockInput || '_ _ _ _';
   const hb = document.getElementById('p1-btn-hide');
   if (hb) hb.textContent = state.player.hidden ? '🚪 ออกจากที่ซ่อน' : '🏺 ซ่อนตัวในตู้/ตุ่ม';
 }
@@ -1601,7 +1640,10 @@ function saveCheckpoint() {
     inventory: state.inventory,
     flags,
     roomCode: state.roomCode,
-    hostToken: net.hostToken
+    hostToken: net.hostToken,
+    lockCode: state.lockCode,
+    playTime: Math.round(state.playTime || 0),
+    deaths: state.deaths || 0
   };
   try { sessionStorage.setItem(CHECKPOINT_KEY, JSON.stringify(data)); } catch (_) {}
 }
@@ -1634,6 +1676,9 @@ async function resumeFromCheckpoint() {
     placedPhotos: [...(inv.placedPhotos || [])]
   };
   Object.assign(state.flags, cp.flags || {});
+  if (Array.isArray(cp.lockCode) && cp.lockCode.length === 4) state.lockCode = cp.lockCode;
+  state.playTime = Number(cp.playTime) || 0;
+  state.deaths = Number(cp.deaths) || 0;
   switchScreen('game-screen');
   if (cp.roomCode && cp.hostToken) {
     await getServerInfo();
@@ -2290,7 +2335,7 @@ function enterScene(sceneNum, startX) {
     queueDialogue([
       { speaker: getPlayerName(), text: 'เข้ามาแล้ว... แต่ในเรือนกลับหนาวกว่าข้างนอก ไฟที่เห็นจากนอกหน้าต่างก็ดับไปแล้ว' },
       { speaker: getPlayerName(), text: 'รูปบนผนัง โต๊ะ ตู้ไม้... ทุกอย่างถูกจัดวางเหมือนรอให้ผมเดินไปแตะ' },
-      { speaker: 'เสียงกระซิบจากผนัง', text: 'อยากออกไป... ก็คืนสิ่งที่เรือนนี้ขาดไปให้ครบ — ของเซ่นไหว้สามอย่าง กับใบหน้าสามชิ้นที่ถูกฉีกออกจากรูป' },
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'อยากออกไป... ก็คืนสิ่งที่เรือนนี้ขาดไปให้ครบ — ของเซ่นไหว้สามอย่าง กับใบหน้าสามชิ้นที่ถูกฉีกออกจากรูป' },
       { speaker: getPlayerName(), text: 'ของเซ่นไหว้ 3 ชิ้น กับเศษรูป 3 ชิ้น... หาให้ครบแล้วนำไปที่หิ้งบูชา ประตูหลังเรือนถึงจะเปิดให้ผมออกไป' }
     ]);
   } else if (sceneNum === 3) {
@@ -2313,7 +2358,8 @@ function enterScene(sceneNum, startX) {
       state.flags.visited4 = true;
       queueDialogue([
         { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... กริ๊ง... (ช้าๆ เหมือนมีคนเต้นรำอยู่ในความมืด ทั้งที่พื้นไม่สั่นเลย)' },
-        { speaker: getPlayerName(), text: 'ผีนางรำ... เธอไม่วิ่ง แต่ทุกครั้งที่ผมกะพริบตา เธอใกล้ขึ้นอีกก้าว รีบหาของเซ่นให้ครบแล้วซ่อนในตู้ไม้!' }
+        { speaker: getPlayerName(), text: 'ผีนางรำ... เธอไม่วิ่ง แต่ทุกครั้งที่ผมกะพริบตา เธอใกล้ขึ้นอีกก้าว รีบหาของเซ่นให้ครบแล้วซ่อนในตู้ไม้!' },
+        { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'เธอจะขยับได้ก็ต่อเมื่อไม่มีใครมอง... หันไฟฉายใส่เธอไว้ แล้วค่อยๆ ทำสิ่งที่ต้องทำ' }
       ]);
     }
   } else if (sceneNum === 5) {
@@ -2374,6 +2420,9 @@ function triggerSamphawesiEncounter() {
     resetGhost(780);
     state.ghost.stunTimer = 1.5; // it is still rising: give the player a moment to run
     playTension();
+    queueDialogue([
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ชู่ว์... มันมองไม่เห็น มันฟังเสียงฝีเท้า — ถ้ามันเข้ามาใกล้ หยุดเดินแล้วยืนนิ่งไว้' }
+    ]);
     broadcastState();
   });
 }
@@ -2385,7 +2434,10 @@ function triggerEndingDialogue() {
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ปลอดภัยแล้ว อยู่ที่โรงพยาบาล... แต่เอ็งน่ะ ตอนรถคว่ำดวงจิตหลุดออกจากร่าง ก่อนที่หมอจะได้พูดคำว่า "ช่วยไม่ได้"' },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ข้าจะพาเอ็งกลับเข้าร่าง... แต่ต้องแลกด้วยสัญญา เอ็งต้องไปที่หนึ่งให้ได้ ไม่อย่างนั้น มันจะดึงเอ็งกลับมาทุกคืน' },
     { speaker: getPlayerName(), text: 'ที่ไหนครับ... ผมสัญญา' },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' }
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' },
+    { speaker: getPlayerName(), text: 'คุณลุงครับ... แล้วเสียงกระซิบที่คอยบอกทางผมตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน' },
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ก็เพื่อนเอ็งไง... คนที่เอ็งเพิ่งไปงานศพมาเมื่อหัวค่ำ มันเดินตามเอ็งมาตลอดทาง ไม่ยอมให้เอ็งหลงอยู่ที่นี่' },
+    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' }
   ], () => {
     const endCaptions = [
       'เฟรม 1/6 : เศษรูปทั้งสามประสานกันในกรอบไม้... ภาพสุดท้ายคือใบหน้าของคุณเองที่ยังหลับตาบนเตียงโรงพยาบาล',
@@ -2399,6 +2451,7 @@ function triggerEndingDialogue() {
       state.flags.victory = true;
       clearCheckpoint();
       playSound('chime');
+      showEndingStats();
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
     });
@@ -2471,7 +2524,7 @@ function placePhotoPiece(num) {
 // ----------------------- Controls & Actions -----------------------
 function setMove(dir) {
   // Stopping is always allowed; starting to walk is not while something is on screen.
-  if (dir !== 0 && (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen())) return;
+  if (dir !== 0 && (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen())) return;
   if (state.player.hidden && dir !== 0) leaveHiding(); // stepping out of hiding
   state.moveInput = dir;
   if (dir !== 0) state.player.dir = dir;
@@ -2492,6 +2545,7 @@ function triggerInteract() {
     return;
   }
   if (isPhotoModalOpen()) return placeNextPhotoPiece();
+  if (isRitualOpen() || isLockOpen()) return; // these take their own buttons (or the phone's)
   if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
     advanceDialogue();
     return;
@@ -2503,7 +2557,7 @@ function triggerInteract() {
 }
 
 function toggleHide() {
-  if (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isPhotoModalOpen()) return;
+  if (isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen()) return;
   const spot = getActiveHotspot();
   if (state.player.hidden) {
     leaveHiding();
@@ -2587,6 +2641,18 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closePause(); // Esc again resumes; every other key is ignored while paused
     return;
   }
+  if (isLockOpen()) {
+    if (/^[0-9]$/.test(e.key)) lockPress(Number(e.key));
+    else if (e.key === 'Backspace') lockPress(-1);
+    else if (e.key === 'Escape') closeLock();
+    return;
+  }
+  if (isRitualOpen()) {
+    const pick = { 1: 'incense', 2: 'garland', 3: 'dessert' }[e.key];
+    if (pick) offerItem(pick);
+    else if (e.key === 'Escape') closeRitual();
+    return;
+  }
   const k = e.key.toLowerCase();
   if (k === 'a' || e.key === 'ArrowLeft') setMove(-1);
   if (k === 'd' || e.key === 'ArrowRight') setMove(1);
@@ -2637,6 +2703,7 @@ function gameLoop(now) {
       updateGame(dt);
       renderGame();
       updateObjectiveUi();
+      if (!isPaused() && !state.flags.victory) state.playTime = (state.playTime || 0) + dt;
     }
   } catch (err) {
     console.error('[gameLoop]', err); // never let one bad frame freeze the game
@@ -2651,7 +2718,7 @@ function updateGame(dt) {
   if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory) return;
 
   const dialogueOpen = isDialogueOpen();
-  const paused = dialogueOpen || isPhotoModalOpen(); // conversations and the photo puzzle freeze the world
+  const paused = dialogueOpen || isOverlayOpen(); // conversations and the puzzle / ritual / lock windows freeze the world
 
   if (!paused) {
     state.bellCooldown = Math.max(0, state.bellCooldown - dt);
@@ -2741,7 +2808,20 @@ function updateGhost(dt) {
     g.phase = 'chase'; // spotted you (or you came out): resume the hunt
     const dist = p.x - g.x;
     g.dir = dist >= 0 ? 1 : -1;
-    g.x += Math.sign(dist) * speed * dt;
+    g.frozen = false;
+    if (g.type === 'dancer') {
+      if (isGhostInBeam()) {
+        g.frozen = true; // pinned by the light
+        if (!state.flags.tipDancerFrozen) {
+          state.flags.tipDancerFrozen = true;
+          showToast('🔦 ผีนางรำหยุดนิ่งเมื่อถูกไฟฉายส่อง... อย่าหันหลังให้เธอ', '', 5000);
+        }
+      } else {
+        g.x += Math.sign(dist) * speed * CONFIG.DANCER_UNSEEN_MULT * dt;
+      }
+    } else {
+      moveBlindGhost(g, p, speed, dt);
+    }
   }
   if (g.phase === 'chase' || g.phase === 'lurk') g.alpha = Math.min(1, g.alpha + dt / CONFIG.GHOST_FADE_IN_TIME);
 
@@ -2781,7 +2861,10 @@ function triggerGameOver() {
   state.gameOverAt = performance.now();
   state.moveInput = 0;
   net.remoteMoving = false;
+  state.deaths = (state.deaths || 0) + 1;
   closePhotoPuzzleModal();
+  if (isRitualOpen()) closeRitual();
+  if (isLockOpen()) closeLock();
   duckAmbient(true);
   playSound('scare');
   const faceSrc = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
@@ -2945,8 +3028,9 @@ function drawGhost() {
   const stunned = g.stunTimer > 0;
   const filter = stunned ? 'brightness(1.7) hue-rotate(120deg)' : null;
   const dist = Math.abs(g.x - state.player.x);
+  const tremble = g.frozen && !REDUCED_MOTION ? (Math.random() - 0.5) * 3 : 0;
 
-  if (!stunned && g.phase === 'chase' && !REDUCED_MOTION) {
+  if (!stunned && !g.frozen && g.phase === 'chase' && !REDUCED_MOTION) {
     if (now - ghostTrailAt > 70) {
       ghostTrailAt = now;
       ghostTrail.push({ img: gImg, x: g.x, y: 612 + bob, flip: g.dir === 1, rot: sway });
@@ -2964,7 +3048,7 @@ function drawGhost() {
   }
   const glitch = now < ghostGlitchUntil && !stunned;
   if (g.alpha > 0.05) drawGroundShadow(g.x, 610, 68, 14, 0.6 * g.alpha);
-  drawGhostSprite(gImg, g.x, 612 + bob, 245, g.dir === 1, filter, g.alpha, sway, glitch);
+  drawGhostSprite(gImg, g.x + tremble, 612 + bob, 245, g.dir === 1, filter, g.alpha, g.frozen ? 0 : sway, glitch);
 }
 
 function drawGhostSprite(img, x, bottomY, h, flip, filter, alpha, rot = 0, glitch = false) {
@@ -3020,6 +3104,14 @@ function drawSceneProps() {
     drawGroundShadow(640, 445, 60, 10, 0.45);
     drawSpriteProportional(IMAGES.altar, 640, 440, 145);
     drawSpriteProportional(IMAGES.talisman, 1085, 395, 85);
+    // the code yantra: red Thai numerals, only legible in the flashlight / sixth sense
+    drawSpriteProportional(IMAGES.talisman, 520, 470, 64); // hung low enough for the flashlight beam to reach
+    ctx.save();
+    ctx.font = 'bold 24px Sarabun';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#d23a2a';
+    ctx.fillText(thaiCode(), 520, 500);
+    ctx.restore();
 
     if (state.flags.offeringsPlaced) {
       drawGroundShadow(640, 610, 58, 12, 0.6);
@@ -3203,7 +3295,12 @@ function renderPostFx() {
 
   // Lightning in the forest, thunder a moment later
   if (state.scene === 1 && sceneOn) {
+    if (!state.flags.scareFigure && state.player.x > 520 && lightning.next - now > 1500) lightning.next = now + 400;
     if (now > lightning.next) {
+      if (!state.flags.scareFigure && state.player.x > 520) {
+        state.flags.scareFigure = true;
+        lightning.figure = true;
+      }
       lightning.start = now;
       lightning.next = now + 9000 + Math.random() * 11000;
       setTimeout(() => { if (state.scene === 1) playSound('thunder', { pan: Math.random() * 1.2 - 0.6 }); }, 500 + Math.random() * 1100);
@@ -3216,7 +3313,14 @@ function renderPostFx() {
       ctx.fillRect(0, 0, 1280, 720);
       ctx.restore();
     }
+    if (lightning.figure) {
+      // someone standing in the doorway of the house... only while the sky is lit
+      if (a > 0.12) drawSpriteProportional(IMAGES.dancerAnim1, 1010, 392, 140, true, 'brightness(0)', 0.85);
+      if (now - lightning.start > 900) lightning.figure = false;
+    }
   }
+
+  renderScareFx(now);
 
   // Low fog drifting along the floor
   if (state.scene <= 4) {
@@ -3299,6 +3403,342 @@ function renderHotspotIndicators() {
 // ----------------------- Mobile P2 Sixth-Sense Radar Renderer -----------------------
 let lastRadarDraw = 0;
 
+
+// =====================================================================================
+// Fun pass: ghost rules, scripted scares, offering ritual, co-op lock, timer & ranks
+// =====================================================================================
+
+// ---- Ghost rules ------------------------------------------------------------------
+// Dancer: only moves while nobody is looking. A flashlight beam on her pins her in place.
+function isGhostInBeam() {
+  const p = state.player;
+  const g = state.ghost;
+  if (!p.flashlight || p.hidden) return false;
+  const now = performance.now();
+  if (now < flashlightDropUntil || now < fx.blackoutUntil) return false;
+  const dx = g.x - p.x;
+  return Math.sign(dx) === p.dir && Math.abs(dx) < 520;
+}
+
+// Samphawesi: blind, follows footsteps. Standing still makes it lose you; it then drifts
+// around (never deliberately onto a player who is standing still).
+function moveBlindGhost(g, p, speed, dt) {
+  const now = performance.now();
+  const walking = state.moveInput !== 0 && !p.hidden;
+  if (walking) {
+    g.heardX = p.x;
+    g.heardAt = now;
+  }
+  if (g.heardAt && now - g.heardAt < 600) {
+    const dx = g.heardX - g.x;
+    g.dir = dx >= 0 ? 1 : -1;
+    // after the footsteps stop it only carries on to just short of where they were,
+    // so "stand still when it's close" really is safe
+    if (!walking && Math.abs(dx) < 90) return;
+    g.x += Math.sign(dx) * Math.min(Math.abs(dx), CONFIG.SAMPHAWESI_HEAR_SPEED * (speed / CONFIG.GHOST_SPEED.samphawesi) * dt);
+    return;
+  }
+  g.wanderTimer = (g.wanderTimer || 0) - dt;
+  if (g.wanderTimer <= 0 || g.wanderX == null) {
+    g.wanderTimer = 1.6 + Math.random() * 1.6;
+    let target = g.x + (Math.random() - 0.5) * 320;
+    if (Math.abs(target - p.x) < 140) target = p.x + Math.sign(g.x - p.x || 1) * 180; // sniff, then turn away
+    g.wanderX = Math.max(40, Math.min(1240, target));
+  }
+  const wx = g.wanderX - g.x;
+  if (Math.abs(wx) > 4) {
+    g.dir = wx >= 0 ? 1 : -1;
+    g.x += Math.sign(wx) * CONFIG.SAMPHAWESI_WANDER_SPEED * dt;
+  }
+}
+
+// ---- Scripted scares ----------------------------------------------------------------
+const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null };
+
+function triggerBlackout(ms, appear = null) {
+  const now = performance.now();
+  fx.blackoutStart = now;
+  fx.blackoutUntil = now + ms;
+  fx.appear = appear ? { ...appear, from: now + appear.at, to: now + appear.at + appear.dur, played: false } : null;
+  playSound('whisper', { gain: 1 });
+}
+
+function renderScareFx(now) {
+  if (now >= fx.blackoutUntil) return;
+  const left = fx.blackoutUntil - now;
+  ctx.save();
+  ctx.fillStyle = `rgba(0, 0, 0, ${left < 300 ? 0.94 * (left / 300) : 0.94})`;
+  ctx.fillRect(0, 0, 1280, 720);
+  const ap = fx.appear;
+  if (ap && now >= ap.from && now <= ap.to) {
+    if (!ap.played) {
+      ap.played = true;
+      playSound('tension');
+    }
+    drawSpriteProportional(IMAGES[ap.img], ap.x, ap.bottom, ap.h, !!ap.flip, 'brightness(0.65) contrast(1.4)', 0.85);
+  }
+  ctx.restore();
+}
+
+// ---- Offering ritual (order matters) ---------------------------------------------------
+const RITUAL_ORDER = ['incense', 'garland', 'dessert'];
+const OFFER_NAMES = { incense: 'ธูปเทียน', garland: 'พวงมาลัย', dessert: 'พานขนม' };
+const RITUAL_HINT = 'จุดธูปเทียนบอกกล่าวก่อน → ถวายพวงมาลัย → ปิดท้ายด้วยพานขนม';
+
+function isRitualOpen() {
+  const el = document.getElementById('ritual-modal');
+  return !!el && !el.classList.contains('hidden');
+}
+
+function openRitual() {
+  state.ritual = [];
+  state.moveInput = 0;
+  refreshRitualUi();
+  document.getElementById('ritual-modal').classList.remove('hidden');
+  broadcastState();
+}
+
+function closeRitual() {
+  document.getElementById('ritual-modal').classList.add('hidden');
+  broadcastState();
+}
+
+function refreshRitualUi() {
+  const slots = document.querySelectorAll('#ritual-slots span');
+  slots.forEach((el, i) => {
+    const placed = state.ritual[i];
+    el.textContent = placed ? OFFER_NAMES[placed] : '๑๒๓'[i];
+    el.classList.toggle('filled', !!placed);
+  });
+  document.querySelectorAll('#ritual-modal [data-offer]').forEach((btn) => {
+    btn.disabled = state.ritual.includes(btn.dataset.offer);
+  });
+}
+
+function offerItem(item) {
+  if (!isRitualOpen() || !OFFER_NAMES[item] || state.ritual.includes(item) || !state.inventory.offerings.includes(item)) return;
+  const expected = RITUAL_ORDER[state.ritual.length];
+  if (item === expected) {
+    state.ritual.push(item);
+    playSound('chime', { gain: 0.6 });
+    refreshRitualUi();
+    if (state.ritual.length === 3) completeRitual();
+    broadcastState();
+    return;
+  }
+  // wrong order: the offerings tumble, the dancer lunges closer
+  state.ritual = [];
+  refreshRitualUi();
+  playSound('scare', { gain: 0.45 });
+  vibrate([120, 60, 120]);
+  const box = document.querySelector('#ritual-modal .modal-box');
+  if (box) {
+    box.classList.remove('shake');
+    void box.offsetWidth;
+    box.classList.add('shake');
+  }
+  angerDancer();
+  showToast(`ผิดธรรมเนียม! ของเซ่นร่วงกระจาย... ต้องวาง${OFFER_NAMES[expected]}ก่อน`, 'warn', 4200);
+  broadcastState();
+}
+
+function angerDancer() {
+  const g = state.ghost;
+  if (!g.active) return;
+  const d = state.player.x - g.x;
+  const step = Math.min(150, Math.max(0, Math.abs(d) - 170));
+  g.x += Math.sign(d) * step;
+  g.alpha = 1;
+  g.phase = 'chase';
+  playSound('chime', { gain: 1.3, pan: Math.max(-0.9, Math.min(0.9, (g.x - state.player.x) / 600)) });
+}
+
+function completeRitual() {
+  closeRitual();
+  state.flags.offeringsPlaced = true;
+  playSound('chime');
+  updateHud();
+  queueDialogue([
+    { speaker: getPlayerName(), text: 'ธูปเทียน พวงมาลัย พานขนม... ครบตามธรรมเนียม กลิ่นธูปม้วนขึ้นมาเองทั้งที่ไม่มีลม ขอให้ดวงวิญญาณในเรือนนี้ได้ไปเสียที' },
+    state.flags.photosRestored
+      ? { speaker: getPlayerName(), text: 'ของเซ่นครบ รูปก็ครบ... เสียงกระพรวนเงียบลงแล้ว ขอให้ท่านไปสู่สุคติ' }
+      : { speaker: getPlayerName(), text: 'เหลือเพียงต่อเศษรูปทั้งสามให้ครบ... ประตูหลังเรือนยังไม่ยอมเปิด' }
+  ], () => {
+    if (!state.flags.photosRestored) showPhotoPuzzleModal();
+    else checkRitualComplete();
+  });
+}
+
+// ---- Co-op lock: a random 4-digit Thai-numeral code ------------------------------------
+const THAI_DIGITS = '๐๑๒๓๔๕๖๗๘๙';
+
+function makeLockCode() {
+  return Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
+}
+
+function thaiCode() {
+  return (state.lockCode || []).map((d) => THAI_DIGITS[d]).join('');
+}
+
+function isLockOpen() {
+  const el = document.getElementById('lock-modal');
+  return !!el && !el.classList.contains('hidden');
+}
+
+function openLock() {
+  state.lockInput = [];
+  state.moveInput = 0;
+  refreshLockUi();
+  document.getElementById('lock-modal').classList.remove('hidden');
+  broadcastState();
+}
+
+function closeLock() {
+  document.getElementById('lock-modal').classList.add('hidden');
+  broadcastState();
+}
+
+function lockDisplay() {
+  return [0, 1, 2, 3].map((i) => (state.lockInput[i] != null ? THAI_DIGITS[state.lockInput[i]] : '_')).join(' ');
+}
+
+function refreshLockUi() {
+  const el = document.getElementById('lock-display');
+  if (el) el.textContent = lockDisplay();
+}
+
+function lockPress(d) {
+  if (!isLockOpen() || !Number.isInteger(d) || d < -1 || d > 9) return;
+  if (d === -1) state.lockInput.pop();
+  else if (state.lockInput.length < 4) state.lockInput.push(d);
+  playSound('step', { gain: 0.4 });
+  refreshLockUi();
+  broadcastState();
+  if (state.lockInput.length === 4) setTimeout(checkLock, 250);
+}
+
+function checkLock() {
+  if (!isLockOpen() || state.lockInput.length < 4) return;
+  if (state.lockInput.join('') === state.lockCode.join('')) {
+    state.flags.cabinetUnlocked = true;
+    closeLock();
+    playSound('creak');
+    showToast('🔓 กลอนตู้ดีดออกเสียงดังกริ๊ก');
+    const cabinet = getSceneHotspots(4).find((sp) => sp.id === 'hiding_cabinet_4');
+    if (cabinet) cabinet.onInteract();
+    return;
+  }
+  const box = document.querySelector('#lock-modal .modal-box');
+  if (box) {
+    box.classList.remove('shake');
+    void box.offsetWidth;
+    box.classList.add('shake');
+  }
+  playSound('rustle');
+  vibrate([80, 40, 80]);
+  state.lockInput = [];
+  refreshLockUi();
+  broadcastState();
+  showToast('รหัสไม่ถูก... ลองส่องไฟฉายอ่านยันต์บนผนังอีกครั้ง', 'warn');
+}
+
+function isOverlayOpen() {
+  return isPhotoModalOpen() || isRitualOpen() || isLockOpen();
+}
+
+// ---- Timer, ranks and the booth's hall of fame ----------------------------------------
+const HOF_KEY = 'buu-horror-hof-v1';
+
+function formatTime(sec) {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function rankFor(time, deaths) {
+  if (deaths === 0 && time < 300) return '🏆 ผู้กล้าแห่งบูรพา';
+  if (deaths <= 1 && time < 480) return '🥈 ผู้มีสัมผัสพิเศษ';
+  if (deaths <= 3) return '🥉 ผู้รอดชีวิตจากเรือนไทย';
+  return '🕯️ ดวงจิตที่หลงทาง (แต่ก็รอดมาได้!)';
+}
+
+function loadHof() {
+  try {
+    const list = JSON.parse(localStorage.getItem(HOF_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+const hofScore = (e) => e.time + e.deaths * 30; // each capture costs 30 s
+
+function renderHof(el, limit, highlightAt = null) {
+  if (!el) return;
+  const list = loadHof().sort((a, b) => hofScore(a) - hofScore(b)).slice(0, limit);
+  el.textContent = '';
+  if (!list.length) return;
+  const title = document.createElement('div');
+  title.className = 'hof-title';
+  title.textContent = '🏯 หอเกียรติยศประจำบูธ';
+  el.appendChild(title);
+  const ol = document.createElement('ol');
+  list.forEach((e) => {
+    const li = document.createElement('li');
+    if (highlightAt && e.at === highlightAt) li.className = 'me';
+    const name = document.createElement('span');
+    name.className = 'hof-name';
+    name.textContent = e.name;
+    const meta = document.createElement('span');
+    meta.className = 'hof-meta';
+    meta.textContent = `${formatTime(e.time)} · ถูกจับ ${e.deaths}`;
+    li.append(name, meta);
+    ol.appendChild(li);
+  });
+  el.appendChild(ol);
+}
+
+function showEndingStats() {
+  const t = state.playTime || 0;
+  const d = state.deaths || 0;
+  const stats = document.getElementById('ending-stats');
+  if (stats) {
+    stats.textContent = '';
+    const rank = document.createElement('div');
+    rank.className = 'ending-rank';
+    rank.textContent = rankFor(t, d);
+    const meta = document.createElement('div');
+    meta.className = 'ending-meta';
+    meta.textContent = `เวลา ${formatTime(t)} · ถูกวิญญาณจับ ${d} ครั้ง`;
+    stats.append(rank, meta);
+  }
+  const entry = document.getElementById('hof-entry');
+  if (entry) entry.classList.remove('hidden');
+  const btn = document.getElementById('hof-save');
+  if (btn) btn.disabled = false;
+  renderHof(document.getElementById('hof-list'), 5);
+}
+
+function saveToHallOfFame() {
+  const input = document.getElementById('hof-name');
+  const name = (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14) || 'ไม่ระบุชื่อ';
+  const entry = { name, time: Math.round(state.playTime || 0), deaths: state.deaths || 0, rank: rankFor(state.playTime || 0, state.deaths || 0), at: Date.now() };
+  const list = loadHof();
+  list.push(entry);
+  list.sort((a, b) => hofScore(a) - hofScore(b));
+  try { localStorage.setItem(HOF_KEY, JSON.stringify(list.slice(0, 30))); } catch (_) {}
+  const btn = document.getElementById('hof-save');
+  if (btn) btn.disabled = true;
+  renderHof(document.getElementById('hof-list'), 5, entry.at);
+  showToast('🏯 บันทึกชื่อลงหอเกียรติยศแล้ว');
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const box = document.getElementById('title-hof');
+  if (!box) return;
+  renderHof(box, 3);
+  box.classList.toggle('hidden', !loadHof().length);
+});
+
 // ----------------------- Objectives: always say what to do next -----------------------
 // Playtesters understood the controls but not the goal. One plain-language objective is
 // derived from the game state every frame, shown at the top of the screen, pointed at with
@@ -3317,7 +3757,10 @@ function currentObjective() {
   const s = state.scene;
   const has = (o) => inv.offerings.includes(o);
   const photo = (n) => inv.photos.includes(n);
-  const hideTip = state.ghost.active && (s === 3 || s === 4) ? ' — ถ้าผีมา ซ่อนในตู้/ตุ่มแล้วปิดไฟฉาย' : '';
+  const hideTip = !state.ghost.active ? ''
+    : s === 3 ? ' — มันตาบอด: ถ้ามันเข้าใกล้ ให้หยุดเดินแล้วยืนนิ่ง'
+    : s === 4 ? ' — ส่องไฟฉายใส่ผีนางรำไว้ เธอจะขยับไม่ได้'
+    : '';
   if (s === 1) return { text: 'เดินไปทางขวา แล้วขอความช่วยเหลือที่ประตูเรือนไทย', target: 'mansion_front_door' };
   if (s === 2) {
     if (!photo(1)) return { text: 'สำรวจตู้ไม้สักกลางห้อง (มีบางอย่างซ่อนอยู่)', target: 'hiding_cabinet_2' };
@@ -3332,12 +3775,16 @@ function currentObjective() {
     return { text: 'ไปประตูทางขวาสุด เข้าโถงด้านใน', target: 'door_to_scene4' };
   }
   if (s === 4) {
-    if (!has('dessert')) return { text: 'หาพานขนมในตู้ไม้ทางซ้าย' + hideTip, target: 'hiding_cabinet_4' };
+    if (!has('dessert')) {
+      if (!f.cabinetUnlocked && !f.codeRead) return { text: 'ตู้ไม้ทางซ้ายถูกล็อก — รหัสเขียนอยู่บนยันต์ที่ผนัง (ส่องไฟฉายอ่าน)' + hideTip, target: 'yantra_code' };
+      if (!f.cabinetUnlocked) return { text: `ใส่รหัส ${thaiCode()} ที่ตู้ไม้ทางซ้าย` + hideTip, target: 'hiding_cabinet_4' };
+      return { text: 'หยิบพานขนมในตู้ไม้ทางซ้าย' + hideTip, target: 'hiding_cabinet_4' };
+    }
     if (!photo(3)) return { text: 'สำรวจหิ้งบูชากลางห้อง (เศษรูปชิ้นสุดท้ายอยู่ที่นั่น)' + hideTip, target: 'shrine_altar_spot' };
     if (inv.offerings.length < 3 || inv.photos.length < 3) {
       return { text: `ยังขาดของ (ของเซ่น ${inv.offerings.length}/3 · เศษรูป ${inv.photos.length}/3) — ย้อนกลับไปหาในห้องก่อนหน้า`, target: 'door_back_scene3' };
     }
-    if (!f.offeringsPlaced) return { text: 'นำของเซ่นไหว้ทั้ง 3 ชิ้นไปถวายที่หิ้งบูชา', target: 'shrine_altar_spot' };
+    if (!f.offeringsPlaced) return { text: 'ถวายของที่หิ้งบูชาตามธรรมเนียม: ' + RITUAL_HINT, target: 'shrine_altar_spot' };
     if (!f.photosRestored) return { text: 'ต่อเศษรูปให้ครบ: ที่หิ้งบูชา หรือปุ่ม 🖼️ ดูกรอบรูป แล้วแตะรูปทั้ง 3 ชิ้น', target: 'shrine_altar_spot' };
     return { text: 'ประตูหลังเรือนเปิดแล้ว — ออกไปทางขวาสุด', target: 'back_exit_door' };
   }
@@ -3433,7 +3880,8 @@ const RADAR_INFO = {
   photo_piece_2_spot: { label: 'โต๊ะ · เศษรูป 2', done: () => state.inventory.photos.includes(2) },
   door_to_scene4: { label: 'ประตู →' },
   door_back_scene3: { label: '← ประตู' },
-  hiding_cabinet_4: { label: 'ตู้ · ขนม', done: () => state.inventory.offerings.includes('dessert') },
+  hiding_cabinet_4: { label: 'ตู้ล็อก · ขนม', done: () => state.inventory.offerings.includes('dessert') },
+  yantra_code: { label: 'ยันต์ · รหัส', done: () => state.flags.codeRead || state.flags.cabinetUnlocked },
   shrine_altar_spot: { label: 'หิ้ง · เศษรูป 3', done: () => state.flags.offeringsPlaced && state.flags.photosRestored },
   back_exit_door: { label: 'ทางออก →' },
   uncle_raj_pattern: { label: 'คุณลุง' }
@@ -3537,7 +3985,12 @@ function renderP2RadarLoop(now = performance.now()) {
       dangerEl.textContent = high ? '⚠️ อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : '🕯️ เปลวเทียนสงบ (ปลอดภัย)';
       dangerEl.className = high ? 'warn-text' : 'safe-text';
     }
-    if (clueEl && state.remoteGoal && state.remoteGoal.goal) {
+    const rg = state.remoteGoal || {};
+    if (clueEl && rg.context === 'ritual') {
+      clueEl.textContent = 'ตำราพิธีในสมุดข่อย: ' + RITUAL_HINT + ' — บอก P1 ทีละชิ้น!';
+    } else if (clueEl && rg.code && (rg.context === 'lock' || rg.target === 'yantra_code' || rg.target === 'hiding_cabinet_4')) {
+      clueEl.textContent = 'นิมิตเห็นยันต์บนผนังเขียนว่า ' + rg.code + ' — นี่คือรหัสตู้ บอก P1!';
+    } else if (clueEl && state.remoteGoal && state.remoteGoal.goal) {
       clueEl.textContent = 'นิมิตบอกทาง: ' + state.remoteGoal.goal + ' — บอก P1 ด้วย!';
     } else if (clueEl) {
       if (state.scene === 1) clueEl.textContent = 'นิมิตบอกทาง: ให้ P1 เดินไปขวาสุดเพื่อสำรวจประตูเรือนไทย';

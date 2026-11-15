@@ -15,7 +15,7 @@ const crypto = require('crypto');
 
 const CODE_RE = /^\d{4}$/;
 const ROLES = ['p1', 'p2'];
-const ACTIONS = new Set(['move', 'interact', 'hide', 'flashlight', 'stun_ghost', 'sixth_sense_pulse']);
+const ACTIONS = new Set(['move', 'interact', 'hide', 'flashlight', 'stun_ghost', 'sixth_sense_pulse', 'offer', 'digit']);
 const ROOM_TTL_MS = 30 * 60 * 1000;   // idle rooms disappear after 30 minutes
 const ONLINE_MS = 6000;               // a device is "online" if seen within 6 s
 const MAX_INPUTS = 64;                // queued inputs kept per room
@@ -24,7 +24,7 @@ const OFFERINGS = ['garland', 'incense', 'dessert'];
 const FLAG_KEYS = [
   'door1Opened', 'inspectedDust', 'inspectedPortraits', 'samphawesiTriggered',
   'offeringsPlaced', 'photosRestored', 'cutscenePlaying', 'gameOver', 'victory',
-  'visited2', 'visited4'
+  'visited2', 'visited4', 'codeRead', 'cabinetUnlocked'
 ];
 
 class RoomError extends Error {
@@ -59,7 +59,7 @@ const num = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
 const oneOf = (v, list) => (list.includes(v) ? v : undefined);
 const shortText = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, max) : undefined);
-const CONTEXTS = ['title', 'play', 'paused', 'dialogue', 'cutscene', 'puzzle', 'gameover', 'victory'];
+const CONTEXTS = ['title', 'play', 'paused', 'dialogue', 'cutscene', 'puzzle', 'ritual', 'lock', 'gameover', 'victory'];
 const uniqList = (v, allowed) => (Array.isArray(v) ? [...new Set(v.filter((x) => allowed.includes(x)))] : undefined);
 
 function pick(src, schema) {
@@ -99,7 +99,9 @@ const PATCH_SCHEMA = {
     context: (c) => oneOf(c, CONTEXTS),
     prompt: (t) => shortText(t, 80),
     goal: (t) => shortText(t, 160),
-    target: (t) => shortText(t, 40)
+    target: (t) => shortText(t, 40),
+    code: (t) => shortText(t, 8),
+    lockInput: (t) => shortText(t, 16)
   })
 };
 
@@ -119,6 +121,8 @@ function applyPatch(state, patch) {
 
 function sanitizeInputValue(action, value) {
   if (action === 'move') return value === -1 || value === 1 ? value : 0;
+  if (action === 'offer') return OFFERINGS.includes(value) ? value : '';
+  if (action === 'digit') return Number.isInteger(value) && value >= -1 && value <= 9 ? value : -2;
   return true;
 }
 

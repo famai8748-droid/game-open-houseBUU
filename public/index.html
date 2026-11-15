@@ -61,6 +61,8 @@
         </div>
       </div>
 
+      <div id="title-hof" class="title-hof hidden"></div>
+
       <div class="title-utility-bar">
         <button class="btn-ghost" onclick="openSettings()">⚙ ตั้งค่า</button>
         <span class="title-utility-dot">·</span>
@@ -272,6 +274,36 @@
         </div>
       </div>
 
+      <!-- OFFERING RITUAL (order matters) -->
+      <div id="ritual-modal" class="modal hidden">
+        <div class="modal-box ritual-box">
+          <h3>🕯️ ถวายของเซ่นไหว้ที่หิ้งบูชา</h3>
+          <p class="modal-sub">วางของทีละชิ้นให้ถูกตามธรรมเนียม — ผิดลำดับ วิญญาณจะไม่พอใจ</p>
+          <div id="ritual-slots" class="ritual-slots"><span>๑</span><span>๒</span><span>๓</span></div>
+          <div class="ritual-items">
+            <button data-offer="garland" onclick="offerItem('garland')"><img src="assets/offering_garland.png" class="pixel-img" alt="" /><span>พวงมาลัย</span></button>
+            <button data-offer="incense" onclick="offerItem('incense')"><img src="assets/offering_incense.png" class="pixel-img" alt="" /><span>ธูปเทียน</span></button>
+            <button data-offer="dessert" onclick="offerItem('dessert')"><img src="assets/offering_dessert.png" class="pixel-img" alt="" /><span>พานขนม</span></button>
+          </div>
+          <button class="btn-secondary" onclick="closeRitual()">ถอยออกมาก่อน</button>
+        </div>
+      </div>
+
+      <!-- LOCKED CABINET (Thai-numeral code) -->
+      <div id="lock-modal" class="modal hidden">
+        <div class="modal-box lock-box">
+          <h3>🔒 ตู้ไม้ถูกล็อกด้วยกุญแจรหัส</h3>
+          <p class="modal-sub">ใส่เลขไทย 4 หลัก (รหัสเขียนอยู่บนยันต์ที่ผนัง)</p>
+          <div id="lock-display" class="lock-display">_ _ _ _</div>
+          <div class="lock-keys">
+            <button onclick="lockPress(1)">๑</button><button onclick="lockPress(2)">๒</button><button onclick="lockPress(3)">๓</button>
+            <button onclick="lockPress(4)">๔</button><button onclick="lockPress(5)">๕</button><button onclick="lockPress(6)">๖</button>
+            <button onclick="lockPress(7)">๗</button><button onclick="lockPress(8)">๘</button><button onclick="lockPress(9)">๙</button>
+            <button onclick="lockPress(-1)">⌫</button><button onclick="lockPress(0)">๐</button><button onclick="closeLock()">ปิด</button>
+          </div>
+        </div>
+      </div>
+
       <!-- ENDING / BUU OPEN HOUSE MODAL -->
       <div id="ending-modal" class="modal hidden">
         <div class="modal-box ending-box">
@@ -286,6 +318,12 @@
             <div class="buu-date">วันที่ 20 – 21 นี้</div>
             <div class="buu-sub">แล้วพบกันที่มหาวิทยาลัยบูรพา! (ไม่งั้นระวังจะถูกดึงกลับมาที่เรือนนี้อีกนะ...)</div>
           </div>
+          <div id="ending-stats" class="ending-stats"></div>
+          <div id="hof-entry" class="hof-entry">
+            <input id="hof-name" type="text" maxlength="14" placeholder="ชื่อเล่น — ลงหอเกียรติยศ" autocomplete="off" />
+            <button id="hof-save" class="btn-small" onclick="saveToHallOfFame()">บันทึก</button>
+          </div>
+          <div id="hof-list" class="hof-list"></div>
           <button class="btn-primary" onclick="restartGame()">🔄 เล่นใหม่อีกครั้ง</button>
         </div>
       </div>
@@ -353,6 +391,24 @@
     </div>
     <div id="p1-status" class="mobile-status">⏳ กำลังเชื่อมต่อ...</div>
     <div id="p1-goal" class="mobile-goal"></div>
+    <div id="p1-ritual" class="p1-panel hidden">
+      <div class="p1-panel-title">🕯️ เลือกของที่จะวางลงหิ้ง — ถาม P2 ว่าต้องวางอะไรก่อน!</div>
+      <div class="p1-panel-grid three">
+        <button onclick="sendRemoteInput('offer', 'garland')">พวงมาลัย</button>
+        <button onclick="sendRemoteInput('offer', 'incense')">ธูปเทียน</button>
+        <button onclick="sendRemoteInput('offer', 'dessert')">พานขนม</button>
+      </div>
+    </div>
+    <div id="p1-lock" class="p1-panel hidden">
+      <div class="p1-panel-title">🔒 ใส่รหัสตู้ — ให้ P2 อ่านรหัสให้ฟัง</div>
+      <div id="p1-lock-display" class="lock-display">_ _ _ _</div>
+      <div class="p1-panel-grid keypad">
+        <button onclick="sendRemoteInput('digit', 1)">๑</button><button onclick="sendRemoteInput('digit', 2)">๒</button><button onclick="sendRemoteInput('digit', 3)">๓</button>
+        <button onclick="sendRemoteInput('digit', 4)">๔</button><button onclick="sendRemoteInput('digit', 5)">๕</button><button onclick="sendRemoteInput('digit', 6)">๖</button>
+        <button onclick="sendRemoteInput('digit', 7)">๗</button><button onclick="sendRemoteInput('digit', 8)">๘</button><button onclick="sendRemoteInput('digit', 9)">๙</button>
+        <button onclick="sendRemoteInput('digit', -1)">⌫</button><button onclick="sendRemoteInput('digit', 0)">๐</button><span></span>
+      </div>
+    </div>
     <div class="p1-pad-layout">
       <div class="p1-dpad">
         <button class="big-pad-btn" data-remote-move="-1">◀ ซ้าย</button>

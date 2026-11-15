@@ -174,6 +174,21 @@ test('sanitizePatch keeps the phone context fields and strips control characters
   assert.equal(sanitizePatch({ support: { context: 'hacked' } }).support.context, undefined);
 });
 
+test('ritual and lock inputs are P1-only and their values are whitelisted', async () => {
+  const clock = makeClock();
+  const svc = createRoomService(createMemoryStore({ now: clock.now, sweepMs: 0 }), { now: clock.now });
+  const { code, hostToken } = await svc.createRoom({});
+  const p1 = await svc.joinRoom({ code, role: 'p1' });
+  const p2 = await svc.joinRoom({ code, role: 'p2' });
+  await svc.playerInput({ code, role: 'p1', playerToken: p1.playerToken, action: 'offer', value: 'incense' });
+  await svc.playerInput({ code, role: 'p1', playerToken: p1.playerToken, action: 'offer', value: 'bomb' });
+  await svc.playerInput({ code, role: 'p1', playerToken: p1.playerToken, action: 'digit', value: 7 });
+  await svc.playerInput({ code, role: 'p1', playerToken: p1.playerToken, action: 'digit', value: 99 });
+  await assert.rejects(svc.playerInput({ code, role: 'p2', playerToken: p2.playerToken, action: 'digit', value: 1 }), { status: 403 });
+  const { inputs } = await svc.syncState({ code, hostToken, seq: 1 });
+  assert.deepEqual(inputs.map((i) => i.value), ['incense', '', 7, -2]);
+});
+
 test('rate limiter', () => {
   const clock = makeClock();
   const allow = createRateLimiter({ limit: 2, windowMs: 1000, now: clock.now });
