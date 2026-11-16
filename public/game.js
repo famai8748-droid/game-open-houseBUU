@@ -510,7 +510,10 @@ const SAMPLE_FILES = {
   carcrash: 'assets/audio/car_crash.mp3',
   temple_gong: 'assets/audio/temple_gong.mp3',
   temple_bell: 'assets/audio/temple_bell.mp3',
-  crickets: 'assets/audio/crickets.mp3'
+  crickets: 'assets/audio/crickets.mp3',
+  ranat: 'assets/audio/ranat_note.mp3',
+  bridge_wind: 'assets/audio/bridge_wind.mp3',
+  bridge_river: 'assets/audio/bridge_river.mp3'
 };
 // playSound type -> [sample, gain, pitch jitter]: the recording replaces the synth once loaded
 const RECORDED_SFX = {
@@ -521,8 +524,14 @@ const RECORDED_SFX = {
   gong: ['temple_gong', 0.55, 0],
   crickets: ['crickets', 0.55, 0]
 };
-// Loops: when one finishes loading after its scene already started, rebuild that scene's ambience.
-const AMBIENT_SAMPLES = new Set(['rain', 'birds']);
+// Loops: when one finishes loading after its scene already started, rebuild that scene's ambience
+// (only the scene that uses it, so a loop for a later scene never restarts the one playing now).
+const AMBIENT_SAMPLES = {
+  rain: (sc) => sc >= 1 && sc <= 4,
+  birds: (sc) => sc === 5,
+  bridge_wind: (sc) => sc === 'bridge',
+  bridge_river: (sc) => sc === 'bridge'
+};
 const samples = {};
 let samplesRequested = false;
 
@@ -535,7 +544,7 @@ function loadSamples() {
       .then((data) => new Promise((resolve, reject) => audioCtx.decodeAudioData(data, resolve, reject)))
       .then((buf) => {
         samples[name] = buf;
-        if (AMBIENT_SAMPLES.has(name) && ambient.scene) {
+        if (AMBIENT_SAMPLES[name] && ambient.scene && AMBIENT_SAMPLES[name](ambient.scene)) {
           const scene = ambient.scene;
           ambient.scene = null;
           setAmbientScene(scene);
@@ -701,6 +710,15 @@ function setAmbientScene(scene) {
     sprinkle(7000, 16000, () => playSound('creak', { gain: 0.25, pan: Math.random() * 1.6 - 0.8 }));
     sprinkle(4000, 9000, () => playSound('drip', { gain: 0.8, pan: Math.random() * 1.4 - 0.7 }));
     if (scene >= 3) sprinkle(14000, 26000, () => playSound('whisper', { gain: 0.8, pan: Math.random() < 0.5 ? -0.7 : 0.7 }));
+  } else if (scene === 'bridge') {
+    // the spirit bridge: open-air wind, water somewhere far below the planks, the ropes straining
+    if (!loopSample('bridge_wind', 0.5)) {
+      const wind = loopNoise('lowpass', 420, 0.06);
+      wobble(wind.gain, 0.09, 0.04);
+    }
+    if (!loopSample('bridge_river', 0.5, 1800)) loopNoise('lowpass', 260, 0.03);
+    loopTone('sine', 46.2, 0.03); // a low hum: the dark pouring out of the house
+    sprinkle(3500, 8000, () => playSound('creak', { gain: 0.3, pan: randPan() }));
   } else if (scene === 5) {
     // dawn: real dawn chorus when loaded (synth chirps otherwise) over a soft warm pad
     [220, 277.2, 329.6].forEach((f) => loopTone('sine', f, 0.008));
@@ -2731,7 +2749,7 @@ function enterScene(sceneNum, startX) {
   const onBridge = sceneNum === 5 && !state.flags.escaped; // the run across the spirit bridge comes before the dawn
   if (sceneNum === 5 && !onBridge) setMusicLevel(0.5, 1.8, { restart: true }); // out of the house: the theme returns at dawn
   setTimeout(() => showChapterCard(onBridge ? 'bridge' : sceneNum), 0); // after the scene's own state is set
-  setAmbientScene(onBridge ? 4 : sceneNum);
+  setAmbientScene(onBridge ? 'bridge' : sceneNum);
   state.struggleLeft = 1; // one chance to tear free from a ghost in every room
   if (!onBridge) chase.active = false;
   state.player.x = startX;

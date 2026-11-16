@@ -154,6 +154,8 @@ function isRanatOpen() {
 function ranatNote(i) {
   xSound((t, out) => {
     const f = RANAT.freqs[i];
+    // a real wooden bar (marimba G5, CC0) tuned to each note, an octave up like a ranat ek; synth until it loads
+    if (playSample('ranat', out, { gain: 0.4, rate: f / 392, t })) return;
     tone(t, { type: 'triangle', freq: f, dur: 0.55, peak: 0.13, attack: 0.003, out });
     tone(t, { freq: f * 2, dur: 0.3, peak: 0.03, attack: 0.003, out });
     tone(t, { freq: f * 3.9, dur: 0.08, peak: 0.03, attack: 0.002, out }); // wooden click
