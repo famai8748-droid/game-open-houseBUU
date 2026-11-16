@@ -475,6 +475,12 @@ function playSound(type, opts = {}) {
   } else if (type === 'phone_vibe') {
     tone(now, { type: 'triangle', freq: 145, to: 140, toTime: 0.14, dur: 0.15, peak: 0.045, attack: 0.005, out });
     tone(now + 0.22, { type: 'triangle', freq: 148, to: 142, toTime: 0.16, dur: 0.17, peak: 0.04, attack: 0.005, out });
+  } else if (type === 'ankle_bells') {
+    [0, 0.24].forEach((offset) => {
+      [2180, 3290, 4120].forEach((freq, i) => {
+        tone(now + offset, { type: i === 0 ? 'sine' : 'triangle', freq: freq + offset * 90, dur: 0.42, peak: 0.032 / (i + 1), attack: 0.015, out });
+      });
+    });
   }
 }
 
@@ -1359,6 +1365,7 @@ function watchStoryIntro() {
 }
 
 function startSoloGame() {
+  if (state.roomCode || net.hostToken || eventSource) stopCoop();
   initAudio();
   applyAutoFullscreen();
   state.role = 'host';
@@ -1381,7 +1388,6 @@ async function openCoopLobby() {
     const res = await apiPost('create-room', { mode: 'coop', character: state.character });
     if (!res.ok) throw new Error(res.message || res.error || 'create-room failed');
 
-    clearCheckpoint();
     state.role = 'host';
     state.roomCode = res.code;
     net.hostToken = res.hostToken;
@@ -1425,10 +1431,12 @@ function getShareOrigin(info) {
 
 function closeCoopLobby() {
   document.getElementById('coop-modal').classList.add('hidden');
+  if (!state.started && (state.roomCode || net.hostToken || eventSource)) stopCoop();
 }
 
 function startFromLobby() {
-  closeCoopLobby();
+  document.getElementById('coop-modal').classList.add('hidden');
+  clearCheckpoint();
   applyAutoFullscreen();
   state.started = true;
   switchScreen('game-screen');
@@ -2365,6 +2373,12 @@ let activeCutscene = null;
  * @param {number[]} [frameOrder] which frame indexes to show (default: all, in order)
  */
 function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComplete, frameOrder = null) {
+  const order = frameOrder || frameCaptions.map((_, i) => i);
+  if (!order.length) {
+    if (onComplete) onComplete();
+    return;
+  }
+  if (activeCutscene) activeCutscene.finish();
   state.flags.cutscenePlaying = true;
   state.moveInput = 0;
   const overlay = document.getElementById('door-cutscene');
@@ -2372,7 +2386,6 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   const frameCtx = frameCanvas.getContext('2d');
   closePhotoPuzzleModal();
   const captionEl = document.getElementById('door-caption');
-  const order = frameOrder || frameCaptions.map((_, i) => i);
 
   overlay.classList.remove('hidden');
   let step = 0;
@@ -2452,6 +2465,7 @@ function skipCutscene() {
 // character walks into the dark, the camera pushes in, then the frame fades to black
 // and the next scene fades in underneath it. No ghosts, no hard cuts.
 function playDoorTransition(seen, captionText, onComplete) {
+  if (activeCutscene) activeCutscene.finish();
   state.flags.cutscenePlaying = true;
   state.moveInput = 0;
   const overlay = document.getElementById('door-cutscene');
@@ -2676,19 +2690,22 @@ function playDoorTransition(seen, captionText, onComplete) {
     if (finished) return;
     finished = true;
     cancelAnimationFrame(raf);
-    activeCutscene = null;
+    if (activeCutscene === cut) activeCutscene = null;
     // bring the next scene in underneath, then lift the black frame away
     if (onComplete) onComplete();
     captionEl.textContent = '';
     overlay.classList.add('leaving');
     setTimeout(() => {
-      overlay.classList.add('hidden');
-      overlay.classList.remove('leaving');
-      state.flags.cutscenePlaying = false;
+      if (!activeCutscene) {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('leaving');
+        state.flags.cutscenePlaying = false;
+      }
     }, 460);
   }
 
-  activeCutscene = { finish, startedAt: performance.now() };
+  const cut = { finish, startedAt: performance.now() };
+  activeCutscene = cut;
   raf = requestAnimationFrame(frame);
 }
 
@@ -2863,6 +2880,7 @@ function playCloseup({ src, html = '', box = null, captions = [], captionMs = 34
   fit = 'contain', focus = 'center', beep = 0, onDone }) {
   const el = document.getElementById('closeup');
   if (!el) return onDone && onDone();
+  if (activeCutscene) activeCutscene.finish();
   const img = document.getElementById('closeup-img');
   const txt = document.getElementById('closeup-text');
   const cap = document.getElementById('closeup-caption');
@@ -2884,19 +2902,7 @@ function playCloseup({ src, html = '', box = null, captions = [], captionMs = 34
 
   const timers = [];
   const at = (ms, fn) => timers.push(setTimeout(fn, ms));
-  captions.forEach((c, i) => {
-    at(500 + i * captionMs, () => {
-      cap.classList.remove('show');
-      at(260, () => { cap.textContent = c; cap.classList.add('show'); });
-    });
-  });
-  const total = captions.length ? 500 + captions.length * captionMs + 400 : holdMs;
-  if (total > 0) at(total, () => finish());
   let beepTimer = null;
-  if (beep) {
-    playSound('monitor_beep');
-    beepTimer = setInterval(() => playSound('monitor_beep'), beep);
-  }
 
   function finish() {
     if (activeCutscene !== cut) return;
@@ -2909,6 +2915,19 @@ function playCloseup({ src, html = '', box = null, captions = [], captionMs = 34
   }
   const cut = { finish, startedAt: performance.now() + CLOSEUP_SKIP_AFTER - 300 };
   activeCutscene = cut;
+
+  captions.forEach((c, i) => {
+    at(500 + i * captionMs, () => {
+      cap.classList.remove('show');
+      at(260, () => { cap.textContent = c; cap.classList.add('show'); });
+    });
+  });
+  const total = captions.length ? 500 + captions.length * captionMs + 400 : holdMs;
+  if (total > 0) at(total, () => finish());
+  if (beep) {
+    playSound('monitor_beep');
+    beepTimer = setInterval(() => playSound('monitor_beep'), beep);
+  }
 }
 
 function escapeHtml(s) {
@@ -3303,6 +3322,20 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const k = e.key.toLowerCase();
+  if (isPhotoModalOpen()) {
+    if (e.repeat) return;
+    if (e.key === 'Escape') {
+      closePhotoPuzzleModal();
+    } else if (k === 'e' || e.key === 'Enter') {
+      placeNextPhotoPiece();
+    } else if (e.code === 'Space') {
+      e.preventDefault();
+      closePhotoPuzzleModal();
+    } else if (/^[123]$/.test(e.key)) {
+      placePhotoPiece(Number(e.key));
+    }
+    return;
+  }
   if (k === 'a' || e.key === 'ArrowLeft') setMove(-1);
   if (k === 'd' || e.key === 'ArrowRight') setMove(1);
   if (e.repeat) {
@@ -3319,7 +3352,6 @@ window.addEventListener('keydown', (e) => {
       return;
     }
   }
-  if (isPhotoModalOpen()) closePhotoPuzzleModal();
   if (k === 'e' || e.key === 'Enter') triggerInteract();
   if (k === 'q') toggleHide();
   if (k === 'f') toggleFlashlight();

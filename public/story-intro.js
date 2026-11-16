@@ -6,21 +6,12 @@
   const H = 540;
 
   const fallbackImgCache = new Map();
-  let introAudioCtx = null;
 
   function safeAudioCtx() {
     try {
       if (typeof initAudio === 'function') initAudio();
-      if (!introAudioCtx) {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (Ctx) introAudioCtx = new Ctx();
-      }
-      if (introAudioCtx && introAudioCtx.state === 'suspended') {
-        introAudioCtx.resume().catch(() => {});
-      }
-      return introAudioCtx;
     } catch {
-      return null;
+      /* Ignore audio unlock failures before user interaction */
     }
   }
 
@@ -34,24 +25,7 @@
 
   function playAnkleBellChime() {
     safePlaySound('whisper');
-    const ctx = safeAudioCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-    [0, 0.24].forEach((offset) => {
-      [2180, 3290, 4120].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = i === 0 ? 'sine' : 'triangle';
-        osc.frequency.setValueAtTime(freq + offset * 90, now + offset);
-        gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.linearRampToValueAtTime(0.032 / (i + 1), now + offset + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.42);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.45);
-      });
-    });
+    safePlaySound('ankle_bells');
   }
 
   function getImg(key) {
