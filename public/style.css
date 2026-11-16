@@ -3781,3 +3781,163 @@ body,
   .phone-note.buzz { animation: none; }
   .phone-note, .phone-sting-line, .phone-sting-clock, .phone-sting-date { transition-duration: 0.2s; }
 }
+
+/* ==================== Close-up viewer (diary pages, the flyer, ending stills) ==================== */
+.closeup {
+  position: absolute;
+  inset: 0;
+  z-index: 42;
+  background: #030203;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  container-type: size;
+}
+.closeup.hidden { display: none; }
+.closeup.in { animation: closeupIn 0.6s ease-out; }
+@keyframes closeupIn { from { opacity: 0; } to { opacity: 1; } }
+.closeup-stage {
+  position: relative;
+  width: min(100cqw, 177.78cqh);
+  aspect-ratio: 16 / 9;
+  container-type: inline-size;
+}
+.closeup-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  animation: closeupDrift 40s ease-out both;
+}
+@keyframes closeupDrift { from { transform: scale(1); } to { transform: scale(1.06); } }
+.closeup-text {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: center;
+  pointer-events: none;
+}
+.closeup-text.hidden { display: none; }
+/* the diary: faded iron-gall ink on yellowed paper */
+.closeup-text.diary {
+  justify-content: flex-start;
+  gap: 0.7cqw;
+  font-family: 'Sarabun', serif;
+  font-style: italic;
+  font-size: 1.5cqw;
+  line-height: 1.5;
+  color: rgba(58, 32, 16, 0.88);
+  text-shadow: 0 0 0.6px rgba(58, 32, 16, 0.5);
+  mix-blend-mode: multiply;
+}
+.closeup-text.diary.wide { font-size: 1.55cqw; }
+.closeup-text.diary p { margin: 0; text-indent: 1.4em; }
+.closeup-text .diary-head {
+  font-family: 'Chakra Petch', 'Sarabun', sans-serif;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.95cqw;
+  letter-spacing: 0.12em;
+  color: rgba(120, 30, 20, 0.85);
+  border-bottom: 1px solid rgba(90, 50, 25, 0.35);
+  padding-bottom: 0.3cqw;
+  margin-bottom: 0.2cqw;
+}
+/* the flyer: printed type, smudged by rain */
+.closeup-text.flyer {
+  align-items: center;
+  text-align: center;
+  font-family: 'Sarabun', sans-serif;
+  color: rgba(28, 34, 52, 0.86);
+  filter: blur(0.25px);
+  mix-blend-mode: multiply;
+}
+.flyer .fly-head {
+  height: 12.5%;
+  display: flex;
+  align-items: center;
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 700;
+  font-size: 2.1cqw;
+  letter-spacing: 0.14em;
+  color: rgba(70, 48, 8, 0.85);
+}
+.flyer .fly-uni { margin-top: 9%; font-weight: 700; font-size: 2.3cqw; }
+.flyer .fly-tag { margin-top: 5%; font-size: 1.45cqw; line-height: 1.45; font-style: italic; }
+.flyer .fly-date {
+  margin-top: 6%;
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 700;
+  font-size: 3.2cqw;
+  color: rgba(120, 86, 20, 0.85);
+}
+.flyer .fly-note {
+  position: absolute;
+  right: 8%;
+  bottom: 9%;
+  transform: rotate(-9deg);
+  font-family: 'Sarabun', sans-serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.35cqw;
+  line-height: 1.25;
+  color: rgba(26, 52, 140, 0.8);
+}
+/* captions under an ending still */
+.closeup-caption {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 6%;
+  text-align: center;
+  font-family: 'Sarabun', sans-serif;
+  font-size: clamp(14px, 1.9cqw, 26px);
+  line-height: 1.5;
+  color: #f3e6cf;
+  text-shadow: 0 2px 10px #000, 0 0 3px #000;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+.closeup-caption.show { opacity: 1; }
+.closeup .cutscene-skip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  margin: 0;
+  text-align: center;
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .closeup-img { animation: none; }
+}
+
+/* Caught screen: the ghost's own painted backdrop behind the red wash */
+.gameover-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.62;
+  filter: saturate(0.85) contrast(1.05);
+  pointer-events: none;
+}
+/* the crawling samphawesi close-up is a wide shot: size it by width */
+.jumpscare-face.wide {
+  height: auto;
+  width: 135vw;
+}
+.jumpscare.soft .jumpscare-face.wide { height: auto; width: 95vw; }
+/* the phone sting happens in the hospital room: its bedside, faint behind the phone */
+.phone-sting {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(13, 11, 18, 0.78) 0%, rgba(2, 2, 3, 0.93) 70%),
+    url('assets/hospital_bedside.jpg') center 70% / cover no-repeat,
+    #020203;
+}

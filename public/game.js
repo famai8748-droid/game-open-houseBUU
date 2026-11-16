@@ -293,6 +293,16 @@ function playSound(type, opts = {}) {
       tone(t, { type: 'square', freq: 180 + i * 40, to: 65, dur: 0.13, peak: 0.08, out });
       noiseHit(t, { dur: 0.06, peak: 0.05, filter: 'bandpass', freq: 600, q: 1.5, out });
     }
+  } else if (type === 'monitor_beep') {
+    // hospital heart monitor: a clean short beep with a soft second partial
+    tone(now, { freq: 988, dur: 0.13, peak: 0.07, attack: 0.003, out });
+    tone(now, { freq: 1976, dur: 0.07, peak: 0.012, attack: 0.003, out });
+  } else if (type === 'blessing') {
+    // the true ending: a slow, warm open fifth under one low temple bell
+    [[262, 0], [392, 0.18], [523, 0.42]].forEach(([freq, d]) => {
+      tone(now + d, { freq, dur: 3.2, peak: 0.045, attack: 0.6, out });
+    });
+    if (samples.bell) playSample('bell', out, { gain: 0.12, rate: 0.5, t: now + 0.1 });
   } else if (type === 'chime') {
     // Thai dancer ankle bells (กระพรวนข้อเท้า): two slightly detuned bell strikes = a jingle
     if (samples.bell) {
@@ -715,7 +725,19 @@ const ASSET_LIST = {
   door: 'assets/prop_door.png',
   table: 'assets/prop_table.png',
   altar: 'assets/prop_altar.png',
-  talisman: 'assets/prop_talisman.png'
+  talisman: 'assets/prop_talisman.png',
+  // full-screen art (preloaded so a jumpscare or close-up never shows up blank)
+  jumpscareDancer: 'assets/jumpscare_dancer.jpg',
+  jumpscareSam: 'assets/jumpscare_sam.jpg',
+  gameoverDancer: 'assets/gameover_dancer.jpg',
+  gameoverSam: 'assets/gameover_sam.jpg',
+  lorePage1: 'assets/lore_page_1.jpg',
+  lorePage2: 'assets/lore_page_2.jpg',
+  lorePage3: 'assets/lore_page_3.jpg',
+  buuFlyer: 'assets/buu_flyer_closeup.jpg',
+  hospitalWake: 'assets/hospital_wake.jpg',
+  hospitalBedside: 'assets/hospital_bedside.jpg',
+  endingTrue: 'assets/ending_true.jpg'
 };
 
 function preloadAssets() {
@@ -2789,16 +2811,123 @@ function triggerEndingDialogue() {
       'เฟรม 5/6 : "จำสัญญาของเราไว้... ไม่อย่างนั้น มันจะดึงเจ้ากลับมา"',
       'เฟรม 6/6 : แล้วพบกันที่ OPEN HOUSE BUU วันที่ 20 – 21 นี้'
     ];
-    playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playPhoneSting(() => {
+    playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playTrueEnding(() => playHospitalWake(() => playPhoneSting(() => {
       state.flags.victory = true;
       clearCheckpoint();
       markTitleGhost();
       playSound('chime');
       showEndingStats();
       setMusicLevel(0.85, 1.2);
+      // the end screen shows where the night ended: the house at peace, or the hospital room
+      const male = state.character !== 'female';
+      const bg = document.getElementById('ending-bg');
+      bg.src = loreFound() === 3 ? ASSET_LIST.endingTrue : (male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalBedside);
+      bg.style.objectPosition = loreFound() < 3 && !male ? 'center 96%' : '';
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
-    }));
+    }))));
+  });
+}
+
+// ----------------------- Close-up viewer -----------------------
+// One full-screen still: a diary page or the flyer with its words written onto the paper
+// (opts.html placed in opts.box, in % of the 16:9 picture), or an ending beat with captions
+// that fade in one after another. Runs as a cutscene: E / tap / Space close it after a moment.
+const CLOSEUP_SKIP_AFTER = 700;
+function playCloseup({ src, html = '', box = null, captions = [], captionMs = 3400, holdMs = 0,
+  fit = 'contain', focus = 'center', beep = 0, onDone }) {
+  const el = document.getElementById('closeup');
+  if (!el) return onDone && onDone();
+  const img = document.getElementById('closeup-img');
+  const txt = document.getElementById('closeup-text');
+  const cap = document.getElementById('closeup-caption');
+  img.src = src;
+  img.style.objectFit = fit;
+  img.style.objectPosition = focus;
+  txt.innerHTML = html;
+  txt.className = 'closeup-text ' + ((box && box.cls) || '') + (html ? '' : ' hidden');
+  if (box) {
+    Object.assign(txt.style, { left: box.x + '%', top: box.y + '%', width: box.w + '%', height: box.h + '%',
+      transform: `rotate(${box.rot || 0}deg)` });
+  }
+  cap.textContent = '';
+  cap.classList.remove('show');
+  el.classList.remove('hidden');
+  restartAnimation(el, 'in');
+  state.flags.cutscenePlaying = true;
+  state.moveInput = 0;
+
+  const timers = [];
+  const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+  captions.forEach((c, i) => {
+    at(500 + i * captionMs, () => {
+      cap.classList.remove('show');
+      at(260, () => { cap.textContent = c; cap.classList.add('show'); });
+    });
+  });
+  const total = captions.length ? 500 + captions.length * captionMs + 400 : holdMs;
+  if (total > 0) at(total, () => finish());
+  let beepTimer = null;
+  if (beep) {
+    playSound('monitor_beep');
+    beepTimer = setInterval(() => playSound('monitor_beep'), beep);
+  }
+
+  function finish() {
+    if (activeCutscene !== cut) return;
+    timers.forEach(clearTimeout);
+    clearInterval(beepTimer);
+    activeCutscene = null;
+    el.classList.add('hidden');
+    state.flags.cutscenePlaying = false;
+    if (onDone) onDone();
+  }
+  const cut = { finish, startedAt: performance.now() + CLOSEUP_SKIP_AFTER - 300 };
+  activeCutscene = cut;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// The ending, after the uncle's cutscene: (1) if all three diary pages were read, the house at
+// peace, (2) waking up in hospital, (3) the friend's messages on the phone, (4) the end screen.
+function playTrueEnding(onDone) {
+  if (loreFound() < 3) return onDone();
+  playSound('blessing');
+  setMusicLevel(0.5, 2.5);
+  playCloseup({
+    src: ASSET_LIST.endingTrue,
+    fit: 'cover',
+    captions: [
+      'ในเรือนที่ไม่มีใครอยู่แล้ว... เทียนทุกเล่มถูกจุดขึ้นอีกครั้ง',
+      'แม่จันทร์ได้รำจนจบเพลง ต่อหน้าพ่อของเธอ — หลวงสุนทรร้องไห้เหมือนเด็ก',
+      'ส่วนตาเหมือน... ได้กินข้าวอิ่มเป็นครั้งแรกในรอบหลายสิบปี',
+      'เรือนซ่อนวิญญาณ ไม่ต้องซ่อนใครไว้อีกต่อไป'
+    ],
+    onDone
+  });
+}
+
+function playHospitalWake(onDone) {
+  const male = state.character !== 'female';
+  setMusicLevel(0, 1.2);
+  const captions = [
+    'ตื๊ด... ตื๊ด... ตื๊ด... เสียงเครื่องวัดชีพจรดังเป็นจังหวะ',
+    'แสงเช้าลอดมู่ลี่เข้ามา... ห้องพักผู้ป่วย กลิ่นยาฆ่าเชื้อ ร่างกายหนักอึ้ง แต่ยังหายใจอยู่',
+    state.flags.buuFound
+      ? 'บนโต๊ะข้างเตียง พวงมาลัยมะลิ กับใบปลิว Open House ใบเดียวกับที่เจอในป่า... มุมกระดาษยังมีลายมือ "ไปด้วยกันนะ"'
+      : 'บนโต๊ะข้างเตียง พวงมาลัยมะลิ มือถือจอร้าว กับใบปลิวเปียกน้ำที่ใครสักคนเอามาวางไว้'
+  ];
+  if (male) captions.push('ที่ประตูห้อง... เงาชายชราชุดราชปะแตนยืนมองอยู่ครู่หนึ่ง แล้วจางหายไป');
+  playCloseup({
+    src: male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalBedside,
+    fit: 'cover',
+    focus: male ? 'center' : 'center 96%',
+    captions,
+    captionMs: 3200,
+    beep: 1050,
+    onDone
   });
 }
 
@@ -3156,7 +3285,11 @@ window.addEventListener('keydown', (e) => {
     return; // held keys must not spam actions or skip whole conversations
   }
   if (e.key === 'Escape') {
-    if (state.role === 'host' && state.started && !state.flags.cutscenePlaying && !state.flags.gameOver && !isPhotoModalOpen() && !isDialogueOpen()) {
+    if (state.flags.cutscenePlaying) { // Esc closes a close-up / skips a cutscene, like E
+      skipCutscene();
+      return;
+    }
+    if (state.role === 'host' && state.started && !state.flags.gameOver && !isPhotoModalOpen() && !isDialogueOpen()) {
       openPause();
       return;
     }
@@ -3410,10 +3543,11 @@ function triggerGameOver() {
   if (isLockOpen()) closeLock();
   duckAmbient(true);
   playSound('scare');
-  const faceSrc = state.ghost.type === 'dancer' ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
-  document.getElementById('jumpscare-img').src = faceSrc;
-  // The caught screen names the ghost and teaches its rule, so the retry goes better.
   const dancer = state.ghost.type === 'dancer';
+  const faceSrc = dancer ? 'assets/ghost_dancer_2.png' : 'assets/ghost_samphawesi_1.png';
+  document.getElementById('jumpscare-img').src = faceSrc;
+  document.getElementById('gameover-bg').src = dancer ? ASSET_LIST.gameoverDancer : ASSET_LIST.gameoverSam;
+  // The caught screen names the ghost and teaches its rule, so the retry goes better.
   document.getElementById('gameover-ghost').textContent = dancer ? 'ผีนางรำ' : 'สัมภเวสี';
   document.getElementById('gameover-tip').innerHTML = dancer
     ? 'เธอขยับได้เฉพาะตอนไม่มีใครมอง — <b>หันไปส่องไฟฉายใส่</b>แล้วเธอจะหยุดนิ่ง อย่าหันหลังให้ และระวังตอนไฟกะพริบดับ'
@@ -3423,7 +3557,10 @@ function triggerGameOver() {
   if (settings.jumpscare === 'off') {
     if (state.flags.gameOver) document.getElementById('gameover-modal').classList.remove('hidden');
   } else {
-    document.getElementById('jumpscare-face').src = faceSrc;
+    // painted close-up faces lunge at the screen (the sam one is a wide crawling shot)
+    const face = document.getElementById('jumpscare-face');
+    face.src = dancer ? ASSET_LIST.jumpscareDancer : ASSET_LIST.jumpscareSam;
+    face.classList.toggle('wide', !dancer);
     const soft = settings.jumpscare === 'soft';
     js.classList.remove('hidden');
     js.classList.toggle('soft', soft);
@@ -4900,16 +5037,30 @@ function readLore(n) {
   playSound('page');
   fx.loreFlashAt = performance.now();
   const idx = [2, 3, 4].indexOf(n) + 1;
-  const lines = page.lines.map((text) => ({ speaker: `บันทึกหลวงสุนทร · หน้า ${idx}/3`, text }));
-  lines.push({ speaker: getPlayerName(), text: page.react });
-  queueDialogue(lines, () => {
-    if (!first) return;
-    const found = loreFound();
-    showToast(found === 3 ? 'พบบันทึกของเรือนครบ 3/3 แล้ว — ตอนจบจะเปลี่ยนไป' : `พบบันทึกของเรือน ${found}/3`, '', 3600);
+  // The page held up to the flashlight, the diary's words inked onto the blank part of the paper.
+  const html = `<div class="diary-head">บันทึกหลวงสุนทร · หน้า ${idx}/3</div>`
+    + page.lines.map((t) => `<p>${escapeHtml(t)}</p>`).join('');
+  playCloseup({
+    src: ASSET_LIST['lorePage' + idx],
+    html,
+    box: LORE_BOX[idx],
+    holdMs: 45000,
+    onDone: () => queueDialogue([{ speaker: getPlayerName(), text: page.react }], () => {
+      if (!first) return;
+      const found = loreFound();
+      showToast(found === 3 ? 'พบบันทึกของเรือนครบ 3/3 แล้ว — ตอนจบจะเปลี่ยนไป' : `พบบันทึกของเรือน ${found}/3`, '', 3600);
+    })
   });
   if (first) saveCheckpoint();
   broadcastState();
 }
+
+// Where the blank paper is in each close-up picture (% of the 16:9 image).
+const LORE_BOX = {
+  1: { x: 33.5, y: 12, w: 33, h: 39, cls: 'diary' },
+  2: { x: 34.5, y: 12, w: 31, h: 42, cls: 'diary' },
+  3: { x: 19, y: 9, w: 58, h: 45, cls: 'diary wide' }
+};
 
 // ---- Easter egg for the booth: a Burapha University Open House flyer, thrown from the car
 // in the crash, lies in the forest grass. It was the plan the two friends made together, and
@@ -4933,11 +5084,20 @@ function readBuuFlyer() {
   state.flags.buuFound = true;
   playSound('page');
   fx.loreFlashAt = performance.now();
-  queueDialogue([
-    { speaker: 'ใบปลิวเปียกฝน', text: 'มหาวิทยาลัยบูรพา · OPEN HOUSE · "มาดูว่าอนาคตของเธอหน้าตาเป็นยังไง" (มุมกระดาษมีลายมือเขียนว่า "ไปด้วยกันนะ ห้ามเบี้ยว!")' },
-    { speaker: getPlayerName(), text: `ลายมือของมัน... เราสองคนสัญญากันว่าจะไปงานนี้ด้วยกัน ${pWord('ผม', 'ฉัน')}ต้องรอดออกไปให้ได้` }
-  ], () => {
-    if (first) showToast('พบของลับ: ใบปลิว Open House — หน้าจบจะได้ตำแหน่งพิเศษ', '', 4200);
+  playCloseup({
+    src: ASSET_LIST.buuFlyer,
+    html: '<div class="fly-head">OPEN HOUSE · BUU</div>'
+      + '<div class="fly-uni">มหาวิทยาลัยบูรพา</div>'
+      + '<div class="fly-tag">"มาดูว่าอนาคตของเธอ<br>หน้าตาเป็นยังไง"</div>'
+      + '<div class="fly-date">20 – 21</div>'
+      + '<div class="fly-note">ไปด้วยกันนะ<br>ห้ามเบี้ยว!</div>',
+    box: { x: 25, y: 11.5, w: 40, h: 66, rot: -6.5, cls: 'flyer' },
+    holdMs: 30000,
+    onDone: () => queueDialogue([
+      { speaker: getPlayerName(), text: `ลายมือของมัน... เราสองคนสัญญากันว่าจะไปงานนี้ด้วยกัน ${pWord('ผม', 'ฉัน')}ต้องรอดออกไปให้ได้` }
+    ], () => {
+      if (first) showToast('พบของลับ: ใบปลิว Open House — หน้าจบจะได้ตำแหน่งพิเศษ', '', 4200);
+    })
   });
   if (first) saveCheckpoint();
   broadcastState();

@@ -193,6 +193,7 @@ const HELPERS = `
         photoModal: isPhotoModalOpen(),
         ritual: isRitualOpen(),
         lock: isLockOpen(),
+        closeup: !document.getElementById('closeup').classList.contains('hidden'),
         intro: isStoryIntroOpen(),
         playerX: state.player.x,
         loopErrors: staff.errors
@@ -241,9 +242,15 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   assert.equal(s.intro, false, 'prologue closes on skip');
   assert.equal(s.scene, 1);
 
-  // Scene 1: the forest; the house door opens and leads in
+  // Scene 1: the forest; the wet flyer in the grass opens its close-up, then the door leads in
   await browser.evaluate(`__pt.use('forest_sign')`);
   await settle(browser);
+  await browser.evaluate(`__pt.use('buu_flyer')`);
+  s = await snap(browser);
+  assert.equal(s.closeup, true, 'the flyer opens as a close-up');
+  await settle(browser);
+  s = await snap(browser);
+  assert.equal(s.closeup, false, 'the close-up closes again');
   await browser.evaluate(`__pt.use('mansion_front_door')`);
   await settle(browser);
   s = await snap(browser);
@@ -251,6 +258,8 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
 
   // Scene 2: photo piece 1 in the cabinet, the garland on the table
   await browser.evaluate(`__pt.use('dust_floor')`);
+  await settle(browser);
+  await browser.evaluate(`__pt.use('lore_page_2')`);
   await settle(browser);
   await browser.evaluate(`__pt.use('hiding_cabinet_2')`);
   await settle(browser);
@@ -273,6 +282,8 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   // Scene 3: incense, the samphawesi wakes up, photo piece 2
   await browser.evaluate(`__pt.use('hiding_jar_3')`);
   await settle(browser);
+  await browser.evaluate(`__pt.use('lore_page_3')`);
+  await settle(browser);
   await browser.evaluate(`__pt.use('samphawesi_offering_spot')`);
   await settle(browser);
   s = await snap(browser);
@@ -290,6 +301,9 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   // Scene 4: read the code, open the locked cabinet (dessert), photo 3 at the altar
   await browser.evaluate(`__pt.use('yantra_code')`);
   await settle(browser);
+  await browser.evaluate(`__pt.use('lore_page_4')`);
+  await settle(browser);
+  assert.equal(await browser.evaluate('loreFound()'), 3, 'all three diary pages were read');
   await browser.evaluate(`__pt.use('hiding_cabinet_4')`);
   s = await snap(browser);
   assert.equal(s.lock, true, 'the cabinet is locked first');
@@ -346,6 +360,8 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   await waitFor(() => browser.evaluate('state.flags.victory'), { timeout: 20000, what: 'the ending' });
   const ending = await browser.evaluate(`!document.getElementById('ending-modal').classList.contains('hidden')`);
   assert.equal(ending, true, 'the ending screen is on show');
+  const endBg = await browser.evaluate(`document.getElementById('ending-bg').getAttribute('src')`);
+  assert.match(endBg, /ending_true/, 'with all three diary pages the end screen shows the house at peace');
 
   // let a few frames render the ending, then look for any error on the way
   await sleep(500);

@@ -395,6 +395,16 @@
       </div>
 
       <!-- ENDING / BUU OPEN HOUSE MODAL -->
+      <!-- CLOSE-UP: a diary page / the flyer held up to the flashlight, and the still ending beats -->
+      <div id="closeup" class="closeup hidden" onclick="skipCutscene()">
+        <div class="closeup-stage">
+          <img id="closeup-img" class="closeup-img" alt="" />
+          <div id="closeup-text" class="closeup-text"></div>
+          <div id="closeup-caption" class="closeup-caption"></div>
+        </div>
+        <div class="cutscene-skip">แตะหรือกด [E] เพื่อไปต่อ</div>
+      </div>
+
       <!-- ENDING STING: two messages on the phone, the moment you wake up -->
       <div id="phone-sting" class="phone-sting hidden" onclick="skipCutscene()">
         <div class="phone-sting-clock">05:42</div>
@@ -414,7 +424,7 @@
       </div>
 
       <div id="ending-modal" class="modal ending-screen hidden">
-        <img class="ending-bg" src="assets/bg_scene5_dawn.jpg" alt="" />
+        <img id="ending-bg" class="ending-bg" src="assets/bg_scene5_dawn.jpg" alt="" />
         <div class="modal-box ending-box">
           <div class="ending-kicker">รอดพ้นจากเรือนซ่อนวิญญาณ</div>
           <h2>"อย่าลืมสัญญาของเราล่ะ..."</h2>
@@ -440,11 +450,12 @@
       <!-- FULL-SCREEN JUMPSCARE (plays before the game-over screen) -->
       <div id="jumpscare" class="jumpscare hidden" aria-hidden="true">
         <div class="jumpscare-flash"></div>
-        <img id="jumpscare-face" class="jumpscare-face pixel-img" alt="" />
+        <img id="jumpscare-face" class="jumpscare-face" alt="" />
       </div>
 
       <!-- JUMPSCARE / GAME OVER MODAL -->
       <div id="gameover-modal" class="modal gameover-screen hidden">
+        <img id="gameover-bg" class="gameover-bg" src="assets/gameover_dancer.jpg" alt="" />
         <div class="modal-box gameover-box">
           <img id="jumpscare-img" src="assets/ghost_dancer_2.png" class="jumpscare-sprite pixel-img" alt="" />
           <div id="gameover-ghost" class="gameover-ghost">ผีนางรำ</div>
