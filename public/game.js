@@ -248,10 +248,13 @@ function playSound(type, opts = {}) {
   }
 
   if (type === 'footstep') {
-    // real footsteps on old floorboards (random take, slight pitch variation); grass stays synthesized
-    const takes = ['step_wood_1', 'step_wood_2', 'step_wood_3'].filter((n) => samples[n]);
-    if (state.scene !== 1 && takes.length) {
-      playSample(takes[Math.floor(Math.random() * takes.length)], out, { gain: 0.55, rate: 0.94 + Math.random() * 0.12, t: now });
+    // real footsteps on wet grass (scene 1) or old floorboards (scenes 2..5)
+    const keys = state.scene === 1 && state.role === 'host'
+      ? ['step_grass_1', 'step_grass_2', 'step_grass_3']
+      : ['step_wood_1', 'step_wood_2', 'step_wood_3'];
+    const takes = keys.filter((n) => samples[n]);
+    if (takes.length) {
+      playSample(takes[Math.floor(Math.random() * takes.length)], out, { gain: state.scene === 1 ? 0.5 : 0.55, rate: 0.94 + Math.random() * 0.12, t: now });
     } else {
       playSound('step', opts);
     }
@@ -500,6 +503,9 @@ const SAMPLE_FILES = {
   step_wood_1: 'assets/audio/step_wood_1.mp3',
   step_wood_2: 'assets/audio/step_wood_2.mp3',
   step_wood_3: 'assets/audio/step_wood_3.mp3',
+  step_grass_1: 'assets/audio/step_grass_1.mp3',
+  step_grass_2: 'assets/audio/step_grass_2.mp3',
+  step_grass_3: 'assets/audio/step_grass_3.mp3',
   scratch: 'assets/audio/scratch.mp3',
   thunder: 'assets/audio/thunder.mp3',
   gecko: 'assets/audio/gecko.mp3',
@@ -3927,7 +3933,7 @@ function echoForestStep() {
   const pan = -state.player.dir * 0.65;
   setTimeout(() => {
     if (state.scene !== 1 || isWorldFrozen()) return;
-    playSound('step', { gain: 0.6, pan });
+    playSound('footstep', { gain: 0.6, pan });
     if (state.moveInput === 0 && forestEcho.steps >= 6 && !state.flags.forestEchoNoticed) {
       state.flags.forestEchoNoticed = true;
       setTimeout(() => {
