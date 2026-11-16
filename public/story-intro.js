@@ -381,19 +381,24 @@
   }
 
   /* -------------------- Shared Pixel Art Drawing Helpers -------------------- */
-  function drawCoverFrame(ctx, img, t, { zoom = 1, panX = 0, panY = 0, shakeX = 0, shakeY = 0, alpha = 1 } = {}) {
+  // Frames whose art has black bars baked in (a half-open-eyes shot): draw only the picture
+  // part, so the scene fills the viewport and the held flashlight never floats over black.
+  const FRAME_CROP = {
+    intro_s4_f1: [0, 46, 634, 270],
+  };
+
+  function drawCoverFrame(ctx, img, t, { zoom = 1, panX = 0, panY = 0, shakeX = 0, shakeY = 0, alpha = 1, crop = null } = {}) {
     if (!img) return false;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.imageSmoothingEnabled = false;
-    const iw = img.naturalWidth || img.width;
-    const ih = img.naturalHeight || img.height;
+    const [sx, sy, iw, ih] = crop || [0, 0, img.naturalWidth || img.width, img.naturalHeight || img.height];
     const scale = Math.max(W / iw, H / ih) * zoom;
     const dw = iw * scale;
     const dh = ih * scale;
     const dx = (W - dw) * 0.5 + panX + shakeX;
     const dy = (H - dh) * 0.5 + panY + shakeY;
-    ctx.drawImage(img, Math.round(dx), Math.round(dy), Math.round(dw), Math.round(dh));
+    ctx.drawImage(img, sx, sy, iw, ih, Math.round(dx), Math.round(dy), Math.round(dw), Math.round(dh));
     ctx.restore();
     return true;
   }
@@ -885,7 +890,7 @@
     ctx.fillRect(0, 0, W, H);
 
     const img = getImg(line.frame || 'intro_s4_f0') || getImg('intro_panel_4');
-    drawCoverFrame(ctx, img, t, { zoom: 1.03, panX: Math.sin(t * 0.8) * 5, panY: Math.cos(t * 0.6) * 2 });
+    drawCoverFrame(ctx, img, t, { zoom: 1.03, panX: Math.sin(t * 0.8) * 5, panY: Math.cos(t * 0.6) * 2, crop: FRAME_CROP[line.frame] });
 
     // Floating moonlit mist & fireflies across Thai banana grove
     ctx.save();
@@ -899,8 +904,9 @@
     }
     ctx.restore();
 
-    // Protagonist holding lit keepsake flashlight + glowing wrist sai-sin in bottom-left corner
-    if (line.heldFlashlight) {
+    // Protagonist holding lit keepsake flashlight + glowing wrist sai-sin in bottom-left corner.
+    // The painted grove frames already show the hand and flashlight, so this is only a fallback.
+    if (line.heldFlashlight && !img) {
       const swayX = Math.sin(t * 1.8) * 6;
       const swayY = Math.cos(t * 2.1) * 4;
       drawPocketFlashlight(ctx, 136 + swayX, H - 78 + swayY, 2.5, true, t);
@@ -960,7 +966,8 @@
     ctx.fillRect(mx - 22, my - 24, 44, 94);
     ctx.restore();
 
-    if (line.heldFlashlight) {
+    // the painted frames already show the hand and flashlight; draw ours only as a fallback
+    if (line.heldFlashlight && !frameImg) {
       drawPocketFlashlight(ctx, 136, H - 78, 2.5, true, t);
       drawSaiSinGlow(ctx, 94, H - 58, t, 1.45, 0.95);
     }

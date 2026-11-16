@@ -3139,7 +3139,9 @@ body,
 .story-intro.hidden { display: none; }
 
 .story-window {
-  width: min(980px, 95vw);
+  /* sized from the screen height minus the subtitle area (~190px), so the picture keeps
+     16:9 on a short laptop screen instead of being squashed with black bars beside it */
+  width: min(980px, 95vw, calc((94vh - 190px) * 16 / 9));
   max-height: 94vh;
   display: flex;
   flex-direction: column;
@@ -3157,7 +3159,6 @@ body,
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-height: 62vh;
   background: #040406;
   border-bottom: 1px solid rgba(201, 164, 90, 0.36);
   overflow: hidden;
@@ -3393,7 +3394,6 @@ body,
 }
 
 @media (max-height: 680px) {
-  .story-viewport { max-height: 55vh; }
   .story-line { min-height: 2.5em; }
 }
 
