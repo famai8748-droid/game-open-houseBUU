@@ -3941,3 +3941,65 @@ body,
     url('assets/hospital_bedside.jpg') center 70% / cover no-repeat,
     #020203;
 }
+
+/* ---- Ranat: the dancer's unfinished song ---- */
+.ranat-box { max-width: 560px; text-align: center; }
+.ranat-rounds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 14px; }
+.ranat-rounds span {
+  padding: 6px 4px;
+  border-radius: 8px;
+  border: 1px dashed rgba(235, 185, 99, 0.45);
+  color: #8f8474;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 14px;
+}
+.ranat-rounds span.now { border-style: solid; color: #f5d393; }
+.ranat-rounds span.done { border-style: solid; color: #1a1408; background: #e0b565; font-weight: 700; }
+.ranat-bars {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 14px 20px;
+  border-radius: 14px 14px 46px 46px;
+  background: linear-gradient(#2c1a0e, #170d07);
+  border: 1px solid rgba(190, 150, 80, 0.4);
+}
+.ranat-bars button {
+  width: 68px;
+  height: 150px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  background: linear-gradient(#a37b45, #6f4f2a 70%, #5a3f21);
+  color: #2a1a0b;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: inset 0 2px 0 rgba(255, 230, 180, 0.25), 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+.ranat-bars button:nth-child(2) { height: 142px; }
+.ranat-bars button:nth-child(3) { height: 134px; }
+.ranat-bars button:nth-child(4) { height: 126px; }
+.ranat-bars button:nth-child(5) { height: 118px; }
+.ranat-bars.listening button { cursor: default; filter: saturate(0.7) brightness(0.8); }
+.ranat-bars button.hit { animation: ranatHit 0.42s ease-out; }
+@keyframes ranatHit {
+  0% { background: #ffe9b0; box-shadow: 0 0 26px rgba(255, 215, 130, 0.95); transform: translateY(4px); filter: none; }
+  100% { transform: translateY(0); }
+}
+.ranat-status { min-height: 26px; margin: 14px 0 12px; color: #cfc4ae; font-family: 'Sarabun', sans-serif; font-size: 16px; }
+.ranat-status.go { color: #f5d393; }
+.ranat-status.bad { color: #ff8f7d; }
+.ranat-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+@media (max-width: 520px) {
+  .ranat-bars { gap: 6px; padding: 12px 8px 16px; }
+  .ranat-bars button { width: 50px; height: 120px; font-size: 24px; }
+  .ranat-bars button:nth-child(2) { height: 113px; }
+  .ranat-bars button:nth-child(3) { height: 106px; }
+  .ranat-bars button:nth-child(4) { height: 99px; }
+  .ranat-bars button:nth-child(5) { height: 92px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ranat-bars button.hit { animation-duration: 0.2s; }
+}

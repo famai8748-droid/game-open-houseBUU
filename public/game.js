@@ -888,7 +888,7 @@ const SCENE_TITLES = {
 let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
   const inv = state.inventory;
-  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}`;
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
   if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum)) };
   return hotspotCache.list;
 }
@@ -1145,6 +1145,7 @@ function buildSceneHotspots(sceneNum) {
           ]);
         }
       },
+      ranatHotspot(),
       {
         id: 'shrine_altar_spot',
         x: 640,
@@ -1190,7 +1191,11 @@ function buildSceneHotspots(sceneNum) {
         width: 130,
         label: 'ประตูหลังเรือน (ทางออก)',
         onInteract: () => {
-          if (!state.flags.offeringsPlaced || !state.flags.photosRestored) {
+          if (state.flags.offeringsPlaced && state.flags.photosRestored && !state.flags.songPlayed) {
+            queueDialogue([
+              { speaker: getPlayerName(), text: 'บานประตูยังไม่ขยับ... เสียงกระพรวนยังรำวนอยู่ข้างหลัง เธอยังรอเพลงจากระนาดตัวนั้นให้จบ' }
+            ]);
+          } else if (!state.flags.offeringsPlaced || !state.flags.photosRestored) {
             queueDialogue([
               { speaker: getPlayerName(), text: 'บานประตูเย็นเฉียบ... ยังผนึกอยู่ ต้องถวายของเซ่นให้ครบสามชิ้น และต่อเศษรูปให้ครบทั้งสามก่อน' }
             ], () => {
@@ -1208,6 +1213,7 @@ function buildSceneHotspots(sceneNum) {
   }
 
   if (sceneNum === 5) {
+    if (!state.flags.escaped) return [];
     return [
       {
         id: 'uncle_raj_pattern',
@@ -1623,10 +1629,10 @@ function buildStatePatch() {
     support: {
       bellCooldown: Math.ceil(state.bellCooldown),
       context: hostContext(),
-      prompt: (state.started && !state.flags.cutscenePlaying && nearSpot) ? nearSpot.label : '',
+      prompt: !state.started || state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : nearSpot ? nearSpot.label : '',
       goal: objective ? objective.text : '',
       code: state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : '',
-      lockInput: isLockOpen() ? lockDisplay() : '',
+      lockInput: isLockOpen() ? lockDisplay() : isRanatOpen() ? ranatDisplay() : '',
       target: objective ? (objective.target || '') : ''
     }
   };
@@ -1640,7 +1646,7 @@ function hostContext() {
   if (state.flags.gameOver) return 'gameover';
   if (state.flags.cutscenePlaying) return 'cutscene';
   if (isRitualOpen()) return 'ritual';
-  if (isLockOpen()) return 'lock';
+  if (isLockOpen() || isRanatOpen()) return 'lock'; // the ranat borrows the phone's number pad (bars 1-5)
   if (isPhotoModalOpen()) return 'puzzle';
   if (isDialogueOpen()) return 'dialogue';
   return 'play';
@@ -1727,7 +1733,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
     return;
   }
   if (action === 'offer') return offerItem(value);
-  if (action === 'digit') return lockPress(value);
+  if (action === 'digit') return isRanatOpen() ? (value === -1 ? ranatReplay() : ranatPress(value)) : lockPress(value);
   if (action === 'interact') triggerInteract();
   if (action === 'hide') toggleHide();
   if (action === 'flashlight') toggleFlashlight();
@@ -1740,6 +1746,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
 }
 
 function useBell(source) {
+  if (chase.active) return chaseBell(source);
   if (!state.ghost.active || state.bellCooldown > 0) return false;
   state.ghost.stunTimer = CONFIG.BELL_STUN;
   state.bellCooldown = CONFIG.BELL_COOLDOWN;
@@ -2387,7 +2394,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   closePhotoPuzzleModal();
   const captionEl = document.getElementById('door-caption');
 
-  overlay.classList.remove('hidden');
+  overlay.classList.remove('hidden', 'leaving'); // a door transition may still be fading this overlay out
   let step = 0;
   let timer = null;
   // Each still is rendered off-screen, then shown with a slow zoom/pan and a crossfade.
@@ -2404,7 +2411,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   }
 
   function present() {
-    if (!activeCutscene) return;
+    if (activeCutscene !== cut) return; // stop drawing once this cutscene is over (another may be running)
     const now = performance.now();
     frameCtx.globalAlpha = 1;
     frameCtx.imageSmoothingEnabled = true;
@@ -2426,7 +2433,7 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
   }
 
   function finish() {
-    if (!activeCutscene) return;
+    if (activeCutscene !== cut) return;
     clearTimeout(timer);
     activeCutscene = null;
     overlay.classList.add('hidden');
@@ -2450,7 +2457,8 @@ function playFrameByFrameCutscene(prefix, frameCaptions, frameDurationMs, onComp
     step++;
     timer = setTimeout(stepFrame, frameDurationMs);
   }
-  activeCutscene = { finish, startedAt: performance.now() };
+  const cut = { finish, startedAt: performance.now() };
+  activeCutscene = cut;
   stepFrame();
   requestAnimationFrame(present);
 }
@@ -2720,9 +2728,12 @@ function playDoorCutscene(targetScene, targetX, captionText = 'แอ๊ดด�
 function enterScene(sceneNum, startX) {
   state.scene = sceneNum;
   fx.sceneZoomAt = performance.now();
-  if (sceneNum === 5) setMusicLevel(0.5, 1.8, { restart: true }); // out of the house: the theme returns at dawn
-  setTimeout(() => showChapterCard(sceneNum), 0); // after the scene's own state is set
-  setAmbientScene(sceneNum);
+  const onBridge = sceneNum === 5 && !state.flags.escaped; // the run across the spirit bridge comes before the dawn
+  if (sceneNum === 5 && !onBridge) setMusicLevel(0.5, 1.8, { restart: true }); // out of the house: the theme returns at dawn
+  setTimeout(() => showChapterCard(onBridge ? 'bridge' : sceneNum), 0); // after the scene's own state is set
+  setAmbientScene(onBridge ? 4 : sceneNum);
+  state.struggleLeft = 1; // one chance to tear free from a ghost in every room
+  if (!onBridge) chase.active = false;
   state.player.x = startX;
   state.player.hidden = false;
   state.unhideGrace = 0;
@@ -2750,7 +2761,7 @@ function enterScene(sceneNum, startX) {
     }
   } else if (sceneNum === 4) {
     state.ghost.type = 'dancer';
-    state.ghost.active = !state.flags.offeringsPlaced || !state.flags.photosRestored;
+    state.ghost.active = !state.flags.offeringsPlaced || !state.flags.photosRestored || !state.flags.songPlayed;
     playSound('chime');
     if (state.ghost.active) playTension();
     if (!state.flags.visited4) {
@@ -2762,11 +2773,8 @@ function enterScene(sceneNum, startX) {
       ]);
     }
   } else if (sceneNum === 5) {
-    state.ghost.active = false;
-    state.player.flashlight = false;
-    queueDialogue([
-      { speaker: getPlayerName(), text: 'แฮ่ก... ออกมาได้แล้ว ข้างนอกหมอกลงขาว... แต่เงาร่างตรงนั้น ทำไมคุ้นเหมือนญาติผู้ใหญ่ในงานศพ' }
-    ]);
+    if (onBridge) startChase();
+    else beginDawn();
   }
   saveCheckpoint();
   broadcastState();
@@ -2791,6 +2799,16 @@ function placeGhostAwayFromPlayer() {
 // Both rituals done in scene 4 -> the dancer is appeased and leaves for good.
 function checkRitualComplete() {
   if (state.scene !== 4 || !state.flags.offeringsPlaced || !state.flags.photosRestored || !state.ghost.active) return;
+  if (!state.flags.songPlayed) { // offerings and photo are done, but her song is still unfinished
+    if (!state.flags.songHinted) {
+      state.flags.songHinted = true;
+      queueDialogue([
+        { speaker: 'เสียงกระพรวนข้อเท้า', text: 'กริ๊ง... กริ๊ง... (ยังไม่หยุด เธอยังรำวนอยู่ในความมืด เหมือนรอจังหวะที่ไม่มีวันมาถึง)' },
+        { speaker: getPlayerName(), text: 'ของเซ่นครบ รูปก็ครบ แต่เธอยังไม่ไป... ระนาดเอกตัวนั้น — เพลงของเธอยังค้างอยู่ ต้องมีคนบรรเลงให้จบ' }
+      ]);
+    }
+    return;
+  }
   state.ghost.active = false;
   document.getElementById('danger-overlay').classList.add('hidden');
   playSound('chime');
@@ -3167,7 +3185,7 @@ function placePhotoPiece(num) {
       { speaker: getPlayerName(), text: `ครบทั้งสามชิ้น... ภาพชัดขึ้นเรื่อยๆ และคนที่ยืนอยู่ข้างหลังในรูปก็คือ${pWord('ผม', 'ฉัน')}เอง` },
       { speaker: getPlayerName(), text: `${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ในรูป... ${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ที่ไหนเลย ${pWord('ผม', 'ฉัน')}นอนหมดสติอยู่ระหว่างความเป็นกับความตาย` },
       state.flags.offeringsPlaced
-        ? { speaker: getPlayerName(), text: `รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้${pWord('ผม', 'ฉัน')}ออกไป` }
+        ? { speaker: getPlayerName(), text: state.flags.songPlayed ? `รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้${pWord('ผม', 'ฉัน')}ออกไป` : 'รู้ความจริงแล้ว ของเซ่นก็ครบ... แต่เสียงกระพรวนยังดังอยู่ในห้องนี้' }
         : { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ถ้าถวายของเซ่นครบสามชิ้นที่หิ้งบูชา ประตูหลังเรือนจะยอมเปิด' }
     ], checkRitualComplete));
   } else {
@@ -3201,6 +3219,7 @@ function leaveHiding() {
 
 function triggerInteract() {
   if (isPaused()) return;
+  if (mash.active || performance.now() < mash.quietUntil) return mashPress(); // tearing free from a ghost / a hand on the bridge
   if (state.flags.cutscenePlaying) return skipCutscene();
   if (isStoryIntroOpen()) return window.advanceStory(); // P1's phone button / E steps the prologue
   if (state.flags.victory) return;
@@ -3210,6 +3229,7 @@ function triggerInteract() {
     return;
   }
   if (isPhotoModalOpen()) return placeNextPhotoPiece();
+  if (isRanatOpen()) return ranatReplay(); // hear the phrase again
   if (isRitualOpen() || isLockOpen()) return; // these take their own buttons (or the phone's)
   if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
     advanceDialogue();
@@ -3283,11 +3303,13 @@ function retryFromCheckpoint() {
   net.remoteMoving = false;
   resetGhost(-CONFIG.GHOST_REENTER_MARGIN); // re-forms behind you
   state.ghost.stunTimer = 2.0;
+  state.struggleLeft = 1;
+  if (chase.active) resetChaseSegment(); // on the bridge: back to just past the last obstacle
   broadcastState();
 }
 
 function updateHud() {
-  document.getElementById('hud-scene-title').textContent = SCENE_TITLES[state.scene] || '';
+  document.getElementById('hud-scene-title').textContent = chase.active ? 'ฉากที่ 5: สะพานข้ามภพ' : (SCENE_TITLES[state.scene] || '');
   document.getElementById('hud-offerings').textContent = `${state.inventory.offerings.length}/3`;
   document.getElementById('hud-photos').textContent = `${state.inventory.photos.length}/3`;
   document.getElementById('hud-offerings-placed').classList.toggle('hidden', !state.flags.offeringsPlaced);
@@ -3322,6 +3344,13 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const k = e.key.toLowerCase();
+  if (isRanatOpen()) {
+    if (e.repeat) return;
+    if (/^[1-5]$/.test(e.key)) ranatPress(Number(e.key));
+    else if (e.key === 'Escape') closeRanat();
+    else if (k === 'e' || e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); ranatReplay(); }
+    return;
+  }
   if (isPhotoModalOpen()) {
     if (e.repeat) return;
     if (e.key === 'Escape') {
@@ -3357,7 +3386,9 @@ window.addEventListener('keydown', (e) => {
   if (k === 'f') toggleFlashlight();
   if (e.code === 'Space') {
     e.preventDefault();
-    if (state.flags.cutscenePlaying) {
+    if (mash.active) {
+      mashPress();
+    } else if (state.flags.cutscenePlaying) {
       skipCutscene();
     } else if (!document.getElementById('dialogue-box').classList.contains('hidden')) {
       advanceDialogue();
@@ -3426,6 +3457,8 @@ function updateGame(dt) {
   updateRemoteMoveTimeout();
   if (state.flags.cutscenePlaying || state.flags.gameOver || state.flags.victory) return;
   if (performance.now() < fx.hitstopUntil) return; // a beat of stillness when you pick something up
+  if (mash.active && mash.kind === 'ghost') return tickStruggle(dt); // held by a ghost: mash to tear free
+  if (chase.active) return updateChase(dt); // the spirit bridge runs on its own rules
 
   const dialogueOpen = isDialogueOpen();
   const paused = dialogueOpen || isOverlayOpen(); // conversations and the puzzle / ritual / lock windows freeze the world
@@ -3557,7 +3590,7 @@ function updateGhost(dt) {
   // Hidden with the flashlight on gives you away; stepping out gives a short grace period.
   const exposed = !p.hidden || p.flashlight;
   if (g.stunTimer <= 0 && exposed && solid && state.unhideGrace <= 0 && absDist < CONFIG.CATCH_DIST) {
-    triggerGameOver();
+    if (!tryStruggle()) triggerGameOver(); // the first grab in a room can be fought off
     return;
   }
 
@@ -3598,6 +3631,8 @@ function triggerGameOver() {
   closePhotoPuzzleModal();
   if (isRitualOpen()) closeRitual();
   if (isLockOpen()) closeLock();
+  if (isRanatOpen()) closeRanat();
+  mash.active = false;
   duckAmbient(true);
   playSound('scare');
   const dancer = state.ghost.type === 'dancer';
@@ -3609,6 +3644,13 @@ function triggerGameOver() {
   document.getElementById('gameover-tip').innerHTML = dancer
     ? 'เธอขยับได้เฉพาะตอนไม่มีใครมอง — <b>หันไปส่องไฟฉายใส่</b>แล้วเธอจะหยุดนิ่ง อย่าหันหลังให้ และระวังตอนไฟกะพริบดับ'
     : 'มันตาบอด ล่าด้วยเสียงฝีเท้า — ได้ยินมันใกล้เข้ามาให้<b>หยุดเดินแล้วยืนนิ่ง</b> หรือซ่อนในตู้/ตุ่มแล้ว<b>ปิดไฟฉาย</b>';
+  if (chase.active) { // on the spirit bridge: say which of its two rules was broken
+    const heard = chase.cause === 'listen';
+    document.getElementById('gameover-ghost').textContent = heard ? 'สัมภเวสี' : 'ความมืดของเรือน';
+    document.getElementById('gameover-tip').innerHTML = heard
+      ? 'มันโผล่มาขวางทางเพื่อฟังเสียงฝีเท้า — เห็นคำว่า "หยุดเดิน" ให้<b>ปล่อยปุ่มเดินทันที</b> ยืนนิ่งจนมันจมหายไป'
+      : 'ความมืดตามทันเมื่อคุณช้า — <b>วิ่งไปทางขวาอย่าหยุด</b> ถ้ามือคว้าขาไว้ให้<b>กดปุ่มสำรวจรัวๆ</b>จนหลุด';
+  }
   // Full-screen jumpscare first, then the game-over screen. Intensity follows settings.
   const js = document.getElementById('jumpscare');
   if (settings.jumpscare === 'off') {
@@ -3719,6 +3761,8 @@ function renderGame() {
   ctx.restore();
   renderPostFx();
   renderPickupFx();
+  renderMashOverlay(performance.now());
+  renderChaseFlash(performance.now());
 }
 
 // Walking into a new room the camera starts a touch close and eases back out.
@@ -3781,6 +3825,7 @@ function computeShake() {
 
 function renderScene() {
   ctx.imageSmoothingEnabled = false;
+  if (chase.active) return renderChase(); // the bridge draws itself: no room, props or hotspots
 
   // 1. Draw Scene Background (Crisp 32-bit HD Pixel Art)
   let bgImg = IMAGES.bg1;
@@ -4122,6 +4167,7 @@ function drawSceneProps() {
       drawGroundShadow(640, 610, 58, 12, 0.6);
       drawProp(IMAGES.krathong, 640, 612, 86);
     }
+    drawRanat();
   }
   drawLorePage();
   drawBuuFlyer();
@@ -4824,7 +4870,7 @@ function completeRitual() {
   queueDialogue([
     { speaker: getPlayerName(), text: 'ธูปเทียน พวงมาลัย พานขนม... ครบตามธรรมเนียม กลิ่นธูปม้วนขึ้นมาเองทั้งที่ไม่มีลม ขอให้ดวงวิญญาณในเรือนนี้ได้ไปเสียที' },
     state.flags.photosRestored
-      ? { speaker: getPlayerName(), text: 'ของเซ่นครบ รูปก็ครบ... เสียงกระพรวนเงียบลงแล้ว ขอให้ท่านไปสู่สุคติ' }
+      ? { speaker: getPlayerName(), text: state.flags.songPlayed ? 'ของเซ่นครบ รูปก็ครบ เพลงก็จบแล้ว... ขอให้ท่านไปสู่สุคติ' : 'ของเซ่นครบ รูปก็ครบ... แต่ทำไมเสียงกระพรวนยังไม่เงียบ' }
       : { speaker: getPlayerName(), text: 'เหลือเพียงต่อเศษรูปทั้งสามให้ครบ... ประตูหลังเรือนยังไม่ยอมเปิด' }
   ], () => {
     if (!state.flags.photosRestored) showPhotoPuzzleModal();
@@ -4904,7 +4950,7 @@ function checkLock() {
 }
 
 function isOverlayOpen() {
-  return isStoryIntroOpen() || isPhotoModalOpen() || isRitualOpen() || isLockOpen();
+  return isStoryIntroOpen() || isPhotoModalOpen() || isRitualOpen() || isLockOpen() || isRanatOpen();
 }
 
 // The animated prologue (story-intro.js) sits on top of chapter 1: the world waits behind it.
@@ -4914,7 +4960,7 @@ function isStoryIntroOpen() {
 
 // Nothing in the room moves or reacts: used by every input path and the pause menu.
 function isWorldFrozen() {
-  return isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen();
+  return isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen() || mash.active;
 }
 
 // ---- Timer, ranks and the booth's hall of fame ----------------------------------------
@@ -4926,8 +4972,8 @@ function formatTime(sec) {
 }
 
 function rankFor(time, deaths) {
-  if (deaths === 0 && time < 300) return 'ผู้กล้าแห่งบูรพา';
-  if (deaths <= 1 && time < 480) return 'ผู้มีสัมผัสพิเศษ';
+  if (deaths === 0 && time < 420) return 'ผู้กล้าแห่งบูรพา';
+  if (deaths <= 1 && time < 600) return 'ผู้มีสัมผัสพิเศษ';
   if (deaths <= 3) return 'ผู้รอดชีวิตจากเรือนไทย';
   return 'ดวงจิตที่หลงทาง (แต่ก็รอดมาได้!)';
 }
@@ -5238,6 +5284,7 @@ const CHAPTERS = {
   2: 'บทที่ 2 · โถงรูปถ่าย',
   3: 'บทที่ 3 · ห้องเครื่องเซ่น',
   4: 'บทที่ 4 · พิธีปลดผนึก',
+  bridge: 'บทที่ 5 · สะพานข้ามภพ',
   5: 'บทสุดท้าย · รุ่งอรุณ'
 };
 
@@ -5276,8 +5323,10 @@ function currentObjective() {
     }
     if (!f.offeringsPlaced) return { text: 'ถวายของที่หิ้งบูชาตามธรรมเนียม: ' + RITUAL_HINT, target: 'shrine_altar_spot' };
     if (!f.photosRestored) return { text: 'ต่อเศษรูปให้ครบ: ที่หิ้งบูชา หรือปุ่ม "ดูกรอบรูป" แล้วแตะรูปทั้ง 3 ชิ้น', target: 'shrine_altar_spot' };
+    if (!f.songPlayed) return { text: 'เธอยังรำไม่จบ — บรรเลงเพลงที่ค้างอยู่บนระนาดเอก (ฟังแล้วเคาะตาม)' + hideTip, target: 'ranat_ek' };
     return { text: 'ประตูหลังเรือนเปิดแล้ว — ออกไปทางขวาสุด', target: 'back_exit_door' };
   }
+  if (s === 5 && !f.escaped) return { text: 'วิ่งไปหาแสงทางขวา! · มือคว้าขา: กดสำรวจรัวๆ · เห็นมันโผล่ขวางทาง: หยุดนิ่ง', target: null };
   if (s === 5) return { text: 'คุยกับคุณลุงที่ยืนรออยู่', target: 'uncle_raj_pattern' };
   return { text: '', target: null };
 }
@@ -5305,6 +5354,7 @@ const STUCK_HINTS = {
     ? 'หิ้งบูชากลางห้อง... ถวายธูปเทียนก่อน แล้วพวงมาลัย ปิดท้ายด้วยพานขนม'
     : 'หิ้งบูชากลางห้อง เศษรูปชิ้นสุดท้ายอยู่ใต้ฐาน — ส่องไฟใส่ผีนางรำไว้ระหว่างเดิน'),
   door_back_scene3: () => 'ยังขาดของ... ย้อนกลับทางประตูซ้ายสุด ไปหาในห้องก่อนหน้า',
+  ranat_ek: () => 'ระนาดอยู่ทางขวาของหิ้งบูชา... ฟังทีละท่อน แล้วกดเลข ๑-๕ ตามลำดับที่ลูกระนาดสว่าง',
   back_exit_door: () => 'ประตูหลังเรือนเปิดแล้ว อยู่ขวาสุดของห้อง',
   uncle_raj_pattern: () => 'มีคนยืนรออยู่ทางขวา... ไปคุยกับท่าน'
 };
@@ -5413,6 +5463,7 @@ const RADAR_INFO = {
   hiding_cabinet_4: { label: 'ตู้ล็อก · ขนม', done: () => state.inventory.offerings.includes('dessert') },
   yantra_code: { label: 'ยันต์ · รหัส', done: () => state.flags.codeRead || state.flags.cabinetUnlocked },
   shrine_altar_spot: { label: 'หิ้ง · เศษรูป 3', done: () => state.flags.offeringsPlaced && state.flags.photosRestored },
+  ranat_ek: { label: 'ระนาด · เพลง', done: () => state.flags.songPlayed },
   back_exit_door: { label: 'ทางออก →' },
   uncle_raj_pattern: { label: 'คุณลุง' },
   lore_page_2: { label: 'บันทึก', done: () => state.flags.lore2 },
@@ -5530,8 +5581,8 @@ function renderP2RadarLoop(now = performance.now()) {
       if (state.scene === 1) clueEl.textContent = 'นิมิตบอกทาง: ให้ P1 เดินไปขวาสุดเพื่อสำรวจประตูเรือนไทย';
       if (state.scene === 2) clueEl.textContent = 'นิมิตบอกทาง: เศษรูปชิ้นที่ 1 อยู่ในตู้ไม้สัก และพวงมาลัยอยู่บนโต๊ะริมหน้าต่างขวา';
       if (state.scene === 3) clueEl.textContent = 'นิมิตบอกทาง: ธูปเทียนอยู่ข้างตุ่มน้ำซ้าย เศษรูปชิ้นที่ 2 อยู่บนโต๊ะขวา (ระวังสัมภเวสี!)';
-      if (state.scene === 4) clueEl.textContent = 'นิมิตบอกทาง: ขนมอยู่ในตู้ซ้าย เศษรูปชิ้นที่ 3 อยู่ใต้หิ้งบูชากลางห้อง ถวายให้ครบแล้วออกประตูขวา!';
-      if (state.scene === 5) clueEl.textContent = 'รอดพ้นอาถรรพ์แล้ว! ให้ P1 เดินไปคุยกับคุณลุงชุดราชปะแตน';
+      if (state.scene === 4) clueEl.textContent = 'นิมิตบอกทาง: ขนมอยู่ในตู้ซ้าย เศษรูปชิ้นที่ 3 อยู่ใต้หิ้งบูชากลางห้อง ถวายให้ครบ บรรเลงระนาดให้จบเพลง แล้วออกประตูขวา!';
+      if (state.scene === 5) clueEl.textContent = state.flags.escaped ? 'รอดพ้นอาถรรพ์แล้ว! ให้ P1 เดินไปคุยกับคุณลุงชุดราชปะแตน' : 'สะพานข้ามภพ: บอก P1 ให้วิ่งไปทางขวา! สั่นกระดิ่งอาคมเพื่อหยุดความมืดและปลดมือที่คว้าขา';
     }
   }
   requestAnimationFrame(renderP2RadarLoop);
@@ -5902,7 +5953,8 @@ const STAFF_STEP_HINT = {
   1: 'ฉาก 1 → 2: เปิดประตูเรือนให้',
   2: 'ฉาก 2 → 3: ให้เศษรูป 1 กับพวงมาลัย',
   3: 'ฉาก 3 → 4: ให้ธูปเทียนกับเศษรูป 2 (ข้ามผีสัมภเวสี)',
-  4: 'ฉาก 4 → 5: ทำพิธีและต่อรูปให้ครบ ไปฉากจบ'
+  4: 'ฉาก 4 → 5: ทำพิธี ต่อรูป บรรเลงระนาด และข้ามสะพานให้ ไปฉากจบ',
+  5: 'สะพานข้ามภพ → รุ่งอรุณ: พาข้ามสะพานให้'
 };
 
 window.addEventListener('error', (e) => {
@@ -6011,7 +6063,7 @@ function refreshStaffPanel() {
   const inGame = state.started && !state.flags.victory;
   const btn = (n) => document.querySelector(`#staff-modal [data-staff="${n}"]`);
   const skip = btn(2);
-  skip.disabled = !inGame || state.scene >= 5;
+  skip.disabled = !inGame || (state.scene >= 5 && !chase.active);
   skip.title = inGame ? (STAFF_STEP_HINT[state.scene] || '') : 'ใช้ได้ระหว่างเล่นเท่านั้น';
   btn(3).disabled = !inGame || !state.ghost.active;
   btn(7).disabled = state.started;
@@ -6034,6 +6086,8 @@ function grantProgressUpTo(target) {
     inv.placedPhotos = [1, 2, 3];
     f.offeringsPlaced = true;
     f.photosRestored = true;
+    f.songPlayed = true;
+    f.escaped = true; // the staff skip lands past the spirit bridge, at the dawn
   }
 }
 
@@ -6048,15 +6102,21 @@ function clearScreenForStaff() {
   closePhotoPuzzleModal();
   if (isRitualOpen()) closeRitual();
   if (isLockOpen()) closeLock();
+  if (isRanatOpen()) closeRanat();
+  mash.active = false;
   if (state.flags.gameOver) retryFromCheckpoint();
   if (state.player.hidden) leaveHiding();
 }
 
 function staffSkipScene() {
-  if (state.role !== 'host' || !state.started || state.flags.victory || state.scene >= 5) return false;
+  if (state.role !== 'host' || !state.started || state.flags.victory || (state.scene >= 5 && !chase.active)) return false;
   if (state.flags.cutscenePlaying) {
     showToast('รอคัตซีนนี้จบก่อน แล้วค่อยกดข้ามอีกครั้ง', 'warn');
     return false;
+  }
+  if (chase.active) { // on the spirit bridge: carry the player across to the dawn
+    clearScreenForStaff();
+    return skipChase();
   }
   const target = state.scene + 1;
   clearScreenForStaff();

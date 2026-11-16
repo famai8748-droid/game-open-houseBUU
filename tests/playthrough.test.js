@@ -347,12 +347,48 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   await settle(browser);
   s = await snap(browser);
   assert.equal(s.photosRestored, true);
-  assert.equal(s.ghostActive, false, 'the dancer leaves once both rituals are done');
-
+  assert.equal(s.ghostActive, true, 'the dancer stays until her song is finished');
   await browser.evaluate(`__pt.use('back_exit_door')`);
   await settle(browser);
   s = await snap(browser);
-  assert.equal(s.scene, 5, 'the back door opens onto the dawn');
+  assert.equal(s.scene, 4, 'the back door stays shut until the ranat has been played');
+
+  // The ranat: listen to each phrase, play it back (one wrong note first)
+  await browser.evaluate(`__pt.use('ranat_ek')`);
+  await settle(browser);
+  await waitFor(() => browser.evaluate(`isRanatOpen() && ranat.phase === 'input'`), { what: 'the first phrase to finish playing' });
+  await browser.evaluate(`ranatPress(((ranat.seq[0] + 1) % 5) + 1); true`);
+  assert.equal(await browser.evaluate('ranat.miss'), 1, 'a wrong note counts as a miss');
+  assert.equal(await browser.evaluate('isRanatOpen()'), true, 'one wrong note does not close the ranat');
+  for (let round = 0; round < 3; round++) {
+    await waitFor(() => browser.evaluate(`ranat.phase === 'input' && ranat.round === ${round}`), { what: `phrase ${round + 1} to finish playing` });
+    await browser.evaluate(`ranat.seq.slice(0, RANAT.rounds[ranat.round]).forEach((n) => ranatPress(n + 1)); true`);
+  }
+  await waitFor(() => browser.evaluate('!!state.flags.songPlayed'), { what: 'the song to be finished' });
+  await settle(browser);
+  s = await snap(browser);
+  assert.equal(s.ghostActive, false, 'the dancer leaves once the offerings, the photo and her song are done');
+
+  // The spirit bridge: run, tear free from the hands, stand still while the blind one listens
+  await browser.evaluate(`__pt.use('back_exit_door')`);
+  await settle(browser);
+  s = await snap(browser);
+  assert.equal(s.scene, 5, 'the back door opens onto the spirit bridge');
+  assert.equal(await browser.evaluate('chase.active'), true, 'the run across the bridge starts');
+  await browser.evaluate('CONFIG.PLAYER_SPEED = 1300; true'); // a person takes ~40 s; the test hurries
+  await waitFor(() => browser.evaluate(`(() => {
+    if (state.flags.gameOver) throw new Error('caught on the bridge (' + chase.cause + ')');
+    if (!chase.active) return true;
+    if (isDialogueOpen()) { __pt.drain(); return false; }
+    if (mash.active) { for (let i = 0; i < 20 && mash.active; i++) mashPress(); return false; }
+    setMove(chase.listen ? 0 : 1);
+    return false;
+  })()`), { timeout: 40000, every: 40, what: 'the far end of the bridge' });
+  await browser.evaluate('CONFIG.PLAYER_SPEED = 230; setMove(0); true');
+  assert.equal(await browser.evaluate('chase.next'), 6, 'every obstacle on the bridge was met');
+  await settle(browser);
+  s = await snap(browser);
+  assert.equal(await browser.evaluate('!!state.flags.escaped'), true, 'the bridge ends in the dawn');
 
   // Scene 5: the uncle, the closing cutscene, the ending screen
   await browser.evaluate(`__pt.use('uncle_raj_pattern')`);
@@ -432,5 +468,76 @@ test('the booth staff panel opens with Ctrl+Shift+K, skips a room and resets', {
   const save = await browser.evaluate(`sessionStorage.getItem('buu-horror-checkpoint-v1')`);
   assert.equal(save, null, 'the save was cleared');
 
+  assert.deepEqual(errors, [], 'no errors in the page console');
+});
+
+test('a ghost grab can be fought off once, and the bridge teaches its rules', { skip: !BROWSER && 'no Chrome/Edge found', timeout: 90000 }, async (t) => {
+  const server = startServer();
+  t.after(() => server.child.kill());
+  await server.ready;
+  const browser = await launchBrowser();
+  t.after(() => browser.close());
+  const errors = watchErrors(browser);
+
+  await openGame(browser, server.port);
+  await browser.evaluate(HELPERS);
+  await browser.evaluate(`startSoloGame(); true`);
+  await waitFor(() => browser.evaluate('isStoryIntroOpen()'), { what: 'the prologue' });
+  await browser.evaluate(`window.skipStoryIntro(); grantProgressUpTo(4); enterScene(4, 400); true`);
+  await settle(browser);
+
+  // the dancer reaches the player: first a struggle, not a game over
+  const grab = `state.ghost.stunTimer = 0; state.ghost.alpha = 1; state.unhideGrace = 0; state.player.flashlight = false; state.ghost.x = state.player.x + 30; true`;
+  await browser.evaluate(grab);
+  await waitFor(() => browser.evaluate('mash.active'), { what: 'the struggle to start' });
+  assert.equal(await browser.evaluate('state.flags.gameOver'), false, 'the first grab is not a game over');
+  await browser.evaluate('for (let i = 0; i < STRUGGLE.need; i++) triggerInteract(); true');
+  assert.equal(await browser.evaluate('mash.active'), false, 'mashing ends the struggle');
+  assert.equal(await browser.evaluate('state.flags.gameOver'), false, 'and the player is free');
+  assert.equal(await browser.evaluate('state.ghost.stunTimer > 0'), true, 'the ghost reels for a moment');
+  // the second grab in the same room is final
+  await browser.evaluate(grab);
+  await waitFor(() => browser.evaluate('state.flags.gameOver'), { what: 'the second grab to be a game over' });
+  await browser.evaluate('retryFromCheckpoint(); true');
+  assert.equal(await browser.evaluate('state.struggleLeft'), 1, 'a new life gets a new chance');
+
+  // not mashing: the grip holds and the ghost wins
+  await browser.evaluate(grab);
+  await waitFor(() => browser.evaluate('mash.active'), { what: 'the struggle after a retry' });
+  await waitFor(() => browser.evaluate('state.flags.gameOver'), { timeout: 8000, what: 'the grip to win when nobody mashes' });
+  await browser.evaluate('retryFromCheckpoint(); true');
+
+  // the P1 phone plays the ranat through its number pad (the same input as the cabinet lock)
+  await browser.evaluate('state.ghost.stunTimer = 60; state.flags.ranatSeen = true; openRanat(); true');
+  await waitFor(() => browser.evaluate("ranat.phase === 'input'"), { what: 'the ranat to wait for the player' });
+  assert.equal(await browser.evaluate('hostContext()'), 'lock', 'the phone shows its number pad for the ranat');
+  await browser.evaluate("handleIncomingRemoteInput({ action: 'digit', value: ranat.seq[0] + 1 }); true");
+  assert.equal(await browser.evaluate('ranat.pos'), 1, 'a digit from the phone strikes a bar');
+  await browser.evaluate("handleIncomingRemoteInput({ action: 'digit', value: -1 }); true");
+  assert.equal(await browser.evaluate('ranat.phase'), 'demo', 'backspace on the phone replays the phrase');
+  await browser.evaluate('closeRanat(); true');
+
+  // the bridge: standing still lets the dark catch up
+  await browser.evaluate(`state.flags.offeringsPlaced = state.flags.photosRestored = state.flags.songPlayed = true; state.flags.escaped = false; enterScene(5, 220); true`);
+  await settle(browser);
+  assert.equal(await browser.evaluate('chase.active'), true);
+  await waitFor(() => browser.evaluate(`(() => { if (isDialogueOpen()) __pt.drain(); return state.flags.gameOver; })()`), { timeout: 12000, what: 'the dark to catch a player who stands still' });
+  assert.match(await browser.evaluate(`document.getElementById('gameover-ghost').textContent`), /ความมืด/);
+  await browser.evaluate('retryFromCheckpoint(); true');
+  assert.equal(await browser.evaluate('chase.active && !state.flags.gameOver'), true, 'a retry puts the player back on the bridge');
+
+  // walking on while the blind one listens is the other way to lose
+  await browser.evaluate('chase.next = 1; chase.dist = CHASE.EVENTS[1].at - 40; chase.wall = chase.dist - 400; setMove(1); true');
+  await waitFor(() => browser.evaluate(`(() => { if (!state.flags.gameOver) setMove(1); return state.flags.gameOver; })()`), { timeout: 8000, what: 'being heard' });
+  assert.equal(await browser.evaluate('chase.cause'), 'listen');
+  await browser.evaluate('retryFromCheckpoint(); true');
+  assert.equal(await browser.evaluate('chase.dist'), 790, 'the retry starts just past the last obstacle cleared');
+
+  // the staff skip carries the player across
+  assert.equal(await browser.evaluate('staffSkipScene()'), true);
+  assert.equal(await browser.evaluate('!chase.active && !!state.flags.escaped && state.scene === 5'), true);
+  await sleep(300);
+  const s = await snap(browser);
+  assert.equal(s.loopErrors, 0, 'no frame of the game loop failed');
   assert.deepEqual(errors, [], 'no errors in the page console');
 });

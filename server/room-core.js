@@ -24,7 +24,7 @@ const OFFERINGS = ['garland', 'incense', 'dessert'];
 const FLAG_KEYS = [
   'door1Opened', 'inspectedDust', 'inspectedPortraits', 'samphawesiTriggered',
   'offeringsPlaced', 'photosRestored', 'cutscenePlaying', 'gameOver', 'victory',
-  'visited2', 'visited4', 'codeRead', 'cabinetUnlocked'
+  'visited2', 'visited4', 'codeRead', 'cabinetUnlocked', 'songPlayed', 'escaped'
 ];
 
 class RoomError extends Error {
