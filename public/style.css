@@ -2148,6 +2148,32 @@ body,
   box-shadow: inset 0 0 200px 80px rgba(0, 0, 0, 0.92), inset 0 0 60px 10px rgba(0, 0, 0, 0.7);
 }
 
+/* The dancer on the path after a finished game: mostly invisible, now and then she is there. */
+.t-ghost {
+  position: absolute;
+  left: 57%;
+  bottom: 27%;
+  height: 21%;
+  width: auto;
+  z-index: 2;
+  pointer-events: none;
+  image-rendering: pixelated;
+  filter: grayscale(0.7) brightness(0.8) contrast(1.1) drop-shadow(0 0 14px rgba(190, 40, 40, 0.45));
+  opacity: 0;
+  animation: tGhostThere 14s ease-in-out infinite;
+}
+.t-ghost.hidden { display: none; }
+@keyframes tGhostThere {
+  0%, 52% { opacity: 0; }
+  60%, 78% { opacity: 0.4; }
+  79% { opacity: 0.1; }
+  80%, 84% { opacity: 0.4; }
+  92%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-ghost { animation: none; opacity: 0.25; }
+}
+
 .t-actor {
   position: absolute;
   right: 8%;

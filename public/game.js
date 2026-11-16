@@ -835,8 +835,8 @@ const SCENE_TITLES = {
 let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
   const inv = state.inventory;
-  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}`;
-  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum)) };
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}`;
+  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum)) };
   return hotspotCache.list;
 }
 
@@ -2792,6 +2792,7 @@ function triggerEndingDialogue() {
     playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playPhoneSting(() => {
       state.flags.victory = true;
       clearCheckpoint();
+      markTitleGhost();
       playSound('chime');
       showEndingStats();
       setMusicLevel(0.85, 1.2);
@@ -2886,6 +2887,91 @@ function placeNextPhotoPiece() {
   }
 }
 
+// The three torn photos fly together on the dark screen; then, in the empty hallway of the
+// third one, a sepia figure fades in at the far doorway: the player, who was never in the
+// photo. Skippable after a moment (skipCutscene), like the other cutscenes.
+const PHOTO_REVEAL_MS = 6400;
+const PHOTO_REVEAL_SKIP_AFTER = 1200;
+function playPhotoReveal(onComplete) {
+  state.flags.cutscenePlaying = true;
+  state.moveInput = 0;
+  fx.photoReveal = { at: performance.now() };
+  const timers = [
+    setTimeout(() => playSound('reveal'), 1500),
+    setTimeout(() => playSound('whisper', { gain: 0.7 }), 2800),
+    setTimeout(() => finish(), PHOTO_REVEAL_MS)
+  ];
+  function finish() {
+    if (activeCutscene !== cut) return;
+    timers.forEach(clearTimeout);
+    activeCutscene = null;
+    fx.photoReveal = null;
+    state.flags.cutscenePlaying = false;
+    onComplete();
+  }
+  const cut = { finish, startedAt: performance.now() + PHOTO_REVEAL_SKIP_AFTER - 300 };
+  activeCutscene = cut;
+}
+
+function renderPhotoReveal(now) {
+  const pr = fx.photoReveal;
+  if (!pr) return;
+  const t = now - pr.at;
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const ease = (v) => 1 - Math.pow(1 - clamp(v), 3);
+  const out = 1 - clamp((t - (PHOTO_REVEAL_MS - 700)) / 700);
+  ctx.save();
+  ctx.fillStyle = `rgba(4, 3, 3, ${0.93 * clamp(t / 400) * out})`;
+  ctx.fillRect(0, 0, 1280, 720);
+  const H = 270;
+  const keys = ['photo1', 'photo2', 'photo3'];
+  const widths = keys.map((k) => (isReady(IMAGES[k]) ? H * IMAGES[k].naturalWidth / IMAGES[k].naturalHeight : H * 1.3));
+  const gap = 26;
+  let x = (1280 - widths.reduce((a, b) => a + b, 0) - gap * 2) / 2;
+  const glow = clamp((t - 1500) / 500) * (1 - clamp((t - 2600) / 900));
+  const from = [{ dx: -420, dy: 160, r: -0.5 }, { dx: 0, dy: -380, r: 0.35 }, { dx: 440, dy: 140, r: 0.55 }];
+  let hall = null;
+  keys.forEach((k, i) => {
+    const w = widths[i];
+    const p = ease((t - 250 - i * 220) / 1100);
+    const cx = x + w / 2 + from[i].dx * (1 - p);
+    const cy = 330 + from[i].dy * (1 - p);
+    const rot = from[i].r * (1 - p) + (i - 1) * 0.025;
+    ctx.save();
+    ctx.globalAlpha = clamp(p * 1.4) * out;
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    if (glow > 0) {
+      ctx.shadowColor = `rgba(255, 210, 140, ${0.8 * glow})`;
+      ctx.shadowBlur = 40 * glow;
+    }
+    if (isReady(IMAGES[k])) ctx.drawImage(IMAGES[k], -w / 2, -H / 2, w, H);
+    ctx.restore();
+    if (i === 2) hall = { cx, cy, w, rot };
+    x += w + gap;
+  });
+  // the figure at the far doorway of the hallway photo
+  const fig = clamp((t - 2800) / 1100) * out;
+  if (hall && fig > 0) {
+    const prefix = state.character === 'female' ? 'femaleWalk' : 'maleWalk';
+    const flick = REDUCED_MOTION ? 1 : (Math.sin(t / 37) > 0.93 ? 0.35 : 1);
+    ctx.save();
+    ctx.translate(hall.cx, hall.cy);
+    ctx.rotate(hall.rot);
+    drawSpriteProportional(IMAGES[`${prefix}0`], hall.w * 0.005, H * 0.2, H * 0.36, false, 'sepia(1) brightness(0.8) contrast(1.15)', 0.8 * fig * flick);
+    ctx.restore();
+  }
+  const cap = clamp((t - 3500) / 600) * out;
+  if (cap > 0) {
+    ctx.globalAlpha = cap;
+    ctx.fillStyle = '#e9dcc2';
+    ctx.font = 'bold 26px Sarabun';
+    ctx.textAlign = 'center';
+    ctx.fillText(`ในรูปโถงเรือนที่ว่างเปล่า... มีใครบางคนยืนอยู่ตรงประตู`, 640, 560);
+  }
+  ctx.restore();
+}
+
 function closePhotoPuzzleModal() {
   document.getElementById('photo-modal').classList.add('hidden');
 }
@@ -2904,13 +2990,13 @@ function placePhotoPiece(num) {
     playSound('chime');
     updateHud();
     closePhotoPuzzleModal();
-    queueDialogue([
+    playPhotoReveal(() => queueDialogue([
       { speaker: getPlayerName(), text: `ครบทั้งสามชิ้น... ภาพชัดขึ้นเรื่อยๆ และคนที่ยืนอยู่ข้างหลังในรูปก็คือ${pWord('ผม', 'ฉัน')}เอง` },
       { speaker: getPlayerName(), text: `${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ในรูป... ${pWord('ผม', 'ฉัน')}ไม่ได้อยู่ที่ไหนเลย ${pWord('ผม', 'ฉัน')}นอนหมดสติอยู่ระหว่างความเป็นกับความตาย` },
       state.flags.offeringsPlaced
         ? { speaker: getPlayerName(), text: `รู้ความจริงแล้ว ของเซ่นก็ครบ... ประตูหลังเรือนต้องเปิดให้${pWord('ผม', 'ฉัน')}ออกไป` }
         : { speaker: getPlayerName(), text: 'รู้ความจริงแล้ว ถ้าถวายของเซ่นครบสามชิ้นที่หิ้งบูชา ประตูหลังเรือนจะยอมเปิด' }
-    ], checkRitualComplete);
+    ], checkRitualComplete));
   } else {
     showPhotoPuzzleModal();
   }
@@ -3539,7 +3625,7 @@ function renderScene() {
     drawGroundShadow(state.player.x, 614, 48, 12, 0.65);
     drawSpriteProportional(sprite, state.player.x, 616, 238, state.player.dir === -1);
     renderFootDust();
-  } else {
+  } else if (hideView.k < 0.3) { // once the hiding view closes in, it shows this hint itself
     ctx.fillStyle = '#8cf5d9';
     ctx.font = 'bold 16px Sarabun';
     ctx.textAlign = 'center';
@@ -3660,6 +3746,13 @@ function renderHidingView(now) {
   if (n > 0.05) {
     ctx.fillStyle = `rgba(120, 0, 0, ${0.12 * n * (0.6 + 0.4 * pulse)})`;
     ctx.fillRect(0, 0, 1280, 720);
+  }
+  if (p.hidden) {
+    ctx.globalAlpha = k;
+    ctx.fillStyle = p.flashlight ? '#ff8a7a' : '#8cf5d9';
+    ctx.font = 'bold 18px Sarabun';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.flashlight ? '[ไฟฉายเปิดอยู่! วิญญาณมองเห็นแสง]' : (IS_TOUCH ? '[กำลังซ่อนตัว... แตะ "ซ่อนตัว" หรือเดินเพื่อออก]' : '[กำลังซ่อนตัว... กด Q หรือเดินเพื่อออก]'), 640, 690);
   }
   ctx.restore();
 }
@@ -3837,6 +3930,7 @@ function drawSceneProps() {
     }
   }
   drawLorePage();
+  drawBuuFlyer();
 }
 
 let lightCanvas = null;
@@ -3894,6 +3988,7 @@ function renderDarknessAndFlashlight() {
 
   // Ambient scene lights (porch lantern, utility pole, moonlight window, candles)
   const flicker = lightFlicker(performance.now());
+  const flamesOut = performance.now() < fx.candlesOutUntil; // a botched offering snuffed them
   if (state.scene === 1) {
     punchLight(468, 282, 10, 155 + flicker, 0.85); // Pole bulb
     punchLight(1086, 250, 15, 220 + flicker, 0.95); // Thai house porch lantern
@@ -3901,13 +3996,13 @@ function renderDarknessAndFlashlight() {
     punchLight(990, 380, 20, 220, 0.75); // Moonlight window
   } else if (state.scene === 3) {
     punchLight(290, 360, 20, 160, 0.5); // Window (dim moonlight)
-    punchLight(670, 560, 12, 120 + flicker, 0.75); // Offering candle glow
+    if (!flamesOut) punchLight(670, 560, 12, 120 + flicker, 0.75); // Offering candle glow
   } else if (state.scene === 4) {
-    punchLight(640, 370, 15, 140 + flicker, 0.75); // Altar candle glow
+    if (!flamesOut) punchLight(640, 370, 15, 140 + flicker, 0.75); // Altar candle glow
     punchLight(1013, 360, 20, 200, 0.6); // Moonlight window
   }
   const lamp = ROOM_LIFE[state.scene] && ROOM_LIFE[state.scene].lamp;
-  if (lamp) punchLight(lamp.x, lamp.y, 6, 70 + lightFlicker(performance.now(), 1.7) * 0.6, 0.55); // oil lamp
+  if (lamp && !flamesOut) punchLight(lamp.x, lamp.y, 6, 70 + lightFlicker(performance.now(), 1.7) * 0.6, 0.55); // oil lamp
 
   // Soft ambient halo around player
   const px = state.player.x;
@@ -4221,6 +4316,7 @@ function renderPostFx() {
   renderScareFx(now);
   renderLoreFlash(now);
   renderHidingView(now);
+  renderPhotoReveal(now);
 
   // Low fog drifting along the floor
   if (state.scene <= 4) {
@@ -4691,6 +4787,12 @@ function showEndingStats() {
     meta.className = 'ending-meta';
     meta.textContent = `เวลา ${formatTime(t)} · ถูกวิญญาณจับ ${d} ครั้ง · บันทึกของเรือน ${loreFound()}/3`;
     stats.append(rank, meta);
+    if (state.flags.buuFound) {
+      const promise = document.createElement('div');
+      promise.className = 'ending-meta ending-lore';
+      promise.textContent = 'ผู้รักษาคำสัญญา — เก็บใบปลิว Open House ม.บูรพา ที่ร่วงอยู่ในป่าได้';
+      stats.appendChild(promise);
+    }
     if (loreFound() === 3) {
       const badge = document.createElement('div');
       badge.className = 'ending-meta ending-lore';
@@ -4718,6 +4820,23 @@ function saveToHallOfFame() {
   renderHof(document.getElementById('hof-list'), 5, entry.at);
   showToast('บันทึกชื่อลงหอเกียรติยศแล้ว');
 }
+
+// After a finished game the dancer lingers on the title screen for a while, so the next
+// people in the booth's queue catch her on the path. Per machine (localStorage).
+const TITLE_GHOST_KEY = 'buu-horror-last-finish-v1';
+const TITLE_GHOST_MS = 15 * 60 * 1000;
+function markTitleGhost() {
+  try { localStorage.setItem(TITLE_GHOST_KEY, String(Date.now())); } catch (_) {}
+}
+function syncTitleGhost() {
+  const el = document.getElementById('t-ghost');
+  if (!el) return;
+  let at = 0;
+  try { at = Number(localStorage.getItem(TITLE_GHOST_KEY)) || 0; } catch (_) {}
+  const age = Date.now() - at;
+  el.classList.toggle('hidden', !(at && age >= 0 && age < TITLE_GHOST_MS));
+}
+window.addEventListener('DOMContentLoaded', syncTitleGhost);
 
 window.addEventListener('DOMContentLoaded', () => {
   const box = document.getElementById('title-hof');
@@ -4790,6 +4909,58 @@ function readLore(n) {
   });
   if (first) saveCheckpoint();
   broadcastState();
+}
+
+// ---- Easter egg for the booth: a Burapha University Open House flyer, thrown from the car
+// in the crash, lies in the forest grass. It was the plan the two friends made together, and
+// the friend's last message at the end ("go to the event for me") points back to it.
+const BUU_FLYER_X = 640;
+function buuHotspots(sceneNum) {
+  if (sceneNum !== 1) return [];
+  const found = !!state.flags.buuFound;
+  return [{
+    id: 'buu_flyer',
+    x: BUU_FLYER_X,
+    width: 70,
+    label: found ? 'ดูใบปลิวอีกครั้ง' : 'กระดาษเปียกฝนในพงหญ้า',
+    isHiddenClue: !found,
+    onInteract: () => readBuuFlyer()
+  }];
+}
+
+function readBuuFlyer() {
+  const first = !state.flags.buuFound;
+  state.flags.buuFound = true;
+  playSound('page');
+  fx.loreFlashAt = performance.now();
+  queueDialogue([
+    { speaker: 'ใบปลิวเปียกฝน', text: 'มหาวิทยาลัยบูรพา · OPEN HOUSE · "มาดูว่าอนาคตของเธอหน้าตาเป็นยังไง" (มุมกระดาษมีลายมือเขียนว่า "ไปด้วยกันนะ ห้ามเบี้ยว!")' },
+    { speaker: getPlayerName(), text: `ลายมือของมัน... เราสองคนสัญญากันว่าจะไปงานนี้ด้วยกัน ${pWord('ผม', 'ฉัน')}ต้องรอดออกไปให้ได้` }
+  ], () => {
+    if (first) showToast('พบของลับ: ใบปลิว Open House — หน้าจบจะได้ตำแหน่งพิเศษ', '', 4200);
+  });
+  if (first) saveCheckpoint();
+  broadcastState();
+}
+
+// A soaked flyer in the grass, grey and gold like the university's colours.
+function drawBuuFlyer() {
+  if (state.scene !== 1) return;
+  ctx.save();
+  ctx.translate(BUU_FLYER_X, 606);
+  ctx.rotate(-0.12);
+  ctx.globalAlpha = state.flags.buuFound ? 0.6 : 0.95;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(-15, -7, 34, 14);
+  ctx.fillStyle = '#b9b6ad';
+  ctx.fillRect(-17, -10, 34, 18);
+  ctx.fillStyle = '#c8a24a';
+  ctx.fillRect(-17, -10, 34, 5);
+  ctx.fillStyle = 'rgba(60, 60, 70, 0.7)';
+  for (let i = 0; i < 3; i++) ctx.fillRect(-12, -2 + i * 3.5, 24 - i * 6, 1.4);
+  ctx.fillStyle = 'rgba(40, 60, 30, 0.8)'; // a blade of grass over one corner
+  ctx.fillRect(10, -12, 2, 16);
+  ctx.restore();
 }
 
 // A yellowed page pinned to the wall: faint in the dark, legible in the flashlight.
@@ -5029,7 +5200,8 @@ const RADAR_INFO = {
   uncle_raj_pattern: { label: 'คุณลุง' },
   lore_page_2: { label: 'บันทึก', done: () => state.flags.lore2 },
   lore_page_3: { label: 'บันทึก', done: () => state.flags.lore3 },
-  lore_page_4: { label: 'บันทึก', done: () => state.flags.lore4 }
+  lore_page_4: { label: 'บันทึก', done: () => state.flags.lore4 },
+  buu_flyer: { label: 'ใบปลิว', done: () => state.flags.buuFound }
 };
 
 function renderP2RadarLoop(now = performance.now()) {
