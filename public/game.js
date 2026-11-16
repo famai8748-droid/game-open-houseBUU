@@ -2970,6 +2970,7 @@ function toggleHide() {
     playSound('hide_out');
   } else if (spot && spot.isHidingSpot) {
     state.player.hidden = true;
+    state.player.hideSpot = spot.id;
     state.player.flashlight = false;
     state.moveInput = 0;
     playSound('hide_in');
@@ -3170,6 +3171,7 @@ function updateGame(dt) {
       if (state.player.frame % 4 === 0) {
         playSound('footstep');
         spawnFootDust(state.player.x - state.player.dir * 14);
+        echoForestStep();
       }
     }
 
@@ -3527,6 +3529,7 @@ function renderScene() {
   } else if (state.scene === 5) {
     drawGroundShadow(835, 612, 52, 12, 0.5);
     drawSpriteProportional(IMAGES.uncle0, 835, 614, 240, false);
+    renderDawnFarewell();
   }
 
   // 4. Draw Player (8-frame articulated walk cycle!)
@@ -3562,6 +3565,156 @@ function renderScene() {
   renderHotspotIndicators();
   renderObjectiveMarker();
   renderHotspotPrompt();
+}
+
+// ---- forest: someone walks behind you, half a step late, and stops when you stop ----
+// It foreshadows the blind ghost's rule (stand still and it loses you). After a few steps the
+// echo starts; the first time you stop, one late step lands after you, and you notice.
+const forestEcho = { steps: 0 };
+function echoForestStep() {
+  if (state.scene !== 1 || state.role !== 'host' || state.player.x < 260 || state.flags.forestEchoNoticed && Math.random() < 0.5) return;
+  forestEcho.steps++;
+  if (forestEcho.steps < 3) return;
+  const pan = -state.player.dir * 0.65;
+  setTimeout(() => {
+    if (state.scene !== 1 || isWorldFrozen()) return;
+    playSound('step', { gain: 0.6, pan });
+    if (state.moveInput === 0 && forestEcho.steps >= 6 && !state.flags.forestEchoNoticed) {
+      state.flags.forestEchoNoticed = true;
+      setTimeout(() => {
+        if (state.scene === 1 && !isWorldFrozen()) showToast(`...เสียงฝีเท้าข้างหลังหยุดตาม${pWord('ผม', 'ฉัน')}ด้วย`, 'hint', 4000);
+      }, 900);
+    }
+  }, 300 + Math.random() * 60);
+}
+
+// ---- hiding: you see the room only through the gap you are peering out of ----
+// Cabinet: the two doors close in from the sides, leaving a vertical crack around you.
+// Water jar: the rim below and the lid's shadow above leave a low slit. Either way the gap
+// narrows and the edges pulse with the heartbeat as the ghost comes closer.
+const hideView = { k: 0, near: 0, last: 0 };
+function renderHidingView(now) {
+  const p = state.player;
+  const dt = hideView.last ? Math.min(0.05, (now - hideView.last) / 1000) : 0;
+  hideView.last = now;
+  hideView.k = Math.max(0, Math.min(1, hideView.k + (p.hidden ? dt / 0.28 : -dt / 0.18)));
+  if (hideView.k <= 0) { hideView.near = 0; return; }
+  const g = state.ghost;
+  const near = g.active && g.alpha > 0.3 ? Math.max(0, 1 - Math.abs(g.x - p.x) / 460) : 0;
+  hideView.near += (near - hideView.near) * Math.min(1, dt * 2.5);
+  const k = hideView.k;
+  const n = hideView.near;
+  const pulse = REDUCED_MOTION ? 0 : Math.max(0, Math.sin(now / (n > 0.5 ? 140 : 260))) * n;
+  const cx = Math.max(260, Math.min(1020, p.x));
+  const jar = String(p.hideSpot || '').includes('jar');
+  ctx.save();
+  if (jar) {
+    // glazed clay rim below, the lid's shadow above
+    const rimTop = 720 - k * (250 + 60 * n + 10 * pulse);
+    const lidBot = k * (210 + 70 * n + 10 * pulse);
+    ctx.fillStyle = '#0b0705';
+    ctx.beginPath();
+    ctx.moveTo(0, 720);
+    ctx.lineTo(0, rimTop + 60);
+    ctx.quadraticCurveTo(cx, rimTop - 50, 1280, rimTop + 60);
+    ctx.lineTo(1280, 720);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = `rgba(150, 110, 70, ${0.35 * k})`; // moonlight on the glaze
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, rimTop + 60);
+    ctx.quadraticCurveTo(cx, rimTop - 50, 1280, rimTop + 60);
+    ctx.stroke();
+    ctx.fillStyle = '#050304';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, lidBot - 40);
+    ctx.quadraticCurveTo(cx, lidBot + 40, 1280, lidBot - 40);
+    ctx.lineTo(1280, 0);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // two teak doors; a thin line of light along their inner edges
+    const half = (1 - k) * 760 + k * (230 - 120 * n - 8 * pulse);
+    const drawDoor = (x0, x1, edgeX) => {
+      const grad = ctx.createLinearGradient(x0, 0, x1, 0);
+      grad.addColorStop(0, '#080504');
+      grad.addColorStop(1, '#140c08');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x0, 0, x1 - x0, 720);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)'; // plank seams
+      for (let x = edgeX; x0 <= x && x <= x1; x += edgeX === x1 ? -58 : 58) ctx.fillRect(Math.round(x), 0, 3, 720);
+      ctx.fillStyle = `rgba(190, 160, 120, ${0.22 * k})`;
+      ctx.fillRect(Math.round(edgeX) - (edgeX === x1 ? 2 : 0), 0, 2, 720);
+    };
+    drawDoor(-10, cx - half, cx - half);
+    drawDoor(cx + half, 1290, cx + half);
+  }
+  // the dark closes in from every edge as it comes; the heartbeat makes it throb
+  const vg = ctx.createRadialGradient(cx, 430, 120, cx, 430, 760);
+  vg.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vg.addColorStop(1, `rgba(0, 0, 0, ${k * (0.45 + 0.35 * n + 0.15 * pulse)})`);
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, 1280, 720);
+  if (n > 0.05) {
+    ctx.fillStyle = `rgba(120, 0, 0, ${0.12 * n * (0.6 + 0.4 * pulse)})`;
+    ctx.fillRect(0, 0, 1280, 720);
+  }
+  ctx.restore();
+}
+
+// ---- dawn: the two spirits, freed by the ritual, appear at the gate behind you, bow
+// (a slow wai) and rise away as motes of light. Once, after you have walked away from it.
+const FAREWELL = { fadeIn: 1200, hold: 1800, bow: 1100, rise: 2400 };
+const farewellMotes = [];
+let farewellAt = 0; // not a flag: a performance.now() stamp means nothing after a reload
+function renderDawnFarewell() {
+  const f = state.flags;
+  const now = performance.now();
+  if (!farewellAt) {
+    if (f.farewellDone || state.player.x < 420 || isWorldFrozen()) return;
+    farewellAt = now;
+    playSound('chime', { gain: 0.35, pan: -0.7 });
+    showToast('เสียงกระพรวนแผ่วๆ ดังมาจากหน้าประตูเรือน...', '', 4200);
+  }
+  const t = now - farewellAt;
+  const { fadeIn, hold, bow, rise } = FAREWELL;
+  const total = fadeIn + hold + bow + rise;
+  if (t > total) {
+    f.farewellDone = true;
+    return;
+  }
+  const bowT = Math.max(0, Math.min(1, (t - fadeIn - hold) / bow));
+  const riseT = Math.max(0, (t - fadeIn - hold - bow) / rise);
+  const bowAmt = Math.sin(Math.min(1, bowT * 1.6) * Math.PI / 2);
+  const alpha = 0.6 * Math.min(1, t / fadeIn) * (1 - riseT);
+  const lift = riseT * riseT * 70;
+  const ghosts = [
+    { img: IMAGES.dancerAnim0, x: 205, h: 220, flip: true },
+    { img: IMAGES.samAnim0, x: 315, h: 165, flip: true }
+  ];
+  ghosts.forEach((g) => {
+    ctx.save();
+    ctx.translate(g.x, 600 - lift);
+    ctx.rotate(bowAmt * 0.22); // lean toward the player on the right: a bow
+    ctx.translate(-g.x, -(600 - lift));
+    drawSpriteProportional(g.img, g.x, 600 - lift, g.h, g.flip, 'brightness(1.5) sepia(0.5) saturate(0.6)', alpha);
+    ctx.restore();
+    if (riseT > 0 && !REDUCED_MOTION && Math.random() < 0.5) {
+      farewellMotes.push({ x: g.x + (Math.random() - 0.5) * 60, y: 600 - lift - Math.random() * g.h, v: 30 + Math.random() * 40, born: now });
+    }
+  });
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = farewellMotes.length - 1; i >= 0; i--) {
+    const m = farewellMotes[i];
+    const age = (now - m.born) / 1000;
+    if (age > 1.6) { farewellMotes.splice(i, 1); continue; }
+    ctx.fillStyle = `rgba(255, 220, 150, ${0.7 * (1 - age / 1.6)})`;
+    ctx.fillRect(Math.round(m.x + Math.sin(age * 3 + m.v) * 6), Math.round(m.y - age * m.v), 3, 3);
+  }
+  ctx.restore();
 }
 
 // ---- ghost effects: afterimage trail while hunting, glitch bursts, the dancer's sway ----
@@ -4067,6 +4220,7 @@ function renderPostFx() {
 
   renderScareFx(now);
   renderLoreFlash(now);
+  renderHidingView(now);
 
   // Low fog drifting along the floor
   if (state.scene <= 4) {
