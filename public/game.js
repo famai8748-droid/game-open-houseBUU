@@ -239,6 +239,14 @@ function playSound(type, opts = {}) {
   const now = audioCtx.currentTime;
   const out = outputNode(opts.gain == null ? 1 : opts.gain, opts.pan || 0, audioBus.sfx);
 
+  // Real recordings (CC0, Freesound) take over these sounds once loaded; the synth below stays
+  // as the fallback when a file is missing or still loading.
+  const rec = RECORDED_SFX[type];
+  if (rec && samples[rec[0]]) {
+    playSample(rec[0], out, { gain: rec[1], rate: rec[2] ? 1 + (Math.random() - 0.5) * rec[2] : 1, t: now });
+    return;
+  }
+
   if (type === 'footstep') {
     // real footsteps on old floorboards (random take, slight pitch variation); grass stays synthesized
     const takes = ['step_wood_1', 'step_wood_2', 'step_wood_3'].filter((n) => samples[n]);
@@ -302,7 +310,8 @@ function playSound(type, opts = {}) {
     [[262, 0], [392, 0.18], [523, 0.42]].forEach(([freq, d]) => {
       tone(now + d, { freq, dur: 3.2, peak: 0.045, attack: 0.6, out });
     });
-    if (samples.bell) playSample('bell', out, { gain: 0.12, rate: 0.5, t: now + 0.1 });
+    if (samples.temple_bell) playSample('temple_bell', out, { gain: 0.32, t: now + 0.1 });
+    else if (samples.bell) playSample('bell', out, { gain: 0.12, rate: 0.5, t: now + 0.1 });
   } else if (type === 'chime') {
     // Thai dancer ankle bells (กระพรวนข้อเท้า): two slightly detuned bell strikes = a jingle
     if (samples.bell) {
@@ -488,7 +497,23 @@ const SAMPLE_FILES = {
   scratch: 'assets/audio/scratch.mp3',
   thunder: 'assets/audio/thunder.mp3',
   gecko: 'assets/audio/gecko.mp3',
-  dog: 'assets/audio/dog_howl.mp3'
+  dog: 'assets/audio/dog_howl.mp3',
+  monitor: 'assets/audio/monitor_beep.mp3',
+  phonevibe: 'assets/audio/phone_vibe.mp3',
+  paper: 'assets/audio/paper.mp3',
+  carcrash: 'assets/audio/car_crash.mp3',
+  temple_gong: 'assets/audio/temple_gong.mp3',
+  temple_bell: 'assets/audio/temple_bell.mp3',
+  crickets: 'assets/audio/crickets.mp3'
+};
+// playSound type -> [sample, gain, pitch jitter]: the recording replaces the synth once loaded
+const RECORDED_SFX = {
+  monitor_beep: ['monitor', 0.32, 0],
+  phone_vibe: ['phonevibe', 0.45, 0],
+  page: ['paper', 0.5, 0.12],
+  crash_hit: ['carcrash', 0.85, 0],
+  gong: ['temple_gong', 0.55, 0],
+  crickets: ['crickets', 0.55, 0]
 };
 // Loops: when one finishes loading after its scene already started, rebuild that scene's ambience.
 const AMBIENT_SAMPLES = new Set(['rain', 'birds']);

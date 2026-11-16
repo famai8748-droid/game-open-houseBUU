@@ -323,7 +323,7 @@
         text: `"เฮือก!! แค่ก... แค่ก...! ที่นี่... ที่ไหนกัน?!" ลมหายใจหอบถี่เมื่อสะดุ้งตื่นขึ้นมากลางป่าดงดิบชื้น`,
         frame: 'intro_s4_f0',
         openingEyes: true,
-        sfx: 'heartbeat',
+        sfx: ['heartbeat', 'crickets'],
       },
       {
         scene: 4,
@@ -1259,8 +1259,10 @@
     // Trigger one-shot beat SFX
     if (story.playedSfxIdx !== story.idx && line.sfx) {
       story.playedSfxIdx = story.idx;
-      if (line.sfx === 'bell_whisper') playAnkleBellChime();
-      else safePlaySound(line.sfx);
+      [].concat(line.sfx).forEach((sfx) => { // one sound or a list of them
+        if (sfx === 'bell_whisper') playAnkleBellChime();
+        else safePlaySound(sfx);
+      });
     } else {
       story.playedSfxIdx = story.idx;
     }

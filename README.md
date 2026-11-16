@@ -199,6 +199,13 @@ design/               ร่างดีไซน์เมนู (ไม่ใ�
 | `thunder.mp3` | ฟ้าร้อง (ฉาก 1) | [Distant Thunder Clap_Gentle](https://freesound.org/people/mikala_oidua/sounds/347562/) — mikala_oidua |
 | `gecko.mp3` | ตุ๊กแก (ฉาก 1–2) | [Tookgeh Gecko](https://freesound.org/people/Organuz/sounds/686626/) — Organuz (อัดที่เชียงใหม่) |
 | `dog_howl.mp3` | หมาหอนไกลๆ (ฉาก 1) | [Dog singing during the night](https://freesound.org/people/felix.blume/sounds/463694/) — felix.blume |
+| `monitor_beep.mp3` | เครื่องวัดชีพจร (ฉากตื่นที่โรงพยาบาล) | [Heart Monitor Beep](https://freesound.org/people/samfk360/sounds/148897/) — samfk360 |
+| `phone_vibe.mp3` | มือถือสั่นบนโต๊ะไม้ (บทนำ + ข้อความตอนจบ) | [mobile phone vibration](https://freesound.org/people/Splash.Yang/sounds/77392/) — Splash.Yang |
+| `paper.mp3` | กระดาษ (อ่านบันทึก / ใบปลิว) | [rustling paper](https://freesound.org/people/keweldog/sounds/181774/) — keweldog |
+| `car_crash.mp3` | รถชน (บทนำ) | [Car Crash](https://freesound.org/people/squareal/sounds/237375/) — squareal |
+| `temple_gong.mp3` | ฆ้องวัดงานศพ (บทนำ) + ฆ้องขึ้นฉาก | [BurmaBell](https://freesound.org/people/LozKaye/sounds/94024/) — LozKaye (ฆ้องแผ่นวัดพม่า) |
+| `temple_bell.mp3` | ระฆังวัดตอนจบเรือนสงบ | [temple_bell_002](https://freesound.org/people/tec_studio/sounds/668647/) — tec_studio |
+| `crickets.mp3` | จิ้งหรีดตอนตื่นในดงกล้วย (บทนำ) | [AMBIENCE NIGHT FIELD CRICKET 01](https://freesound.org/people/sengjinn/sounds/175020/) — sengjinn |
 
 ถ้าไฟล์ไหนโหลดไม่ได้ เกมจะกลับไปใช้เสียงสังเคราะห์เดิมอัตโนมัติ เพิ่ม/เปลี่ยนไฟล์ได้ที่ `SAMPLE_FILES` ใน `public/game.js` (ใช้ `.mp3` โมโน เพื่อให้เล่นได้ทั้ง iPhone และ Android)
 
@@ -256,6 +263,7 @@ Prompt สำหรับสร้างเพลงด้วย Suno 6 เพ�
 | `7f420b7` | คัทซีนต่อรูปครบ (เศษรูปประกอบกัน + ร่างผู้เล่นปรากฏในรูป), ของลับใบปลิว Open House ม.บูรพาในป่า + ตำแหน่ง "ผู้รักษาคำสัญญา", ผีนางรำบนหน้าแรกหลังมีคนเล่นจบ · ตรวจบัค: แสงเทียนยังสว่างตอนเทียนดับ, ข้อความ "กำลังซ่อนตัว" ถูกเงาฝาตุ่มบัง (ย้ายไปล่างจอ + ข้อความสำหรับจอสัมผัส) |
 | `75af8ca` | แก้บัคบทนำ: ผมบ็อบของรินในฉากงานศพลงเงาใหม่ (เดิมเป็นก้อนดำแบนเหมือนแถบเซนเซอร์), ภาพดงต้นกล้วยบรรทัด 24 ไม่มีแถบดำบน/ล่างแล้ว, กรอบคัทซีนคงสัดส่วน 16:9 บนจอโน้ตบุ๊ก (ไม่มีแถบดำซ้าย/ขวา), เลิกวาดไฟฉาย + สายสิญจน์ซ้อนทับภาพที่มีมือถือไฟฉายอยู่แล้ว |
 | `99b2558` | ภาพใหม่จาก Gemini: บันทึก 3 หน้ากับใบปลิวเป็นภาพใกล้เต็มจอพร้อมข้อความบนกระดาษ, หน้าผี jumpscare แบบวาด, พื้นหลังหน้าถูกจับตามผี, ตอนจบเรือนสงบ (อ่านบันทึกครบ) + ฉากตื่นที่โรงพยาบาลก่อนข้อความในมือถือ, ภาพดงต้นกล้วยมีสายสิญจน์ที่ข้อมือ · เสียงใหม่: เครื่องวัดชีพจร, คอร์ดตอนจบเรือนสงบ, ฆ้องงานศพ/หัวใจเต้นตอนตื่น/ตุ๊กแก/หมาหอนในบทนำ · Esc ปิดภาพใกล้/ข้ามคัทซีนได้ · เทสต์เล่นทั้งเกมอ่านใบปลิวและบันทึกครบ แล้วเช็คว่าได้ตอนจบเรือนสงบ (ต้นฉบับภาพเต็มขนาดอยู่ใน `art-source/` ซึ่งไม่ขึ้น git) |
+| `PENDING` | เสียงจริง CC0 จาก Freesound 7 เสียง (เครื่องวัดชีพจร, มือถือสั่น, กระดาษ, รถชน, ฆ้องวัด, ระฆังวัด, จิ้งหรีด) แทนเสียงสังเคราะห์เดิม (`RECORDED_SFX`; ถ้าไฟล์โหลดไม่ได้กลับไปใช้เสียงสังเคราะห์) · บทนำเล่นได้หลายเสียงต่อบรรทัด |
 
 ## งานที่เหลือ
 
