@@ -786,6 +786,9 @@ const ASSET_LIST = {
   buuFlyer: 'assets/buu_flyer_closeup.jpg',
   hospitalWake: 'assets/hospital_wake.jpg',
   hospitalBedside: 'assets/hospital_bedside.jpg',
+  hospitalWakeRin: 'assets/hospital_wake_rin.jpg',
+  ranat: 'assets/prop_ranat.png',
+  bgBridge: 'assets/bg_bridge.jpg',
   endingTrue: 'assets/ending_true.jpg'
 };
 
@@ -2899,8 +2902,7 @@ function triggerEndingDialogue() {
       // the end screen shows where the night ended: the house at peace, or the hospital room
       const male = state.character !== 'female';
       const bg = document.getElementById('ending-bg');
-      bg.src = loreFound() === 3 ? ASSET_LIST.endingTrue : (male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalBedside);
-      bg.style.objectPosition = loreFound() < 3 && !male ? 'center 96%' : '';
+      bg.src = loreFound() === 3 ? ASSET_LIST.endingTrue : (male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin);
       document.getElementById('ending-modal').classList.remove('hidden');
       broadcastState();
     }))));
@@ -2999,11 +3001,11 @@ function playHospitalWake(onDone) {
       ? 'บนโต๊ะข้างเตียง พวงมาลัยมะลิ กับใบปลิว Open House ใบเดียวกับที่เจอในป่า... มุมกระดาษยังมีลายมือ "ไปด้วยกันนะ"'
       : 'บนโต๊ะข้างเตียง พวงมาลัยมะลิ มือถือจอร้าว กับใบปลิวเปียกน้ำที่ใครสักคนเอามาวางไว้'
   ];
-  if (male) captions.push('ที่ประตูห้อง... เงาชายชราชุดราชปะแตนยืนมองอยู่ครู่หนึ่ง แล้วจางหายไป');
+  captions.push('ที่ประตูห้อง... เงาชายชราชุดราชปะแตนยืนมองอยู่ครู่หนึ่ง แล้วจางหายไป');
   playCloseup({
-    src: male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalBedside,
+    src: male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin,
     fit: 'cover',
-    focus: male ? 'center' : 'center 96%',
+    focus: 'center',
     captions,
     captionMs: 3200,
     beep: 1050,

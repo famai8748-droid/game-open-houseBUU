@@ -348,6 +348,18 @@ function drawRanat() {
   const cx = RANAT.x;
   const by = 612;
   drawGroundShadow(cx, by - 2, 96, 13, 0.6);
+  if (isReady(IMAGES.ranat)) { // painted prop (Gemini); the code drawing below is the fallback
+    if (!state.flags.songPlayed) { // the unfinished song still hangs over the bars
+      const pulse = 0.16 + 0.07 * Math.sin(performance.now() / 600);
+      const halo = ctx.createRadialGradient(cx, by - 80, 6, cx, by - 80, 120);
+      halo.addColorStop(0, `rgba(240, 196, 120, ${pulse})`);
+      halo.addColorStop(1, 'rgba(240, 196, 120, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(cx - 120, by - 200, 240, 200);
+    }
+    drawProp(IMAGES.ranat, cx, by, 106);
+    return;
+  }
   ctx.save();
   ctx.translate(cx, by);
   ctx.fillStyle = '#2a1a0f'; // pedestal
@@ -697,19 +709,39 @@ function renderChase(now = performance.now()) {
   ctx.save();
   ctx.imageSmoothingEnabled = true;
 
-  // sky, and the light at the far end growing as you get there
+  const painted = isReady(IMAGES.bgBridge);
+  if (painted) {
+    // painted valley (Gemini): pans from the moonlit dead trees toward the far light as you cross
+    const img = IMAGES.bgBridge;
+    const iw = img.naturalWidth * (H / img.naturalHeight);
+    ctx.drawImage(img, -prog * Math.max(0, iw - W), 0, iw, H);
+  } else {
+    renderChaseSky(W, H, cam, prog);
+  }
+  // the light at the far end growing as you get there
+  const gx = 1520 - prog * 430;
+  const glow = ctx.createRadialGradient(gx, 470, 10, gx, 470, 380 + prog * 640);
+  glow.addColorStop(0, `rgba(255, 216, 152, ${(painted ? 0.06 : 0.16) + prog * 0.5})`);
+  glow.addColorStop(0.4, `rgba(240, 150, 110, ${(painted ? 0.02 : 0.06) + prog * 0.2})`);
+  glow.addColorStop(1, 'rgba(240, 150, 110, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  // near trees: only over the code-drawn sky (the painting has its own, and stick trees clash with it)
+  if (!painted) {
+    ctx.strokeStyle = '#05060b';
+    chaseLayer(cam, 0.42, 340, (i, x) => drawChaseTree(x + chaseRand(i + 7) * 200, 650, 300 + chaseRand(i + 70) * 190, i * 29 + 5));
+  }
+  renderChaseFront(now, W, H, cam, prog, p);
+}
+
+// The code-drawn sky, moon and far trees: only used until the painting has loaded.
+function renderChaseSky(W, H, cam, prog) {
   const sky = ctx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, '#04050b');
   sky.addColorStop(0.6, `rgb(${Math.round(10 + prog * 46)}, ${Math.round(12 + prog * 24)}, ${Math.round(24 + prog * 22)})`);
   sky.addColorStop(1, '#020306');
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
-  const gx = 1520 - prog * 430;
-  const glow = ctx.createRadialGradient(gx, 470, 10, gx, 470, 380 + prog * 640);
-  glow.addColorStop(0, `rgba(255, 216, 152, ${0.16 + prog * 0.6})`);
-  glow.addColorStop(0.4, `rgba(240, 150, 110, ${0.06 + prog * 0.22})`);
-  glow.addColorStop(1, 'rgba(240, 150, 110, 0)');
-  ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
   // a thin moon the fog keeps swallowing
@@ -724,12 +756,14 @@ function renderChase(now = performance.now()) {
   ctx.arc(mx, 150, 40, 0, Math.PI * 2);
   ctx.fill();
 
-  // far and near trees
+  // far trees
   ctx.strokeStyle = `rgb(${Math.round(9 + prog * 10)}, ${Math.round(11 + prog * 8)}, ${Math.round(19 + prog * 8)})`;
   chaseLayer(cam, 0.16, 210, (i, x) => drawChaseTree(x + chaseRand(i) * 120, 600, 170 + chaseRand(i + 40) * 170, i * 13));
   ctx.strokeStyle = '#05060b';
-  chaseLayer(cam, 0.42, 340, (i, x) => drawChaseTree(x + chaseRand(i + 7) * 200, 650, 300 + chaseRand(i + 70) * 190, i * 29 + 5));
+}
 
+// Everything in front of the backdrop: fog, the void, the gate, the bridge, the hands, the player.
+function renderChaseFront(now, W, H, cam, prog, p) {
   // fog between the trees and the bridge
   if (!chaseFog) chaseFog = makeFogSprite();
   ctx.globalAlpha = 0.13;
