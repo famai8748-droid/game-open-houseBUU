@@ -749,6 +749,13 @@ function preloadAssets() {
       IMAGES[`intro_s${sceneKey}_f${f}`] = fr;
     }
   });
+  // The funeral frames show the player from behind; Rin gets the same frames with a schoolgirl
+  // bob painted on (tools/rin_bob.py), so picking her no longer shows a boy at the altar.
+  [0, 1, 2, 4, 5].forEach((f) => {
+    const fr = new Image();
+    fr.src = `assets/frames/intro_s1_f${f}_rin.png`;
+    IMAGES[`intro_s1_f${f}_rin`] = fr;
+  });
 }
 preloadAssets();
 
@@ -3198,6 +3205,7 @@ function updateGhost(dt) {
   let speed = CONFIG.GHOST_SPEED[g.type] || 100;
   if (p.sixthSense) speed *= CONFIG.SIXTH_SENSE_GHOST_MULT;
   g.frozen = false; // set again below only while the beam pins her this frame
+  if (performance.now() < fx.ghostHoldUntil) return; // a scripted scare owns her for a moment
 
   if (g.stunTimer > 0) {
     g.stunTimer = Math.max(0, g.stunTimer - dt);
@@ -3254,6 +3262,7 @@ function updateGhost(dt) {
 
   const absDist = Math.abs(p.x - g.x);
   const solid = g.alpha > 0.5;
+  maybeCallPlayerName(g, p, absDist, solid);
 
   // The beam finds a ghost after losing it for a while: a sharp sting, like in the movies.
   const now = performance.now();
@@ -3869,6 +3878,7 @@ function renderRoomGlow() {
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+  if (now < fx.candlesOutUntil) return; // snuffed by a botched offering; they relight together
   drawFlame(life.lamp.x, life.lamp.y, 0.6, 1.7);
   (CANDLE_FLAMES[state.scene] || []).forEach((c, i) => drawFlame(c.x, c.y, c.s, i * 3.1));
 }
@@ -4242,8 +4252,25 @@ function moveBlindGhost(g, p, speed, dt) {
   }
 }
 
+// Once per game, while you stand frozen with the blind one close by, something calls your name
+// in your mother's voice and begs you to come to her — the one thing that would get you caught.
+function maybeCallPlayerName(g, p, absDist, solid) {
+  if (state.flags.nameCalled || state.scene !== 3 || g.type !== 'samphawesi') return;
+  if (!solid || p.hidden || state.moveInput !== 0 || absDist > 260 || absDist < 90) return;
+  state.flags.nameCalled = true;
+  const name = state.character === 'female' ? 'ริน' : 'นนท์';
+  const pan = Math.max(-0.9, Math.min(0.9, (g.x - p.x) / 300));
+  playSound('whisper', { gain: 1.2, pan });
+  vibrate([40, 80, 40]);
+  showToast(`เสียงแม่: "${name}... ${name}ลูก... มาหาแม่ตรงนี้หน่อยสิ"`, 'warn', 4200);
+  setTimeout(() => {
+    if (state.scene !== 3 || state.flags.gameOver) return;
+    showToast(`แม่ไม่ได้มาที่นี่... นั่นไม่ใช่เสียงแม่ — อย่าขยับ`, 'hint', 3800);
+  }, 4300);
+}
+
 // ---- Scripted scares ----------------------------------------------------------------
-const fx = { blackoutUntil: 0, blackoutStart: 0, appear: null, hitstopUntil: 0, sceneZoomAt: 0, pickup: null, loreFlashAt: 0, beamSince: 0, beamLostAt: 0 };
+const fx = { candlesOutUntil: 0, ghostHoldUntil: 0, blackoutUntil: 0, blackoutStart: 0, appear: null, hitstopUntil: 0, sceneZoomAt: 0, pickup: null, loreFlashAt: 0, beamSince: 0, beamLostAt: 0 };
 
 function triggerBlackout(ms, appear = null) {
   const now = performance.now();
@@ -4317,15 +4344,20 @@ function offerItem(item) {
     broadcastState();
     return;
   }
-  // wrong order: the offerings tumble, the dancer lunges closer
+  // wrong order: the offerings tumble, every flame in the room dies, and in the dark the
+  // dancer's face is suddenly right in front of you; the lamps sputter back and she is closer
   state.ritual = [];
   refreshRitualUi();
   playSound('scare', { gain: 0.45 });
   vibrate([120, 60, 120]);
-  const box = document.querySelector('#ritual-modal .modal-box');
-  restartAnimation(box, 'shake');
+  closeRitual();
+  const now = performance.now();
+  fx.candlesOutUntil = now + 2600;
+  fx.ghostHoldUntil = now + 1500; // she moves only by the scripted lunge, never unseen in the dark
+  const p = state.player;
+  triggerBlackout(1400, { img: 'dancerAnim1', x: Math.max(80, Math.min(1200, p.x + p.dir * 150)), bottom: 616, h: 320, flip: p.dir === 1, at: 650, dur: 260 });
   angerDancer();
-  showToast(`ผิดธรรมเนียม! ของเซ่นร่วงกระจาย... ต้องวาง${OFFER_NAMES[expected]}ก่อน`, 'warn', 4200);
+  showToast(`ผิดธรรมเนียม! ของเซ่นร่วงกระจาย เปลวเทียนดับวูบ... ต้องวาง${OFFER_NAMES[expected]}ก่อน`, 'warn', 4200);
   broadcastState();
 }
 

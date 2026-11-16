@@ -489,7 +489,9 @@
     const shiverX = Math.sin(t * 17.3) * Math.cos(t * 6.9) * (0.9 * uneasy) + flinch;
     const shiverY = Math.sin(t * 13.1) * (0.55 * uneasy);
 
-    const img = getImg(line.frame || 'intro_s1_f0') || getImg('intro_panel_1');
+    const frameKey = line.frame || 'intro_s1_f0';
+    const rin = typeof state !== 'undefined' && state && state.character === 'female';
+    const img = (rin && getImg(frameKey + '_rin')) || getImg(frameKey) || getImg('intro_panel_1');
     const zoom = 1.03 + beatProgress * 0.04;
     drawCoverFrame(ctx, img, t, { zoom, panX: shiverX * 0.45, panY: Math.sin(t * 0.7) * 2 + shiverY * 0.4 });
 

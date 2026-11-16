@@ -318,6 +318,11 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   await browser.evaluate(`offerItem('dessert'); true`);
   s = await snap(browser);
   assert.equal(s.offeringsPlaced, false, 'a wrong order does not finish the ritual');
+  assert.equal(s.ritual, false, 'a wrong order snuffs the candles and closes the ritual');
+  await sleep(1600); // the blackout and the dancer's flash
+  await browser.evaluate(`__pt.use('shrine_altar_spot')`);
+  s = await snap(browser);
+  assert.equal(s.ritual, true, 'the altar reopens the ritual');
   await browser.evaluate(`offerItem('incense'); offerItem('garland'); offerItem('dessert'); true`);
   s = await snap(browser);
   assert.equal(s.offeringsPlaced, true, 'the right order finishes the ritual');
