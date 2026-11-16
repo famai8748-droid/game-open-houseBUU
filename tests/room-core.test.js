@@ -165,13 +165,28 @@ test('sanitizePatch drops unknown keys and clamps values', () => {
 });
 
 test('sanitizePatch keeps the phone context fields and strips control characters', () => {
-  const out = sanitizePatch({ support: { context: 'puzzle', prompt: 'ตู้ไม้สัก\u0000\n' + 'x'.repeat(200), bellCooldown: 3, evil: 1 } });
+  const out = sanitizePatch({
+    support: {
+      context: 'puzzle',
+      prompt: 'ตู้ไม้สัก\u0000\n' + 'x'.repeat(200),
+      bellCooldown: 3,
+      ranatHint: '๑ · ๓ · ๕',
+      bridgePct: 140,
+      bridgeWallPct: -50,
+      bridgeState: 'hand',
+      evil: 1
+    }
+  });
   assert.equal(out.support.context, 'puzzle');
   assert.equal(out.support.bellCooldown, 3);
+  assert.equal(out.support.ranatHint, '๑ · ๓ · ๕');
+  assert.equal(out.support.bridgePct, 100);
+  assert.equal(out.support.bridgeWallPct, -20);
+  assert.equal(out.support.bridgeState, 'hand');
   assert.equal(out.support.evil, undefined);
   assert.ok(!/[\u0000-\u001f]/.test(out.support.prompt));
   assert.equal(out.support.prompt.length, 80);
-  assert.equal(sanitizePatch({ support: { context: 'hacked' } }).support.context, undefined);
+  assert.deepEqual(sanitizePatch({ support: { context: 'hacked', bridgeState: 'fly' } }).support, {});
 });
 
 test('ritual and lock inputs are P1-only and their values are whitelisted', async () => {

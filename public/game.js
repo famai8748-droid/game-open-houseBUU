@@ -1652,8 +1652,12 @@ function buildStatePatch() {
       context: hostContext(),
       prompt: !state.started || state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : nearSpot ? nearSpot.label : '',
       goal: objective ? objective.text : '',
-      code: state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : '',
+      code: isRanatOpen() ? '' : (state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : ''),
       lockInput: isLockOpen() ? lockDisplay() : isRanatOpen() ? ranatDisplay() : '',
+      ranatHint: typeof ranatCoopHint === 'function' ? ranatCoopHint() : '',
+      bridgePct: chase.active ? Math.round(Math.max(0, Math.min(100, (chase.dist / CHASE.LENGTH) * 100))) : 0,
+      bridgeWallPct: chase.active ? Math.round(Math.max(-20, Math.min(100, (chase.wall / CHASE.LENGTH) * 100))) : 0,
+      bridgeState: !chase.active ? '' : (mash.active && mash.kind === 'hand') ? 'hand' : chase.listen ? 'listen' : 'run',
       target: objective ? (objective.target || '') : ''
     }
   };
@@ -5081,6 +5085,118 @@ function saveToHallOfFame() {
   showToast('บันทึกชื่อลงหอเกียรติยศแล้ว');
 }
 
+// Render a 1200x630 souvenir card of the run (rank, time, badges, ending backdrop) and save it as PNG.
+function downloadSouvenirCard() {
+  const c = document.createElement('canvas');
+  c.width = 1200;
+  c.height = 630;
+  const g = c.getContext('2d');
+  const t = state.playTime || 0;
+  const d = state.deaths || 0;
+  const lore = loreFound();
+  const male = state.character !== 'female';
+  const input = document.getElementById('hof-name');
+  const playerName = (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14) || (male ? 'นนท์' : 'ริน');
+
+  g.fillStyle = '#070508';
+  g.fillRect(0, 0, 1200, 630);
+  const bg = lore === 3 ? IMAGES.endingTrue : (male ? IMAGES.hospitalWake : IMAGES.hospitalWakeRin);
+  if (isReady(bg)) {
+    const scale = Math.max(1200 / bg.naturalWidth, 630 / bg.naturalHeight);
+    const bw = bg.naturalWidth * scale;
+    const bh = bg.naturalHeight * scale;
+    g.globalAlpha = 0.72;
+    g.drawImage(bg, (1200 - bw) / 2, (630 - bh) / 2, bw, bh);
+    g.globalAlpha = 1;
+  }
+
+  const shade = g.createLinearGradient(0, 0, 1200, 0);
+  shade.addColorStop(0, 'rgba(5, 4, 7, 0.92)');
+  shade.addColorStop(0.58, 'rgba(5, 4, 7, 0.76)');
+  shade.addColorStop(1, 'rgba(5, 4, 7, 0.35)');
+  g.fillStyle = shade;
+  g.fillRect(0, 0, 1200, 630);
+
+  // Subtle top/bottom red-gold hairline matching the game's UI frames
+  const line = g.createLinearGradient(0, 0, 1200, 0);
+  line.addColorStop(0, 'rgba(200, 52, 40, 0.95)');
+  line.addColorStop(0.55, 'rgba(240, 207, 149, 0.8)');
+  line.addColorStop(1, 'rgba(240, 207, 149, 0)');
+  g.fillStyle = line;
+  g.fillRect(0, 0, 1200, 4);
+  g.fillRect(0, 626, 1200, 4);
+
+  g.strokeStyle = 'rgba(240, 207, 149, 0.28)';
+  g.lineWidth = 1.5;
+  g.strokeRect(24, 24, 1152, 582);
+
+  // Character sprite standing on the right
+  const sprite = male ? IMAGES.maleWalk0 : IMAGES.femaleWalk0;
+  if (isReady(sprite)) {
+    const sh = 330;
+    const sw = sh * (sprite.naturalWidth / sprite.naturalHeight);
+    g.save();
+    g.imageSmoothingEnabled = false;
+    g.shadowColor = 'rgba(255, 200, 120, 0.35)';
+    g.shadowBlur = 24;
+    g.drawImage(sprite, 990 - sw / 2, 560 - sh, sw, sh);
+    g.restore();
+  }
+
+  g.textAlign = 'left';
+  g.fillStyle = '#ff6b5e';
+  g.font = 'bold 20px "Chakra Petch", Sarabun, sans-serif';
+  g.fillText('THE VEILED THAI HOUSE · SURVIVOR RECORD', 64, 86);
+
+  g.fillStyle = '#f6dda9';
+  g.font = 'bold 54px "Chakra Petch", Sarabun, sans-serif';
+  g.fillText('เรือนซ่อนวิญญาณ', 64, 148);
+
+  g.fillStyle = '#ddd2be';
+  g.font = '600 28px Sarabun, sans-serif';
+  g.fillText(`ผู้รอดชีวิต: ${playerName}`, 64, 224);
+
+  g.fillStyle = '#ffd36b';
+  g.font = 'bold 38px Sarabun, sans-serif';
+  g.fillText(rankFor(t, d), 64, 282);
+
+  g.fillStyle = '#e7dcc6';
+  g.font = '600 24px Sarabun, sans-serif';
+  g.fillText(`เวลา ${formatTime(t)}  ·  ถูกวิญญาณจับ ${d} ครั้ง  ·  บันทึกของเรือน ${lore}/3`, 64, 336);
+
+  let by = 396;
+  const badges = [];
+  if (state.flags.buuFound) badges.push('ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
+  if (lore === 3) badges.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
+  if (state.roomCode) badges.push(`Co-op 2 ผู้เล่น (ห้อง ${state.roomCode})`);
+  badges.forEach((b) => {
+    g.fillStyle = 'rgba(240, 207, 149, 0.12)';
+    g.fillRect(64, by - 28, 680, 38);
+    g.strokeStyle = 'rgba(240, 207, 149, 0.35)';
+    g.strokeRect(64, by - 28, 680, 38);
+    g.fillStyle = '#9fe3cf';
+    g.font = '600 20px Sarabun, sans-serif';
+    g.fillText(b, 80, by - 3);
+    by += 48;
+  });
+
+  g.fillStyle = '#f0cf95';
+  g.font = 'bold 26px "Chakra Petch", Sarabun, sans-serif';
+  g.fillText('OPEN HOUSE BUU · วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา', 64, 566);
+
+  try {
+    const a = document.createElement('a');
+    a.download = `veiled-thai-house-${Date.now()}.png`;
+    a.href = c.toDataURL('image/png');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast('บันทึกการ์ดผู้รอดชีวิตแล้ว');
+  } catch (_) {
+    showToast('ไม่สามารถบันทึกภาพอัตโนมัติบนเบราว์เซอร์นี้ได้', 'warn');
+  }
+}
+
 // After a finished game the dancer lingers on the title screen for a while, so the next
 // people in the booth's queue catch her on the path. Per machine (localStorage).
 const TITLE_GHOST_KEY = 'buu-horror-last-finish-v1';
@@ -5492,6 +5608,72 @@ const RADAR_INFO = {
   buu_flyer: { label: 'ใบปลิว', done: () => state.flags.buuFound }
 };
 
+function renderP2BridgeRadar(rctx, rg) {
+  rctx.fillStyle = '#84f2d4';
+  rctx.font = 'bold 20px Sarabun';
+  rctx.fillText('ฉากที่ 5: สะพานข้ามภพ', 14, 30);
+
+  const left = 28;
+  const right = 572;
+  const span = right - left;
+  const pct = Math.max(0, Math.min(100, Number(rg.bridgePct) || 0));
+  const wallPct = Math.max(0, Math.min(100, Number(rg.bridgeWallPct) || 0));
+  const p1x = left + (pct / 100) * span;
+  const wallX = left + (wallPct / 100) * span;
+
+  // Dawn gate at the right end of the bridge
+  const gateGlow = rctx.createRadialGradient(right, 165, 4, right, 165, 56);
+  gateGlow.addColorStop(0, 'rgba(255, 224, 150, 0.75)');
+  gateGlow.addColorStop(1, 'rgba(255, 224, 150, 0)');
+  rctx.fillStyle = gateGlow;
+  rctx.fillRect(right - 56, 105, 80, 110);
+  rctx.fillStyle = '#ffd36b';
+  rctx.font = '600 17px Sarabun';
+  rctx.textAlign = 'right';
+  rctx.fillText('แสงรุ่งอรุณ', right, 130);
+  rctx.textAlign = 'left';
+
+  // Bridge plank track
+  rctx.strokeStyle = '#59dfb7';
+  rctx.lineWidth = 3;
+  rctx.beginPath();
+  rctx.moveTo(left, 195);
+  rctx.lineTo(right, 195);
+  rctx.stroke();
+
+  // Darkness pouring in from the house on the left
+  if (wallX > left) {
+    const darkGrad = rctx.createLinearGradient(left, 0, wallX + 18, 0);
+    darkGrad.addColorStop(0, 'rgba(180, 28, 28, 0.45)');
+    darkGrad.addColorStop(1, 'rgba(255, 59, 59, 0.72)');
+    rctx.fillStyle = darkGrad;
+    rctx.fillRect(left, 148, wallX - left, 47);
+  }
+  rctx.fillStyle = '#ff3b3b';
+  rctx.beginPath();
+  rctx.arc(Math.max(left, wallX), 174, 12 + Math.sin(performance.now() / 120) * 3, 0, Math.PI * 2);
+  rctx.fill();
+  rctx.fillStyle = '#fff';
+  rctx.font = 'bold 17px Sarabun';
+  rctx.fillText('ความมืด!', Math.max(left, Math.min(wallX - 24, 460)), 70);
+
+  // P1 position & immediate hazard status
+  rctx.fillStyle = '#00f5d4';
+  rctx.beginPath();
+  rctx.arc(p1x, 174, 10, 0, Math.PI * 2);
+  rctx.fill();
+  const statusMap = {
+    hand: 'มือคว้าขา! (กดกระดิ่งช่วยได้)',
+    listen: 'หยุดนิ่ง! (สัมภเวสีฟังอยู่)',
+    run: `P1 (${pct}%)`
+  };
+  rctx.fillStyle = rg.bridgeState === 'hand' || rg.bridgeState === 'listen' ? '#ffd36b' : '#00f5d4';
+  rctx.font = 'bold 18px Sarabun';
+  rctx.textAlign = 'center';
+  rctx.fillText(statusMap[rg.bridgeState] || `P1 (${pct}%)`, Math.max(95, Math.min(505, p1x)), 104);
+  rctx.textAlign = 'left';
+}
+
 function renderP2RadarLoop(now = performance.now()) {
   if (state.role !== 'p2') {
     net.radarRunning = false;
@@ -5517,67 +5699,73 @@ function renderP2RadarLoop(now = performance.now()) {
       rctx.beginPath(); rctx.moveTo(0, y); rctx.lineTo(600, y); rctx.stroke();
     }
 
-    // Scene title on blueprint
-    rctx.fillStyle = '#84f2d4';
-    rctx.font = 'bold 20px Sarabun';
-    rctx.fillText(SCENE_TITLES[state.scene] || 'เรือนไทย', 14, 30);
+    const rg = state.remoteGoal || {};
+    const onBridge = state.scene === 5 && !state.flags.escaped;
+    if (onBridge) {
+      renderP2BridgeRadar(rctx, rg);
+    } else {
+      // Scene title on blueprint
+      rctx.fillStyle = '#84f2d4';
+      rctx.font = 'bold 20px Sarabun';
+      rctx.fillText(SCENE_TITLES[state.scene] || 'เรือนไทย', 14, 30);
 
-    // Floor line
-    rctx.strokeStyle = '#59dfb7';
-    rctx.lineWidth = 2;
-    rctx.beginPath();
-    rctx.moveTo(20, 195);
-    rctx.lineTo(580, 195);
-    rctx.stroke();
-
-    // Hidden Clues & Hiding Spots on P2 Radar
-    const spots = getSceneHotspots(state.scene);
-    rctx.textAlign = 'center';
-    spots.forEach((s, i) => {
-      const rx = (s.x / 1280) * 560 + 20;
-      const info = RADAR_INFO[s.id] || { label: s.isHidingSpot ? 'ที่ซ่อน' : 'จุดสำรวจ' };
-      const done = info.done ? info.done() : false;
-      rctx.fillStyle = done ? '#4a5652' : (s.isHidingSpot ? '#4da6ff' : '#ffd166');
-      rctx.fillRect(rx - 8, 165, 16, 26);
-      if (state.remoteGoal && state.remoteGoal.target === s.id) {
-        // the current objective: a pulsing gold ring
-        rctx.strokeStyle = '#ffd36b';
-        rctx.lineWidth = 3;
-        rctx.beginPath();
-        rctx.arc(rx, 178, 22 + Math.sin(performance.now() / 200) * 3, 0, Math.PI * 2);
-        rctx.stroke();
-      }
-      // The canvas is shown at ~55% on phones, so text is drawn large and kept inside the edges.
-      rctx.font = '600 19px Sarabun';
-      rctx.fillStyle = done ? '#7d8a85' : '#f3e5c8';
-      const text = (done ? '✓ ' : '') + info.label;
-      const half = rctx.measureText(text).width / 2;
-      rctx.fillText(text, Math.max(half + 4, Math.min(600 - half - 4, rx)), i % 2 ? 156 : 128); // staggered rows
-    });
-    rctx.textAlign = 'left';
-
-    // Player P1 position (Cyan circle)
-    const p1x = (state.player.x / 1280) * 560 + 20;
-    rctx.fillStyle = '#00f5d4';
-    rctx.beginPath();
-    rctx.arc(p1x, 175, 10, 0, Math.PI * 2);
-    rctx.fill();
-    rctx.font = 'bold 18px Sarabun';
-    rctx.fillText(state.player.hidden ? 'P1 (ซ่อน)' : 'P1', Math.min(p1x - 10, 500), 96);
-
-    // Ghost position (Pulsing Red Skull/Dot)
-    if (state.ghost.active) {
-      const gx = Math.max(20, Math.min(580, (state.ghost.x / 1280) * 560 + 20));
-      rctx.globalAlpha = Math.max(0.25, state.ghost.alpha == null ? 1 : state.ghost.alpha);
-      rctx.fillStyle = '#ff3b3b';
+      // Floor line
+      rctx.strokeStyle = '#59dfb7';
+      rctx.lineWidth = 2;
       rctx.beginPath();
-      rctx.arc(gx, 170, 13 + Math.sin(performance.now() / 120) * 3, 0, Math.PI * 2);
+      rctx.moveTo(20, 195);
+      rctx.lineTo(580, 195);
+      rctx.stroke();
+
+      // Hidden Clues & Hiding Spots on P2 Radar
+      const spots = getSceneHotspots(state.scene);
+      rctx.textAlign = 'center';
+      spots.forEach((s, i) => {
+        const rx = (s.x / 1280) * 560 + 20;
+        const info = RADAR_INFO[s.id] || { label: s.isHidingSpot ? 'ที่ซ่อน' : 'จุดสำรวจ' };
+        const done = info.done ? info.done() : false;
+        rctx.fillStyle = done ? '#4a5652' : (s.isHidingSpot ? '#4da6ff' : '#ffd166');
+        rctx.fillRect(rx - 8, 165, 16, 26);
+        if (state.remoteGoal && state.remoteGoal.target === s.id) {
+          // the current objective: a pulsing gold ring
+          rctx.strokeStyle = '#ffd36b';
+          rctx.lineWidth = 3;
+          rctx.beginPath();
+          rctx.arc(rx, 178, 22 + Math.sin(performance.now() / 200) * 3, 0, Math.PI * 2);
+          rctx.stroke();
+        }
+        // The canvas is shown at ~55% on phones, so text is drawn large and kept inside the edges.
+        rctx.font = '600 19px Sarabun';
+        rctx.fillStyle = done ? '#7d8a85' : '#f3e5c8';
+        const text = (done ? '✓ ' : '') + info.label;
+        const half = rctx.measureText(text).width / 2;
+        rctx.fillText(text, Math.max(half + 4, Math.min(600 - half - 4, rx)), i % 2 ? 156 : 128); // staggered rows
+      });
+      rctx.textAlign = 'left';
+
+      // Player P1 position (Cyan circle)
+      const p1x = (state.player.x / 1280) * 560 + 20;
+      rctx.fillStyle = '#00f5d4';
+      rctx.beginPath();
+      rctx.arc(p1x, 175, 10, 0, Math.PI * 2);
       rctx.fill();
-      rctx.fillStyle = '#fff';
-      const faded = state.ghost.alpha != null && state.ghost.alpha < 0.4;
       rctx.font = 'bold 18px Sarabun';
-      rctx.fillText(faded ? 'หายไปในความมืด…' : (state.ghost.type === 'dancer' ? 'ผีนางรำ!' : 'สัมภเวสี!'), Math.max(4, Math.min(gx - 30, 450)), 70);
-      rctx.globalAlpha = 1;
+      rctx.fillText(state.player.hidden ? 'P1 (ซ่อน)' : 'P1', Math.min(p1x - 10, 500), 96);
+
+      // Ghost position (Pulsing Red Skull/Dot)
+      if (state.ghost.active) {
+        const gx = Math.max(20, Math.min(580, (state.ghost.x / 1280) * 560 + 20));
+        rctx.globalAlpha = Math.max(0.25, state.ghost.alpha == null ? 1 : state.ghost.alpha);
+        rctx.fillStyle = '#ff3b3b';
+        rctx.beginPath();
+        rctx.arc(gx, 170, 13 + Math.sin(performance.now() / 120) * 3, 0, Math.PI * 2);
+        rctx.fill();
+        rctx.fillStyle = '#fff';
+        const faded = state.ghost.alpha != null && state.ghost.alpha < 0.4;
+        rctx.font = 'bold 18px Sarabun';
+        rctx.fillText(faded ? 'หายไปในความมืด…' : (state.ghost.type === 'dancer' ? 'ผีนางรำ!' : 'สัมภเวสี!'), Math.max(4, Math.min(gx - 30, 450)), 70);
+        rctx.globalAlpha = 1;
+      }
     }
 
     // Update EMF meter & Clue text
@@ -5587,11 +5775,18 @@ function renderP2RadarLoop(now = performance.now()) {
     if (fillEl) fillEl.style.width = `${state.ghost.alertLevel || 8}%`;
     if (dangerEl) {
       const high = (state.ghost.alertLevel || 0) > 55;
-      dangerEl.textContent = high ? 'อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : 'เปลวเทียนสงบ (ปลอดภัย)';
+      dangerEl.textContent = onBridge
+        ? (high ? 'อันตราย! ความมืดจ่อหลัง P1 แล้ว!' : 'ความมืดยังห่าง (คอยคุมจังหวะ)')
+        : (high ? 'อันตราย! วิญญาณอยู่ใกล้ P1 มาก!' : 'เปลวเทียนสงบ (ปลอดภัย)');
       dangerEl.className = high ? 'warn-text' : 'safe-text';
     }
-    const rg = state.remoteGoal || {};
-    if (clueEl && rg.context === 'ritual') {
+    if (clueEl && rg.ranatHint) {
+      clueEl.textContent = 'นิมิตได้ยินโน้ตระนาดท่อนนี้: ' + rg.ranatHint + ' — บอก P1 เคาะตาม!';
+    } else if (clueEl && onBridge) {
+      if (rg.bridgeState === 'hand') clueEl.textContent = 'มือผีคว้าขา P1! บอกให้กดสำรวจรัวๆ หรือสั่นกระดิ่งอาคมปลดมือทันที!';
+      else if (rg.bridgeState === 'listen') clueEl.textContent = 'สัมภเวสีโผล่ขวางทาง! รีบบอก P1 หยุดเดินทันที!';
+      else clueEl.textContent = 'สะพานข้ามภพ: บอก P1 วิ่งไปทางขวา! สั่นกระดิ่งอาคมหยุดความมืดได้ 4 วินาที';
+    } else if (clueEl && rg.context === 'ritual') {
       clueEl.textContent = 'ตำราพิธีในสมุดข่อย: ' + RITUAL_HINT + ' — บอก P1 ทีละชิ้น!';
     } else if (clueEl && rg.code && (rg.context === 'lock' || rg.target === 'yantra_code' || rg.target === 'hiding_cabinet_4')) {
       clueEl.textContent = 'นิมิตเห็นยันต์บนผนังเขียนว่า ' + rg.code + ' — นี่คือรหัสตู้ บอก P1!';

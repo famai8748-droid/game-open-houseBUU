@@ -101,7 +101,11 @@ const PATCH_SCHEMA = {
     goal: (t) => shortText(t, 160),
     target: (t) => shortText(t, 40),
     code: (t) => shortText(t, 8),
-    lockInput: (t) => shortText(t, 16)
+    lockInput: (t) => shortText(t, 16),
+    ranatHint: (t) => shortText(t, 32),
+    bridgePct: (n) => num(n, 0, 100),
+    bridgeWallPct: (n) => num(n, -20, 100),
+    bridgeState: (s) => oneOf(s, ['', 'run', 'hand', 'listen'])
   })
 };
 

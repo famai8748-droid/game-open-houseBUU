@@ -2836,7 +2836,18 @@ body,
   padding: 8px 14px;
 }
 .ending-screen .hof-list:empty { display: none; }
-.ending-again { margin-top: 4px; }
+.ending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.ending-souvenir {
+  font-size: 16px;
+  padding: 10px 18px;
+}
+.ending-again { margin-top: 0; }
 @keyframes endingDrift {
   from { transform: scale(1.12); }
   to { transform: scale(1); }

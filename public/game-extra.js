@@ -201,6 +201,14 @@ function ranatDisplay() {
   return '';
 }
 
+// What P2's spirit vision sees so they can call out the current ranat phrase to P1.
+function ranatCoopHint() {
+  if (!isRanatOpen() || ranat.phase === 'done') return '';
+  const len = RANAT.rounds[ranat.round] || 0;
+  if (!len) return '';
+  return ranat.seq.slice(0, len).map((n) => THAI_DIGITS[n + 1]).join(' · ');
+}
+
 function openRanat() {
   playSound('window_open');
   const seq = [];

@@ -1,5 +1,6 @@
 node_modules/
 .vercel/
+.claude/
 public_url.txt
 *.log
 art-source/
