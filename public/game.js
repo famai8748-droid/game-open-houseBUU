@@ -4996,18 +4996,6 @@ function isWorldFrozen() {
 // ---- Timer, ranks and the booth's hall of fame ----------------------------------------
 const HOF_KEY = 'buu-horror-hof-v1';
 
-function formatTime(sec) {
-  const s = Math.max(0, Math.round(sec));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-function rankFor(time, deaths) {
-  if (deaths === 0 && time < 420) return 'ผู้กล้าแห่งบูรพา';
-  if (deaths <= 1 && time < 600) return 'ผู้มีสัมผัสพิเศษ';
-  if (deaths <= 3) return 'ผู้รอดชีวิตจากเรือนไทย';
-  return 'ดวงจิตที่หลงทาง (แต่ก็รอดมาได้!)';
-}
-
 function loadHof() {
   try {
     const list = JSON.parse(localStorage.getItem(HOF_KEY) || '[]');
@@ -5091,116 +5079,38 @@ function saveToHallOfFame() {
   showToast('บันทึกชื่อลงหอเกียรติยศแล้ว');
 }
 
-// Render a 1200x630 souvenir card of the run (rank, time, badges, ending backdrop) and save it as PNG.
-function downloadSouvenirCard() {
-  const c = document.createElement('canvas');
-  c.width = 1200;
-  c.height = 630;
-  const g = c.getContext('2d');
-  const t = state.playTime || 0;
-  const d = state.deaths || 0;
-  const lore = loreFound();
-  const male = state.character !== 'female';
+// Ending: a QR the visitor scans to get the survivor card on their own phone (drawn by
+// souvenir.js on card.html). A download here would land on the booth laptop instead.
+let souvenirTimer = 0;
+async function showSouvenirQr() {
   const input = document.getElementById('hof-name');
-  const playerName = (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14) || (male ? 'นนท์' : 'ริน');
-
-  g.fillStyle = '#070508';
-  g.fillRect(0, 0, 1200, 630);
-  const bg = lore === 3 ? IMAGES.endingTrue : (male ? IMAGES.hospitalWake : IMAGES.hospitalWakeRin);
-  if (isReady(bg)) {
-    const scale = Math.max(1200 / bg.naturalWidth, 630 / bg.naturalHeight);
-    const bw = bg.naturalWidth * scale;
-    const bh = bg.naturalHeight * scale;
-    g.globalAlpha = 0.72;
-    g.drawImage(bg, (1200 - bw) / 2, (630 - bh) / 2, bw, bh);
-    g.globalAlpha = 1;
-  }
-
-  const shade = g.createLinearGradient(0, 0, 1200, 0);
-  shade.addColorStop(0, 'rgba(5, 4, 7, 0.92)');
-  shade.addColorStop(0.58, 'rgba(5, 4, 7, 0.76)');
-  shade.addColorStop(1, 'rgba(5, 4, 7, 0.35)');
-  g.fillStyle = shade;
-  g.fillRect(0, 0, 1200, 630);
-
-  // Subtle top/bottom red-gold hairline matching the game's UI frames
-  const line = g.createLinearGradient(0, 0, 1200, 0);
-  line.addColorStop(0, 'rgba(200, 52, 40, 0.95)');
-  line.addColorStop(0.55, 'rgba(240, 207, 149, 0.8)');
-  line.addColorStop(1, 'rgba(240, 207, 149, 0)');
-  g.fillStyle = line;
-  g.fillRect(0, 0, 1200, 4);
-  g.fillRect(0, 626, 1200, 4);
-
-  g.strokeStyle = 'rgba(240, 207, 149, 0.28)';
-  g.lineWidth = 1.5;
-  g.strokeRect(24, 24, 1152, 582);
-
-  // Character sprite standing on the right
-  const sprite = male ? IMAGES.maleWalk0 : IMAGES.femaleWalk0;
-  if (isReady(sprite)) {
-    const sh = 330;
-    const sw = sh * (sprite.naturalWidth / sprite.naturalHeight);
-    g.save();
-    g.imageSmoothingEnabled = false;
-    g.shadowColor = 'rgba(255, 200, 120, 0.35)';
-    g.shadowBlur = 24;
-    g.drawImage(sprite, 990 - sw / 2, 560 - sh, sw, sh);
-    g.restore();
-  }
-
-  g.textAlign = 'left';
-  g.fillStyle = '#ff6b5e';
-  g.font = 'bold 20px "Chakra Petch", Sarabun, sans-serif';
-  g.fillText('THE VEILED THAI HOUSE · SURVIVOR RECORD', 64, 86);
-
-  g.fillStyle = '#f6dda9';
-  g.font = 'bold 54px "Chakra Petch", Sarabun, sans-serif';
-  g.fillText('เรือนซ่อนวิญญาณ', 64, 148);
-
-  g.fillStyle = '#ddd2be';
-  g.font = '600 28px Sarabun, sans-serif';
-  g.fillText(`ผู้รอดชีวิต: ${playerName}`, 64, 224);
-
-  g.fillStyle = '#ffd36b';
-  g.font = 'bold 38px Sarabun, sans-serif';
-  g.fillText(rankFor(t, d), 64, 282);
-
-  g.fillStyle = '#e7dcc6';
-  g.font = '600 24px Sarabun, sans-serif';
-  g.fillText(`เวลา ${formatTime(t)}  ·  ถูกวิญญาณจับ ${d} ครั้ง  ·  บันทึกของเรือน ${lore}/3`, 64, 336);
-
-  let by = 396;
-  const badges = [];
-  if (state.flags.buuFound) badges.push('ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
-  if (lore === 3) badges.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
-  if (state.roomCode) badges.push(`Co-op 2 ผู้เล่น (ห้อง ${state.roomCode})`);
-  badges.forEach((b) => {
-    g.fillStyle = 'rgba(240, 207, 149, 0.12)';
-    g.fillRect(64, by - 28, 680, 38);
-    g.strokeStyle = 'rgba(240, 207, 149, 0.35)';
-    g.strokeRect(64, by - 28, 680, 38);
-    g.fillStyle = '#9fe3cf';
-    g.font = '600 20px Sarabun, sans-serif';
-    g.fillText(b, 80, by - 3);
-    by += 48;
+  const url = souvenirUrl({
+    female: state.character === 'female',
+    buu: !!state.flags.buuFound,
+    coop: !!state.roomCode,
+    lore: loreFound(),
+    deaths: state.deaths || 0,
+    time: state.playTime || 0,
+    name: (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14)
   });
-
-  g.fillStyle = '#f0cf95';
-  g.font = 'bold 26px "Chakra Petch", Sarabun, sans-serif';
-  g.fillText('OPEN HOUSE BUU · วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา', 64, 566);
-
+  const box = document.getElementById('souvenir-qr');
+  const img = document.getElementById('souvenir-qr-img');
   try {
-    const a = document.createElement('a');
-    a.download = `veiled-thai-house-${Date.now()}.png`;
-    a.href = c.toDataURL('image/png');
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    showToast('บันทึกการ์ดผู้รอดชีวิตแล้ว');
+    const res = await apiGet(`qr?text=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error(res.error || 'qr');
+    img.src = res.dataUrl;
+    box.classList.remove('hidden');
   } catch (_) {
-    showToast('ไม่สามารถบันทึกภาพอัตโนมัติบนเบราว์เซอร์นี้ได้', 'warn');
+    showToast('สร้าง QR ไม่สำเร็จ ลองกดใหม่อีกครั้ง', 'warn');
   }
+}
+
+// The name on the card follows the hall-of-fame box, so a QR already on screen is redrawn while typing.
+function refreshSouvenirQr() {
+  const box = document.getElementById('souvenir-qr');
+  if (!box || box.classList.contains('hidden')) return;
+  clearTimeout(souvenirTimer);
+  souvenirTimer = setTimeout(showSouvenirQr, 400);
 }
 
 // After a finished game the dancer lingers on the title screen for a while, so the next

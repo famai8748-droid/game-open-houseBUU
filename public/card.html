@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>การ์ดผู้รอดชีวิต | เรือนซ่อนวิญญาณ</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="stylesheet" href="assets/fonts/fonts.css" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: #070508 radial-gradient(ellipse at 50% 0%, rgba(120, 30, 24, 0.35), transparent 60%);
+      color: #ddd2be;
+      font-family: Sarabun, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 16px 40px;
+      text-align: center;
+    }
+    .kicker {
+      font-family: 'Chakra Petch', Sarabun, sans-serif;
+      color: #ff6b5e;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+    }
+    h1 {
+      margin: 6px 0 4px;
+      font-family: 'Chakra Petch', Sarabun, sans-serif;
+      color: #f6dda9;
+      font-size: 26px;
+    }
+    p { margin: 0 0 18px; font-size: 15px; line-height: 1.55; }
+    #card {
+      width: 100%;
+      max-width: 720px;
+      display: block;
+      border: 1px solid rgba(240, 207, 149, 0.35);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      -webkit-touch-callout: default;
+    }
+    #card.loading { aspect-ratio: 1200 / 630; background: #120d10; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+    .btn {
+      display: inline-block;
+      padding: 12px 20px;
+      font: 600 16px Sarabun, sans-serif;
+      color: #1a0f08;
+      background: #f0cf95;
+      border: 0;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn.ghost { background: transparent; color: #f0cf95; border: 1px solid rgba(240, 207, 149, 0.5); }
+    .note { margin-top: 22px; font-size: 13px; color: #9a8e7c; }
+    .error { color: #ffb4a8; }
+  </style>
+</head>
+<body>
+  <div class="kicker">THE VEILED THAI HOUSE · SURVIVOR RECORD</div>
+  <h1>การ์ดผู้รอดชีวิต</h1>
+  <p id="msg">กำลังวาดการ์ดของคุณ…</p>
+  <img id="card" class="loading" alt="การ์ดผู้รอดชีวิต เรือนซ่อนวิญญาณ" />
+  <div class="actions">
+    <button id="save" class="btn" type="button" hidden>บันทึกรูป</button>
+    <a class="btn ghost" href="./">เล่นเรือนซ่อนวิญญาณ</a>
+  </div>
+  <div class="note">OPEN HOUSE BUU · วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา</div>
+
+  <script src="souvenir.js"></script>
+  <script>
+    (async () => {
+      const msg = document.getElementById('msg');
+      const out = document.getElementById('card');
+      const data = decodeSouvenir(location.hash.slice(1));
+      if (!data) {
+        msg.textContent = 'ลิงก์การ์ดไม่ถูกต้อง ลองสแกน QR ที่หน้าจอบูธอีกครั้งนะ';
+        msg.className = 'error';
+        out.hidden = true;
+        return;
+      }
+      const load = (src) => new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+      const paths = souvenirImagePaths(data);
+      const fonts = ['bold 20px "Chakra Petch"', '600 28px Sarabun', 'bold 38px Sarabun']
+        .map((f) => (document.fonts ? document.fonts.load(f, 'กขค ABC').catch(() => null) : null));
+      const [bg, sprite] = await Promise.all([load(paths.bg), load(paths.sprite), ...fonts]);
+      const canvas = drawSouvenirCard(document.createElement('canvas'), data, { bg, sprite });
+      canvas.toBlob((blob) => {
+        if (!blob) { msg.textContent = 'วาดการ์ดไม่สำเร็จ ลองเปิดลิงก์ใหม่อีกครั้ง'; return; }
+        const url = URL.createObjectURL(blob);
+        out.src = url;
+        out.classList.remove('loading');
+        msg.textContent = 'กดค้างที่รูปเพื่อบันทึก หรือกดปุ่มด้านล่าง';
+        const save = document.getElementById('save');
+        save.hidden = false;
+        save.onclick = async () => {
+          const file = new File([blob], 'veiled-thai-house-survivor.png', { type: 'image/png' });
+          // Phones: the share sheet has "Save image"; desktop browsers fall back to a download.
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try { await navigator.share({ files: [file], title: 'การ์ดผู้รอดชีวิต เรือนซ่อนวิญญาณ' }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+          }
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file.name;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        };
+      }, 'image/png');
+    })();
+  </script>
+</body>
+</html>

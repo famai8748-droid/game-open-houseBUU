@@ -461,12 +461,20 @@
           </div>
           <div id="ending-stats" class="ending-stats"></div>
           <div id="hof-entry" class="hof-entry">
-            <input id="hof-name" type="text" maxlength="14" placeholder="ชื่อเล่น — ลงหอเกียรติยศ" autocomplete="off" />
+            <input id="hof-name" type="text" maxlength="14" placeholder="ชื่อเล่น — ลงหอเกียรติยศ" autocomplete="off" oninput="refreshSouvenirQr()" />
             <button id="hof-save" class="btn-small" onclick="saveToHallOfFame()">บันทึก</button>
           </div>
           <div id="hof-list" class="hof-list"></div>
+          <div id="souvenir-qr" class="souvenir-qr hidden">
+            <img id="souvenir-qr-img" class="souvenir-qr-img" alt="QR การ์ดผู้รอดชีวิต" />
+            <div class="souvenir-qr-text">
+              <strong>สแกนด้วยกล้องมือถือ</strong>
+              รับการ์ดผู้รอดชีวิตของคุณ แล้วกดค้างที่รูปเพื่อบันทึก
+              <span>ใช้เน็ตมือถือได้เลย ไม่ต้องต่อ Wi-Fi บูธ</span>
+            </div>
+          </div>
           <div class="ending-actions">
-            <button id="btn-souvenir" class="btn-secondary ending-souvenir" onclick="downloadSouvenirCard()">บันทึกการ์ดผู้รอดชีวิต</button>
+            <button id="btn-souvenir" class="btn-secondary ending-souvenir" onclick="showSouvenirQr()">รับการ์ดผู้รอดชีวิตลงมือถือ</button>
             <button class="gameover-retry ending-again" onclick="restartGame()">เล่นใหม่อีกครั้ง</button>
           </div>
         </div>
@@ -650,6 +658,7 @@
     </div>
   </div>
 
+  <script src="souvenir.js"></script>
   <script src="game.js"></script>
   <script src="game-extra.js"></script>
   <script src="story-intro.js"></script>
