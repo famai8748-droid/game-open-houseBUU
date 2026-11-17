@@ -249,7 +249,7 @@ function playSound(type, opts = {}) {
 
   if (type === 'footstep') {
     // real footsteps on wet grass (scene 1) or old floorboards (scenes 2..5)
-    const keys = state.scene === 1 && state.role === 'host'
+    const keys = (state.scene === 1 || under.active) && state.role === 'host' // grass in the forest, earth under the house
       ? ['step_grass_1', 'step_grass_2', 'step_grass_3']
       : ['step_wood_1', 'step_wood_2', 'step_wood_3'];
     const takes = keys.filter((n) => samples[n]);
@@ -795,6 +795,8 @@ const ASSET_LIST = {
   hospitalWakeRin: 'assets/hospital_wake_rin.jpg',
   ranat: 'assets/prop_ranat.png',
   bgBridge: 'assets/bg_bridge.jpg',
+  bgUnder: 'assets/bg_under_house.jpg',
+  cradle: 'assets/prop_cradle.png',
   endingTrue: 'assets/ending_true.jpg'
 };
 
@@ -914,6 +916,7 @@ const SCENE_TITLES = {
 // isHiddenClue flags depend on changes (handlers read live state when called).
 let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
+  if (sceneNum === 3 && under.active) return underHotspots();
   const inv = state.inventory;
   const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
   if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum)) };
@@ -1069,20 +1072,16 @@ function buildSceneHotspots(sceneNum) {
         id: 'hiding_jar_3',
         x: 340,
         width: 130,
-        label: 'ตุ่มน้ำโบราณ (สำรวจ / ซ่อนตัว [Q])',
+        label: 'ตุ่มน้ำโบราณ (ซ่อนตัว [Q])',
         isHidingSpot: true,
-        onInteract: () => {
-          if (!state.inventory.offerings.includes('incense')) {
-            state.inventory.offerings.push('incense'); pickupFx('incense');
-            playSound('pickup');
-            updateHud();
-            queueDialogue([
-              { speaker: getPlayerName(), text: 'ใต้ฐานตุ่มน้ำมีธูปเทียนมัดหนึ่ง ยังชื้นอยู่... ใครเพิ่งจุดมัน (2/3)' }
-            ]);
-          } else {
-            toggleHide();
-          }
-        }
+        onInteract: () => toggleHide()
+      },
+      {
+        id: 'trapdoor_3',
+        x: UNDER.TRAP_X,
+        width: 80,
+        label: state.inventory.offerings.includes('incense') ? 'ฝาไม้บนพื้น (ลงไปใต้ถุนเรือนอีกครั้ง)' : 'เปิดฝาไม้บนพื้น ลงไปใต้ถุนเรือน',
+        onInteract: () => goDownTrapdoor()
       },
       {
         id: 'samphawesi_offering_spot',
@@ -1656,7 +1655,7 @@ function buildStatePatch() {
     support: {
       bellCooldown: Math.ceil(state.bellCooldown),
       context: hostContext(),
-      prompt: !state.started ? '' : isChoiceOpen() ? choiceLabel() : state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : nearSpot ? nearSpot.label : '',
+      prompt: !state.started ? '' : isChoiceOpen() ? choiceLabel() : state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : under.active ? underPrompt() : nearSpot ? nearSpot.label : '',
       goal: objective ? objective.text : '',
       code: isRanatOpen() ? '' : (state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : ''),
       lockInput: isLockOpen() ? lockDisplay() : isRanatOpen() ? ranatDisplay() : '',
@@ -1664,6 +1663,9 @@ function buildStatePatch() {
       bridgePct: chase.active ? Math.round(Math.max(0, Math.min(100, (chase.dist / CHASE.LENGTH) * 100))) : 0,
       bridgeWallPct: chase.active ? Math.round(Math.max(-20, Math.min(100, (chase.wall / CHASE.LENGTH) * 100))) : 0,
       bridgeState: !chase.active ? '' : (mash.active && mash.kind === 'hand') ? 'hand' : chase.listen ? 'listen' : 'run',
+      underPct: under.active ? Math.round((state.player.x / UNDER.W) * 100) : 0,
+      underSamPct: under.active && under.sam ? Math.round((under.sam.x / UNDER.W) * 100) : 0,
+      underState: !under.active || !under.sam ? '' : under.sam.mode === 'listen' && Math.abs(under.sam.x - state.player.x) < UNDER.LISTEN_NEAR ? 'listen' : 'walk',
       target: objective ? (objective.target || '') : ''
     }
   };
@@ -1780,6 +1782,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
 
 function useBell(source) {
   if (chase.active) return chaseBell(source);
+  if (under.active) return underBell(source);
   if (!state.ghost.active || state.bellCooldown > 0) return false;
   state.ghost.stunTimer = CONFIG.BELL_STUN;
   state.bellCooldown = bellCooldownSecs();
@@ -2769,6 +2772,9 @@ function enterScene(sceneNum, startX) {
   setAmbientScene(onBridge ? 'bridge' : sceneNum);
   state.struggleLeft = 1; // one chance to tear free from a ghost in every room
   if (!onBridge) chase.active = false;
+  // a checkpoint saved under the house (a fresh page: the flag came back, the crawl space is not running yet)
+  const resumeUnder = sceneNum === 3 && !!state.flags.inUnder && !under.active;
+  if (under.active || state.flags.inUnder) leaveUnderState();
   state.player.x = startX;
   state.player.hidden = false;
   state.unhideGrace = 0;
@@ -2794,6 +2800,7 @@ function enterScene(sceneNum, startX) {
     } else {
       state.ghost.active = true;
     }
+    if (resumeUnder) startUnder(true);
   } else if (sceneNum === 4) {
     state.ghost.type = 'dancer';
     state.ghost.active = !state.flags.offeringsPlaced || !state.flags.photosRestored || !state.flags.songPlayed;
@@ -3386,11 +3393,13 @@ function retryFromCheckpoint() {
   state.ghost.stunTimer = 2.0;
   state.struggleLeft = 1;
   if (chase.active) resetChaseSegment(); // on the bridge: back to just past the last obstacle
+  if (under.active) resetUnder(); // under the house: back at the foot of the ladder
   broadcastState();
 }
 
 function updateHud() {
-  document.getElementById('hud-scene-title').textContent = chase.active ? 'ฉากที่ 5: สะพานข้ามภพ' : (SCENE_TITLES[state.scene] || '');
+  document.getElementById('hud-scene-title').textContent = chase.active ? 'ฉากที่ 5: สะพานข้ามภพ'
+    : under.active ? 'ฉากที่ 3: ใต้ถุนเรือน' : (SCENE_TITLES[state.scene] || '');
   document.getElementById('hud-offerings').textContent = `${state.inventory.offerings.length}/3`;
   document.getElementById('hud-photos').textContent = `${state.inventory.photos.length}/3`;
   document.getElementById('hud-offerings-placed').classList.toggle('hidden', !state.flags.offeringsPlaced);
@@ -3544,6 +3553,7 @@ function updateGame(dt) {
   if (performance.now() < fx.hitstopUntil) return; // a beat of stillness when you pick something up
   if (mash.active && mash.kind === 'ghost') return tickStruggle(dt); // held by a ghost: mash to tear free
   if (chase.active) return updateChase(dt); // the spirit bridge runs on its own rules
+  if (under.active) return updateUnder(dt); // so does the crawl space under room 3
 
   const dialogueOpen = isDialogueOpen();
   const paused = dialogueOpen || isOverlayOpen(); // conversations and the puzzle / ritual / lock windows freeze the world
@@ -3736,6 +3746,10 @@ function triggerGameOver() {
       ? 'มันโผล่มาขวางทางเพื่อฟังเสียงฝีเท้า — เห็นคำว่า "หยุดเดิน" ให้<b>ปล่อยปุ่มเดินทันที</b> ยืนนิ่งจนมันจมหายไป'
       : 'ความมืดตามทันเมื่อคุณช้า — <b>วิ่งไปทางขวาอย่าหยุด</b> ถ้ามือคว้าขาไว้ให้<b>กดปุ่มสำรวจรัวๆ</b>จนหลุด';
   }
+  if (under.active) { // under the house: he heard you through the floor
+    document.getElementById('gameover-ghost').textContent = 'สัมภเวสี (ใต้ถุนเรือน)';
+    document.getElementById('gameover-tip').innerHTML = 'มันเดินอยู่บนพื้นเหนือหัว — เห็น<b>ฝุ่นร่วงและคำว่า "หยุดนิ่ง"</b> ให้<b>ปล่อยปุ่มเดินทันที</b> รอจนมันเดินผ่านไปแล้วค่อยไปต่อ';
+  }
   // Full-screen jumpscare first, then the game-over screen. Intensity follows settings.
   const js = document.getElementById('jumpscare');
   if (settings.jumpscare === 'off') {
@@ -3911,6 +3925,7 @@ function computeShake() {
 function renderScene() {
   ctx.imageSmoothingEnabled = false;
   if (chase.active) return renderChase(); // the bridge draws itself: no room, props or hotspots
+  if (under.active) return renderUnder(); // and so does the space under the house
 
   // 1. Draw Scene Background (Crisp 32-bit HD Pixel Art)
   let bgImg = IMAGES.bg1;
@@ -3928,6 +3943,7 @@ function renderScene() {
 
   // 2. Draw Interactive Props per Scene (with proportional scaling & floor shadows)
   drawSceneProps();
+  if (state.scene === 3) drawTrapdoor();
 
   // 3. Draw Ghost or NPC (8-frame animation!)
   if (state.scene === 3 && !state.flags.samphawesiTriggered) {
@@ -5425,7 +5441,8 @@ function currentObjective() {
   if (s === 3) {
     if (!photo(1) || !has('garland')) return { text: 'ยังเก็บของในโถงรูปถ่ายไม่ครบ — ย้อนกลับทางประตูซ้าย', target: 'door_back_scene2' };
     if (!f.samphawesiTriggered) return { text: 'เข้าไปดูว่าใครนั่งอยู่กลางห้อง', target: 'samphawesi_offering_spot' };
-    if (!has('incense')) return { text: 'หาธูปเทียนข้างตุ่มน้ำทางซ้าย' + hideTip, target: 'hiding_jar_3' };
+    if (under.active) return underObjective();
+    if (!has('incense')) return { text: 'กลิ่นธูปลอยขึ้นมาจากใต้พื้น — เปิดฝาไม้บนพื้นแล้วลงไปใต้ถุนเรือน' + hideTip, target: 'trapdoor_3' };
     if (!photo(2)) return { text: 'เอาเศษรูปชิ้นที่ 2 บนโต๊ะมุมขวา' + hideTip, target: 'photo_piece_2_spot' };
     return { text: 'ไปประตูทางขวาสุด เข้าโถงด้านใน', target: 'door_to_scene4' };
   }
@@ -5463,7 +5480,9 @@ const STUCK_HINTS = {
   door_to_scene3: () => 'ประตูอยู่สุดทางขวาของห้อง เดินไปจนสุดแล้วกดสำรวจ',
   door_back_scene2: () => 'ยังเก็บของในโถงรูปถ่ายไม่ครบ... ย้อนกลับทางประตูซ้ายสุด',
   samphawesi_offering_spot: () => 'เดินเข้าไปกลางห้อง... ไม่ต้องกลัว เราอยู่ตรงนี้',
-  hiding_jar_3: () => 'ตุ่มน้ำใบใหญ่ทางซ้าย ธูปเทียนอยู่ใต้ฐาน — ถ้าได้ยินมันคลานใกล้ หยุดเดินก่อน',
+  trapdoor_3: () => 'ฝาไม้บนพื้น อยู่ระหว่างตุ่มน้ำกับกลางห้อง ยืนบนมันแล้วกดสำรวจ — ธูปเทียนอยู่ข้างล่าง',
+  under_shrine: () => 'ศาลไม้เล็กๆ อยู่สุดทางขวา เหนือแคร่ไม้ — เดินตอนเสียงฝีเท้าข้างบนยังห่าง ฝุ่นร่วงเมื่อไหร่ให้หยุด',
+  under_ladder: () => 'บันไดอยู่ซ้ายสุด ปีนกลับขึ้นไปแล้วไปเอาเศษรูปบนโต๊ะมุมขวา',
   photo_piece_2_spot: () => 'โต๊ะมุมขวาของห้อง... เดินทีละช่วง ได้ยินมันใกล้ให้หยุดนิ่ง',
   door_to_scene4: () => 'ครบแล้ว ไปประตูขวาสุดของห้อง',
   yantra_code: () => 'เปิดไฟฉาย แล้วหันไปทางยันต์แดงบนผนังข้างตู้ ยืนตรงนั้นแล้วกดสำรวจ',
@@ -5573,7 +5592,8 @@ const RADAR_INFO = {
   table_offering_1: { label: 'โต๊ะ · พวงมาลัย', done: () => state.inventory.offerings.includes('garland') },
   door_to_scene3: { label: 'ประตู →' },
   door_back_scene2: { label: '← ประตู' },
-  hiding_jar_3: { label: 'ตุ่ม · ธูปเทียน', done: () => state.inventory.offerings.includes('incense') },
+  hiding_jar_3: { label: 'ตุ่ม (ซ่อน)' },
+  trapdoor_3: { label: 'ฝาไม้ · ธูปเทียน', done: () => state.inventory.offerings.includes('incense') },
   samphawesi_offering_spot: { label: 'กระทง', done: () => state.flags.samphawesiTriggered },
   photo_piece_2_spot: { label: 'โต๊ะ · เศษรูป 2', done: () => state.inventory.photos.includes(2) },
   door_to_scene4: { label: 'ประตู →' },
@@ -5683,8 +5703,11 @@ function renderP2RadarLoop(now = performance.now()) {
 
     const rg = state.remoteGoal || {};
     const onBridge = state.scene === 5 && !state.flags.escaped;
+    const inUnder = state.scene === 3 && !!state.flags.inUnder;
     if (onBridge) {
       renderP2BridgeRadar(rctx, rg);
+    } else if (inUnder) {
+      renderP2UnderRadar(rctx, rg);
     } else {
       // Scene title on blueprint
       rctx.fillStyle = '#84f2d4';
@@ -5764,6 +5787,10 @@ function renderP2RadarLoop(now = performance.now()) {
     }
     if (clueEl && rg.ranatHint) {
       clueEl.textContent = 'นิมิตได้ยินโน้ตระนาดท่อนนี้: ' + rg.ranatHint + ' — บอก P1 เคาะตาม!';
+    } else if (clueEl && inUnder) {
+      clueEl.textContent = rg.underState === 'listen'
+        ? 'มันหยุดฟังอยู่เหนือหัว P1! บอกให้หยุดนิ่งทันที — หรือสั่นกระดิ่งไล่มันไป'
+        : 'ใต้ถุนเรือน: สัมภเวสีเดินอยู่บนพื้นข้างบน บอก P1 เดินตอนมันยังห่าง ไปเอาธูปที่ศาลสุดทางขวา';
     } else if (clueEl && onBridge) {
       if (rg.bridgeState === 'hand') clueEl.textContent = 'มือผีคว้าขา P1! บอกให้กดสำรวจรัวๆ หรือสั่นกระดิ่งอาคมปลดมือทันที!';
       else if (rg.bridgeState === 'listen') clueEl.textContent = 'สัมภเวสีโผล่ขวางทาง! รีบบอก P1 หยุดเดินทันที!';
@@ -5777,7 +5804,7 @@ function renderP2RadarLoop(now = performance.now()) {
     } else if (clueEl) {
       if (state.scene === 1) clueEl.textContent = 'นิมิตบอกทาง: ให้ P1 เดินไปขวาสุดเพื่อสำรวจประตูเรือนไทย';
       if (state.scene === 2) clueEl.textContent = 'นิมิตบอกทาง: เศษรูปชิ้นที่ 1 อยู่ในตู้ไม้สัก และพวงมาลัยอยู่บนโต๊ะริมหน้าต่างขวา';
-      if (state.scene === 3) clueEl.textContent = 'นิมิตบอกทาง: ธูปเทียนอยู่ข้างตุ่มน้ำซ้าย เศษรูปชิ้นที่ 2 อยู่บนโต๊ะขวา (ระวังสัมภเวสี!)';
+      if (state.scene === 3) clueEl.textContent = 'นิมิตบอกทาง: ธูปเทียนอยู่ใต้ถุนเรือน (ฝาไม้บนพื้น) เศษรูปชิ้นที่ 2 อยู่บนโต๊ะขวา (ระวังสัมภเวสี!)';
       if (state.scene === 4) clueEl.textContent = 'นิมิตบอกทาง: ขนมอยู่ในตู้ซ้าย เศษรูปชิ้นที่ 3 อยู่ใต้หิ้งบูชากลางห้อง ถวายให้ครบ บรรเลงระนาดให้จบเพลง แล้วออกประตูขวา!';
       if (state.scene === 5) clueEl.textContent = state.flags.escaped ? 'รอดพ้นอาถรรพ์แล้ว! ให้ P1 เดินไปคุยกับคุณลุงชุดราชปะแตน' : 'สะพานข้ามภพ: บอก P1 ให้วิ่งไปทางขวา! สั่นกระดิ่งอาคมเพื่อหยุดความมืดและปลดมือที่คว้าขา';
     }

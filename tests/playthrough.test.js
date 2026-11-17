@@ -280,15 +280,22 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   s = await snap(browser);
   assert.equal(s.scene, 3);
 
-  // Scene 3: incense, the samphawesi wakes up, photo piece 2
-  await browser.evaluate(`__pt.use('hiding_jar_3')`);
-  await settle(browser);
+  // Scene 3: the samphawesi wakes up, the incense under the house, photo piece 2
   await browser.evaluate(`__pt.use('lore_page_3')`);
   await settle(browser);
   await browser.evaluate(`__pt.use('samphawesi_offering_spot')`);
   await settle(browser);
   s = await snap(browser);
   assert.equal(s.ghostActive, true, 'the samphawesi hunts after its cutscene');
+  await browser.evaluate(`__pt.use('trapdoor_3')`);
+  await settle(browser);
+  assert.equal(await browser.evaluate('under.active && !!state.flags.inUnder && state.scene === 3'), true, 'the trapdoor leads under the house');
+  await browser.evaluate(`under.sam.x = 80; under.sam.mode = 'leave'; state.ghost.stunTimer = 60; __pt.use('under_shrine')`); // he is busy at the far end
+  await settle(browser);
+  assert.equal(await browser.evaluate(`state.inventory.offerings.includes('incense')`), true, 'the incense lies on the little shrine');
+  await browser.evaluate(`__pt.use('under_ladder')`);
+  await settle(browser);
+  assert.equal(await browser.evaluate('!under.active && !state.flags.inUnder && state.scene === 3'), true, 'the ladder leads back up');
   await browser.evaluate(`__pt.use('photo_piece_2_spot')`);
   await settle(browser);
   await browser.evaluate(`__pt.use('door_to_scene4')`);
@@ -579,7 +586,16 @@ test('co-op: the phones play the ranat and the bridge together with the main scr
 
   await host.evaluate('startFromLobby(); true');
   await waitFor(() => host.evaluate('isStoryIntroOpen()'), { what: 'the prologue' });
-  await host.evaluate(`window.skipStoryIntro(); grantProgressUpTo(4); enterScene(4, 400); true`);
+  // under the house: P2 sees the one walking on the floor above P1
+  await host.evaluate(`window.skipStoryIntro(); grantProgressUpTo(3); state.flags.samphawesiTriggered = true; enterScene(3, 460); true`);
+  await settle(host);
+  await host.evaluate('startUnder(); true');
+  await settle(host);
+  await waitFor(() => p2.phone.evaluate(`/ใต้ถุนเรือน/.test(document.getElementById('p2-clue-text').textContent)`), { timeout: 8000, what: 'P2 to switch to the under-house view' });
+  await host.evaluate(`under.sam.x = state.player.x; under.sam.mode = 'walk'; under.sam.lastListen = 0; state.ghost.stunTimer = 0; true`);
+  await waitFor(() => p2.phone.evaluate(`state.remoteGoal.underState === 'listen'`), { timeout: 8000, what: 'P2 to see him listening above P1' });
+  await waitFor(() => p1.phone.evaluate(`document.getElementById('p1-btn-interact').textContent.includes('หยุดนิ่ง')`), { timeout: 8000, what: 'the P1 button to say freeze' });
+  await host.evaluate('state.ghost.stunTimer = 60; grantProgressUpTo(4); enterScene(4, 400); true');
   await settle(host);
   await host.evaluate('state.ghost.stunTimer = 120; true');
 
@@ -687,6 +703,65 @@ test('refusing the promise ends in the hospital at night, and the second night i
   await settle(browser);
   await browser.evaluate(`saveCheckpoint(); true`);
   assert.equal(await browser.evaluate(`JSON.parse(sessionStorage.getItem('buu-horror-checkpoint-v1')).flags.night2`), true, 'a checkpoint keeps the second night');
+
+  await sleep(300);
+  assert.equal(await browser.evaluate('staff.errors'), 0, 'no frame of the game loop failed');
+  assert.deepEqual(errors, [], 'no errors in the page console');
+});
+
+test('under the house: standing still while he listens is safe, walking gets you heard', { skip: !BROWSER && 'no Chrome/Edge found', timeout: 90000 }, async (t) => {
+  const server = startServer();
+  t.after(() => server.child.kill());
+  await server.ready;
+  const browser = await launchBrowser();
+  t.after(() => browser.close());
+  const errors = watchErrors(browser);
+
+  await openGame(browser, server.port);
+  await browser.evaluate(HELPERS);
+  await browser.evaluate(`startSoloGame(); true`);
+  await waitFor(() => browser.evaluate('isStoryIntroOpen()'), { what: 'the prologue' });
+  await browser.evaluate(`window.skipStoryIntro(); grantProgressUpTo(3); state.flags.samphawesiTriggered = true; enterScene(3, 300); true`);
+  await settle(browser);
+  assert.equal(await browser.evaluate(`currentObjective().target`), 'trapdoor_3', 'room 3 points at the trapdoor for the incense');
+  await browser.evaluate(`__pt.use('trapdoor_3')`);
+  await settle(browser);
+  assert.equal(await browser.evaluate('under.active'), true);
+  assert.equal(await browser.evaluate(`document.getElementById('hud-scene-title').textContent`), 'ฉากที่ 3: ใต้ถุนเรือน');
+
+  // he stops right above: holding still lets him walk on
+  const listenAbove = `under.sam.x = state.player.x + 20; under.sam.mode = 'walk'; under.sam.lastListen = 0; state.ghost.stunTimer = 0; true`;
+  await browser.evaluate(listenAbove);
+  await waitFor(() => browser.evaluate(`under.sam.mode === 'listen'`), { timeout: 3000, what: 'him to stop and listen' });
+  assert.match(await browser.evaluate('underPrompt()'), /หยุดนิ่ง/, 'the prompt (and the P1 phone) says to freeze');
+  await waitFor(() => browser.evaluate(`under.sam.mode === 'leave'`), { timeout: 4000, what: 'him to walk on' });
+  assert.equal(await browser.evaluate('state.flags.gameOver'), false, 'standing still is safe');
+
+  // walking while he listens above: heard
+  await browser.evaluate(listenAbove);
+  await waitFor(() => browser.evaluate(`under.sam.mode === 'listen'`), { timeout: 3000, what: 'him to listen again' });
+  await sleep(600); // past the grace (UNDER.GRACE_MS = 450)
+  await waitFor(() => browser.evaluate(`(() => { if (!state.flags.gameOver) setMove(1); return state.flags.gameOver; })()`), { timeout: 4000, what: 'being heard' });
+  assert.match(await browser.evaluate(`document.getElementById('gameover-ghost').textContent`), /ใต้ถุน/);
+  await browser.evaluate('setMove(0); retryFromCheckpoint(); true');
+  assert.equal(await browser.evaluate('under.active && state.player.x === UNDER.LADDER_X + 40'), true, 'a retry starts at the foot of the ladder');
+
+  // the bell sends him away
+  await browser.evaluate(`state.bellCooldown = 0; ${listenAbove}`);
+  await waitFor(() => browser.evaluate(`under.sam.mode === 'listen'`), { timeout: 3000, what: 'him to listen' });
+  assert.equal(await browser.evaluate(`useBell('P2')`), true);
+  assert.equal(await browser.evaluate(`under.sam.mode`), 'leave', 'the bell drives him off');
+
+  // a checkpoint taken down here comes back down here
+  await browser.evaluate('saveCheckpoint(); true');
+  const cp = await browser.evaluate(`JSON.parse(sessionStorage.getItem('buu-horror-checkpoint-v1'))`);
+  assert.equal(cp.flags.inUnder, true);
+  await browser.evaluate('enterScene(3, 600); true');
+  assert.equal(await browser.evaluate('under.active'), false, 'entering room 3 normally leaves the crawl space');
+  await browser.evaluate('state.flags.inUnder = true; enterScene(3, 600); true');
+  assert.equal(await browser.evaluate('under.active && state.player.x === UNDER.LADDER_X + 40'), true, 'resuming a save made underneath puts you back underneath');
+  await browser.evaluate('enterScene(4, 150); true');
+  assert.equal(await browser.evaluate('!under.active && !state.flags.inUnder'), true, 'another room clears it');
 
   await sleep(300);
   assert.equal(await browser.evaluate('staff.errors'), 0, 'no frame of the game loop failed');

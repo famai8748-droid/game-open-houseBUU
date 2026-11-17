@@ -6,6 +6,7 @@
  *   4. choice : a two-answer question (keyboard, mouse/touch, or the P1 phone)
  *   5. promise: keep or refuse the uncle's promise; refusing ends in the hospital at night
  *   6. night2 : "คืนที่สอง", a harder replay unlocked on this machine after a finish
+ *   7. under  : ใต้ถุนเรือน, the crawl space below room 3 (the samphawesi paces on the floor above)
  * game.js calls into this file from its update / render / input paths; nothing here runs
  * before a game has started.
  * ============================================================================ */
@@ -1217,3 +1218,524 @@ function beginSecondNight() {
 }
 
 syncNight2Button();
+
+// ----------------------- 7. ใต้ถุนเรือน (under the house, from room 3) -----------------------
+// A trapdoor in room 3 leads down to the crawl space under the stilted house, where the incense
+// lies on ตาเหมือน's little spirit shelf. The blind samphawesi keeps pacing on the floor above:
+// light leaks through the gaps in the planks and his shadow crosses it. When he stops right above
+// you, dust falls on your head: stand still until he walks on, or he hears you.
+// Runs inside scene 3 like the bridge runs inside scene 5 (scene numbers stay 1..5). The world is
+// the painting's width (1697 px at 720 high) and the camera follows the player.
+// state.flags.inUnder keeps it across a checkpoint and tells the phones.
+const UNDER = {
+  W: 1697,
+  FEET: 648,
+  LADDER_X: 225,
+  SHRINE_X: 1590,
+  BED_X: 1400,
+  HOOK: { x: 731, y: 312 },
+  CRADLE_H: 270,
+  TRAP_X: 460,          // the trapdoor in room 3 (lore page 3 hangs at 560)
+  SLIT_Y: 182,          // the gaps between the floor planks above
+  SAM_SPEED: 92,
+  CROUCH: 0.62,         // the ceiling is low: you move crouched
+  LISTEN_NEAR: 150,     // he stops above you when he gets this close
+  LISTEN_MS: 2200,
+  GRACE_MS: 450,        // the moment the dust starts falling you may still finish a step
+  LEAVE_MS: 1300,
+  LISTEN_GAP_MS: 1900   // he can stop to listen again this soon
+};
+const under = { active: false, cam: 0, sam: null, cradle: { amp: 0.04, at: 0 }, dust: [], stepT: 0, sawCradle: false };
+
+function camUnder() {
+  return Math.max(0, Math.min(UNDER.W - 1280, state.player.x - 640));
+}
+
+function resetUnderSam() {
+  under.sam = { x: 1350, dir: -1, mode: 'walk', t: 0, lastListen: performance.now(), near: false, leaveDir: 1 };
+  under.dust = [];
+}
+
+function startUnder(resume = false) {
+  under.active = true;
+  state.flags.inUnder = true;
+  const p = state.player;
+  p.x = UNDER.LADDER_X + 40;
+  p.dir = 1;
+  p.hidden = false;
+  state.moveInput = 0;
+  resetUnderSam();
+  under.cradle = { amp: 0.04, at: performance.now() };
+  const g = state.ghost;
+  g.type = 'samphawesi';
+  g.active = true; // so the bell (P2) is live
+  g.alpha = 1;
+  g.stunTimer = 0;
+  fx.sceneZoomAt = performance.now();
+  updateHud();
+  if (!resume && !state.flags.underVisited) {
+    state.flags.underVisited = true;
+    queueDialogue([
+      { speaker: getPlayerName(), text: 'ใต้ถุนเรือน... เพดานเตี้ยจนแทบต้องก้ม กลิ่นดินชื้น กับกลิ่นธูปอ่อนๆ ลอยมาจากสุดทางขวา' },
+      { speaker: 'เสียงไม้ลั่นเหนือหัว', text: 'แอ๊ด... แอ๊ด... (มีใครเดินอยู่บนพื้นข้างบน ช้าๆ ลากเท้า)' },
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'มันยังได้ยินเธอ... ถ้ามันหยุดเดินตรงเหนือหัวแล้วฝุ่นร่วงลงมา ให้ยืนนิ่งจนมันเดินผ่านไป' }
+    ]);
+  }
+  saveCheckpoint();
+  broadcastState();
+}
+
+function leaveUnderState() {
+  under.active = false;
+  state.flags.inUnder = false;
+  under.dust = [];
+}
+
+function exitUnder() {
+  leaveUnderState();
+  enterScene(3, UNDER.TRAP_X);
+}
+
+function goDownTrapdoor() {
+  if (!state.flags.samphawesiTriggered) {
+    queueDialogue([{ speaker: getPlayerName(), text: `ฝาไม้บนพื้น... มีกลิ่นธูปลอยขึ้นมาจากข้างล่าง แต่กลางห้องมีใครนั่งอยู่ ${pWord('ผม', 'ฉัน')}ต้องไปดูก่อน` }]);
+    return;
+  }
+  const seen = state.seenDoors.has('3->under');
+  state.seenDoors.add('3->under');
+  playDoorTransition(seen, 'เปิดฝาไม้ แล้วไต่บันไดลงไปในความมืดใต้เรือน...', () => startUnder());
+}
+
+function resetUnder() {
+  const p = state.player;
+  p.x = UNDER.LADDER_X + 40;
+  p.dir = 1;
+  resetUnderSam();
+  state.ghost.active = true;
+  state.ghost.stunTimer = 1.5;
+}
+
+function underHotspots() {
+  const has = state.inventory.offerings.includes('incense');
+  return [
+    {
+      id: 'under_ladder',
+      x: UNDER.LADDER_X,
+      width: 150,
+      label: 'ปีนบันไดกลับขึ้นไปบนเรือน',
+      onInteract: () => {
+        const seen = state.seenDoors.has('under->3');
+        state.seenDoors.add('under->3');
+        playDoorTransition(seen, 'ปีนกลับขึ้นไปบนเรือน...', exitUnder);
+      }
+    },
+    {
+      id: 'under_bed',
+      x: UNDER.BED_X,
+      width: 120,
+      label: 'สำรวจแคร่ไม้กับเสื่อเก่า',
+      onInteract: () => queueDialogue([
+        { speaker: getPlayerName(), text: 'แคร่ไม้ เสื่อขาดๆ ผ้าห่มพับไว้เรียบร้อย กับขันข้าวทองเหลืองที่ว่างเปล่า... มีคนนอนตรงนี้มาทั้งชีวิต' }
+      ])
+    },
+    {
+      id: 'under_shrine',
+      x: UNDER.SHRINE_X,
+      width: 150,
+      label: has ? 'ศาลไม้เล็กๆ ของคนเฝ้าเรือน' : 'หยิบธูปเทียนบนศาลไม้เล็กๆ',
+      onInteract: () => {
+        if (has) {
+          queueDialogue([{ speaker: getPlayerName(), text: 'ตอไม้ธูปไหม้ไปครึ่งเดียว... เหมือนมีคนตั้งใจจะจุดให้ แต่ไม่เคยจุดจนจบ' }]);
+          return;
+        }
+        state.inventory.offerings.push('incense');
+        pickupFx('incense');
+        if (fx.pickup) fx.pickup.x -= under.cam;
+        playSound('pickup');
+        updateHud();
+        queueDialogue([
+          { speaker: getPlayerName(), text: 'บนศาลไม้เล็กๆ มีธูปเทียนมัดหนึ่ง ยังมีกลิ่นควันอ่อนๆ ทั้งที่ไม่มีใครจุด (2/3)' },
+          { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ตาเหมือนนอนอยู่ตรงนี้มาทั้งชีวิต เฝ้าเรือนให้คนข้างบน... แต่ไม่เคยมีใครจุดธูปให้เขาสักดอก' }
+        ]);
+      }
+    }
+  ];
+}
+
+function underObjective() {
+  if (!state.inventory.offerings.includes('incense')) {
+    return { text: 'เดินไปศาลไม้สุดทางขวา · ฝุ่นร่วงจากพื้นข้างบนเมื่อไหร่ ให้หยุดนิ่งจนมันเดินผ่าน', target: 'under_shrine' };
+  }
+  return { text: 'ได้ธูปเทียนแล้ว — ปีนบันไดทางซ้ายกลับขึ้นไป', target: 'under_ladder' };
+}
+
+function underBell(source) {
+  if (state.bellCooldown > 0) return false;
+  state.ghost.stunTimer = CONFIG.BELL_STUN;
+  state.bellCooldown = bellCooldownSecs();
+  playSound('chime');
+  showToast(`${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! เสียงฝีเท้าข้างบนถอยห่างออกไป`);
+  const s = under.sam;
+  if (s) {
+    s.mode = 'leave';
+    s.t = 0;
+    s.leaveDir = s.x < state.player.x ? -1 : 1;
+  }
+  broadcastState();
+  return true;
+}
+
+// The soft hum of a lullaby from the cradle (a few falling notes, nothing recognisable).
+function playLullaby() {
+  xSound((t, out) => {
+    const notes = [659, 587, 523, 587, 494, 523, 440];
+    notes.forEach((f, i) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f / 2;
+      o.detune.value = (Math.random() - 0.5) * 30;
+      const at = t + i * 0.52;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(0.06, at + 0.12);
+      g.gain.exponentialRampToValueAtTime(0.0008, at + 0.6);
+      o.connect(g);
+      g.connect(out);
+      o.start(at);
+      o.stop(at + 0.65);
+    });
+  }, { gain: 0.9, pan: -0.2 });
+}
+
+function updateUnder(dt) {
+  const now = performance.now();
+  const p = state.player;
+  const g = state.ghost;
+  const s = under.sam;
+  if (isDialogueOpen() || isOverlayOpen()) {
+    p.frame = 0;
+    return;
+  }
+  state.bellCooldown = Math.max(0, state.bellCooldown - dt);
+  state.revealTimer = Math.max(0, state.revealTimer - dt);
+  document.getElementById('sixth-sense-overlay').classList.toggle('hidden', !isSensing());
+
+  // walk
+  if (state.moveInput !== 0) {
+    p.dir = state.moveInput;
+    p.x = Math.max(150, Math.min(UNDER.W - 60, p.x + state.moveInput * CONFIG.PLAYER_SPEED * UNDER.CROUCH * dt));
+    state.stepTimer += dt;
+    if (state.stepTimer >= 0.13) {
+      state.stepTimer = 0;
+      p.frame = (p.frame + 1) % 8;
+      if (p.frame % 4 === 0) playSound('footstep', { gain: 0.7 });
+    }
+  } else {
+    p.frame = 0;
+  }
+  under.cam = camUnder();
+
+  // the cradle starts rocking the first time you walk under it
+  if (!under.sawCradle && p.x > UNDER.HOOK.x - 190) {
+    under.sawCradle = true;
+    under.cradle = { amp: 0.32, at: now };
+    playSound('creak', { gain: 0.8, pan: -0.3 });
+    playLullaby();
+    if (!state.flags.cradleSeen) {
+      state.flags.cradleSeen = true;
+      setTimeout(() => {
+        if (under.active && !isWorldFrozen()) showToast('เปลไม้ไกวเองทั้งที่ไม่มีลม... และใครบางคนฮัมเพลงกล่อมเด็กอยู่ในความมืด', 'hint', 4200);
+      }, 600);
+    }
+  }
+  under.cradle.amp = Math.max(0.04, under.cradle.amp - dt * 0.03);
+
+  // the one upstairs
+  const dx = s.x - p.x;
+  const speed = UNDER.SAM_SPEED * nightGhostSpeed();
+  if (g.stunTimer > 0) {
+    g.stunTimer = Math.max(0, g.stunTimer - dt);
+    s.mode = 'leave';
+  }
+  if (s.mode === 'walk') {
+    s.dir = Math.sign(-dx) || s.dir;
+    s.x += s.dir * speed * dt;
+    if (Math.abs(dx) < UNDER.LISTEN_NEAR * 0.75 && now - s.lastListen > UNDER.LISTEN_GAP_MS) {
+      s.mode = 'listen';
+      s.t = 0;
+      s.near = true;
+      s.lastListen = now;
+      playSound('creak', { gain: 1, pan: 0 });
+      for (let i = 0; i < 26; i++) under.dust.push({ x: s.x + (Math.random() - 0.5) * 90, y: UNDER.SLIT_Y + Math.random() * 10, vy: 60 + Math.random() * 90, a: 1 });
+    }
+  } else if (s.mode === 'listen') {
+    s.t += dt * 1000;
+    const close = Math.abs(dx) < UNDER.LISTEN_NEAR;
+    if (close && s.t > UNDER.GRACE_MS && state.moveInput !== 0) return underCaught();
+    if (s.t > UNDER.LISTEN_MS) {
+      s.mode = 'leave';
+      s.t = 0;
+      s.leaveDir = Math.random() < 0.5 ? -1 : 1;
+      if (s.x < 260) s.leaveDir = 1;
+      if (s.x > UNDER.W - 200) s.leaveDir = -1;
+    }
+    if (Math.random() < dt * 4) under.dust.push({ x: s.x + (Math.random() - 0.5) * 60, y: UNDER.SLIT_Y, vy: 50 + Math.random() * 60, a: 1 });
+  } else { // leave: walks off a little way before he comes back for you
+    s.t += dt * 1000;
+    s.x += s.leaveDir * speed * 1.2 * dt;
+    if (s.t > UNDER.LEAVE_MS && g.stunTimer <= 0) {
+      s.mode = 'walk';
+      s.lastListen = now;
+    }
+  }
+  s.x = Math.max(80, Math.min(UNDER.W - 40, s.x));
+
+  // footsteps on the boards above
+  if (s.mode !== 'listen') {
+    under.stepT += dt;
+    if (under.stepT > 0.62) {
+      under.stepT = 0;
+      const pan = Math.max(-1, Math.min(1, (s.x - p.x) / 650));
+      playSound(Math.random() < 0.35 ? 'creak' : 'step', { gain: 0.45, pan });
+    }
+  }
+
+  // dust
+  under.dust.forEach((d) => { d.y += d.vy * dt; d.a -= dt * 0.55; });
+  under.dust = under.dust.filter((d) => d.a > 0 && d.y < UNDER.FEET);
+
+  // the phones and the danger overlay
+  const near = Math.abs(dx);
+  g.x = s.x;
+  g.alertLevel = s.mode === 'listen' && near < UNDER.LISTEN_NEAR ? 95 : Math.max(8, Math.min(70, Math.round(80 - near / 8)));
+  document.getElementById('danger-overlay').classList.toggle('hidden', !(s.mode === 'listen' && near < UNDER.LISTEN_NEAR));
+}
+
+function underCaught() {
+  under.cause = 'heard';
+  playSound('creak', { gain: 1.4 });
+  triggerGameOver();
+}
+
+// What the P1 phone / prompt says right now.
+function underPrompt() {
+  const s = under.sam;
+  if (s && s.mode === 'listen' && Math.abs(s.x - state.player.x) < UNDER.LISTEN_NEAR) return 'หยุดนิ่ง! มันฟังอยู่ข้างบน';
+  const spot = getActiveHotspot();
+  return spot ? spot.label : '';
+}
+
+let underLight = null;
+function renderUnder(now = performance.now()) {
+  const W = 1280;
+  const H = 720;
+  const p = state.player;
+  const s = under.sam || { x: -999, mode: 'walk' };
+  const cam = under.cam = camUnder();
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  const bg = IMAGES.bgUnder;
+  if (isReady(bg)) {
+    ctx.drawImage(bg, -cam, 0, bg.naturalWidth * (H / bg.naturalHeight), H);
+  } else {
+    ctx.fillStyle = '#0a0806';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#2a1d14';
+    ctx.fillRect(0, 120, W, 70);
+    ctx.fillStyle = '#1a130d';
+    ctx.fillRect(0, UNDER.FEET, W, H - UNDER.FEET);
+  }
+
+  // the cradle, swinging from its hook
+  const cr = IMAGES.cradle;
+  if (isReady(cr)) {
+    const h = UNDER.CRADLE_H;
+    const w = cr.naturalWidth * (h / cr.naturalHeight);
+    const ang = REDUCED_MOTION ? 0 : under.cradle.amp * Math.sin((now - under.cradle.at) / 520);
+    ctx.save();
+    ctx.translate(UNDER.HOOK.x - cam, UNDER.HOOK.y);
+    ctx.rotate(ang);
+    ctx.drawImage(cr, -w * 0.482, 0, w, h);
+    ctx.restore();
+  }
+
+  // the player
+  const prefix = state.character === 'female' ? 'femaleWalk' : 'maleWalk';
+  drawGroundShadow(p.x - cam, UNDER.FEET - 2, 48, 12, 0.7);
+  drawSpriteProportional(IMAGES[`${prefix}${p.frame}`] || IMAGES[`${prefix}0`], p.x - cam, UNDER.FEET, 232, p.dir === -1);
+
+  // darkness with a few holes: the open sides, a little halo, the flashlight, the shrine ember
+  if (!underLight) {
+    underLight = document.createElement('canvas');
+    underLight.width = W;
+    underLight.height = H;
+  }
+  const d = underLight.getContext('2d');
+  d.globalCompositeOperation = 'source-over';
+  d.clearRect(0, 0, W, H);
+  d.fillStyle = `rgba(4, 5, 10, ${isSensing() ? 0.55 : Math.min(0.97, 0.9 + nightDarkness())})`;
+  d.fillRect(0, 0, W, H);
+  d.globalCompositeOperation = 'destination-out';
+  const hole = (x, y, r0, r1, a) => {
+    const gr = d.createRadialGradient(x, y, r0, x, y, r1);
+    gr.addColorStop(0, `rgba(0,0,0,${a})`);
+    gr.addColorStop(0.6, `rgba(0,0,0,${a * 0.45})`);
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    d.fillStyle = gr;
+    d.beginPath();
+    d.arc(x, y, r1, 0, Math.PI * 2);
+    d.fill();
+  };
+  hole(40 - cam, 480, 20, 300, 0.55);           // moonlight through the open side (left)
+  hole(UNDER.W - 20 - cam, 470, 20, 280, 0.55);  // ...and the right
+  hole(p.x - cam, 520, 30, 190, 0.55);
+  if (!state.inventory.offerings.includes('incense')) hole(UNDER.SHRINE_X + 8 - cam, 330, 4, 90, 0.75 + Math.sin(now / 300) * 0.1);
+  if (p.flashlight) {
+    const sx = p.x - cam + p.dir * 30;
+    const beam = d.createLinearGradient(sx, 0, sx + p.dir * 560, 0);
+    beam.addColorStop(0, 'rgba(0,0,0,0.95)');
+    beam.addColorStop(1, 'rgba(0,0,0,0)');
+    d.fillStyle = beam;
+    d.beginPath();
+    d.moveTo(sx, 500);
+    d.lineTo(sx + p.dir * 560, 330);
+    d.lineTo(sx + p.dir * 560, 690);
+    d.closePath();
+    d.fill();
+  }
+  ctx.drawImage(underLight, 0, 0);
+  if (p.flashlight) { // the warm haze of the beam itself, like upstairs
+    const sx = p.x - cam + p.dir * 30;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const haze = ctx.createLinearGradient(sx, 0, sx + p.dir * 520, 0);
+    haze.addColorStop(0, 'rgba(255, 220, 160, 0.16)');
+    haze.addColorStop(1, 'rgba(255, 220, 160, 0)');
+    ctx.fillStyle = haze;
+    ctx.beginPath();
+    ctx.moveTo(sx, 500);
+    ctx.lineTo(sx + p.dir * 520, 345);
+    ctx.lineTo(sx + p.dir * 520, 675);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // light through the gaps in the planks above, cut by his shadow
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  for (let x = 0; x < UNDER.W; x += 23) {
+    const sx = x - cam;
+    if (sx < -60 || sx > W + 60) continue;
+    if (Math.abs(x - s.x) < 62) continue; // his shadow
+    const len = 8 + ((x * 7919) % 17); // uneven gaps, not a dashed line
+    const flick = 0.1 + 0.05 * Math.sin(now / 700 + x);
+    ctx.fillStyle = `rgba(190, 180, 150, ${flick})`;
+    ctx.fillRect(sx, UNDER.SLIT_Y, len, 2);
+    ctx.fillStyle = `rgba(190, 180, 150, ${flick * 0.25})`;
+    ctx.fillRect(sx + 2, UNDER.SLIT_Y + 2, Math.max(4, len - 6), 22);
+  }
+  ctx.restore();
+  // his shadow across the planks (two feet), darker while he stands and listens
+  const shx = s.x - cam;
+  ctx.fillStyle = s.mode === 'listen' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.6)';
+  ctx.fillRect(shx - 34, UNDER.SLIT_Y - 4, 26, 10);
+  ctx.fillRect(shx + 8, UNDER.SLIT_Y - 4, 26, 10);
+
+  // dust falling from where he stands
+  ctx.fillStyle = 'rgba(210, 196, 170, 0.8)';
+  under.dust.forEach((dd) => {
+    ctx.globalAlpha = Math.max(0, dd.a);
+    ctx.fillRect(dd.x - cam, dd.y, 2, 3);
+  });
+  ctx.globalAlpha = 1;
+
+  // warning, prompt and the objective marker
+  const listening = s.mode === 'listen' && Math.abs(s.x - p.x) < UNDER.LISTEN_NEAR;
+  ctx.textAlign = 'center';
+  if (listening) {
+    const pulse = 0.75 + 0.25 * Math.sin(now / 110);
+    ctx.font = 'bold 34px Sarabun';
+    ctx.fillStyle = `rgba(255, 120, 100, ${pulse})`;
+    ctx.fillText('หยุดนิ่ง! มันหยุดฟังอยู่เหนือหัว', W / 2, 110);
+  }
+  const spot = getActiveHotspot();
+  if (spot && !listening) {
+    ctx.font = 'bold 18px Sarabun';
+    const text = `[E] ${spot.label}`;
+    const tw = ctx.measureText(text).width + 24;
+    const sx = Math.max(tw / 2 + 8, Math.min(W - tw / 2 - 8, spot.x - cam));
+    ctx.fillStyle = 'rgba(12, 9, 8, 0.82)';
+    ctx.fillRect(sx - tw / 2, 362, tw, 32);
+    ctx.fillStyle = '#f0e4cc';
+    ctx.fillText(text, sx, 384);
+  }
+  const target = underObjective().target;
+  const tspot = underHotspots().find((h) => h.id === target);
+  if (tspot && (!spot || spot.id !== target)) {
+    const tx = Math.max(30, Math.min(W - 30, tspot.x - cam));
+    const bob = Math.sin(now / 260) * 5;
+    ctx.fillStyle = 'rgba(255, 211, 107, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(tx - 10, 404 + bob);
+    ctx.lineTo(tx + 10, 404 + bob);
+    ctx.lineTo(tx, 420 + bob);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// The trapdoor on room 3's floor (drawn in the room, under the darkness).
+function drawTrapdoor() {
+  const x = UNDER.TRAP_X;
+  const y = 606;
+  ctx.save();
+  ctx.fillStyle = '#1b130d';
+  ctx.fillRect(x - 52, y - 4, 104, 12);
+  ctx.strokeStyle = '#5a412b';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x - 52, y - 4, 104, 12);
+  ctx.fillStyle = '#3b2a1c';
+  for (let i = -40; i <= 40; i += 26) ctx.fillRect(x + i - 1, y - 3, 2, 10);
+  ctx.strokeStyle = '#8a7356';
+  ctx.beginPath();
+  ctx.arc(x + 30, y + 2, 4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// P2's spirit vision under the house: P1 below, the one upstairs on the planks.
+function renderP2UnderRadar(rctx, rg) {
+  rctx.fillStyle = '#84f2d4';
+  rctx.font = 'bold 20px Sarabun';
+  rctx.fillText('ฉากที่ 3: ใต้ถุนเรือน', 14, 30);
+  const left = 28;
+  const span = 544;
+  rctx.strokeStyle = '#59dfb7';
+  rctx.lineWidth = 3;
+  rctx.beginPath(); rctx.moveTo(left, 120); rctx.lineTo(left + span, 120); rctx.stroke(); // the floor above
+  rctx.lineWidth = 2;
+  rctx.beginPath(); rctx.moveTo(left, 195); rctx.lineTo(left + span, 195); rctx.stroke(); // the earth below
+  const px = left + (Math.max(0, Math.min(100, Number(rg.underPct) || 0)) / 100) * span;
+  const sx = left + (Math.max(0, Math.min(100, Number(rg.underSamPct) || 0)) / 100) * span;
+  const listen = rg.underState === 'listen';
+  rctx.fillStyle = listen ? '#ff3b3b' : '#ff8a6b';
+  rctx.beginPath();
+  rctx.arc(sx, 108, 11 + (listen ? Math.sin(performance.now() / 110) * 3 : 0), 0, Math.PI * 2);
+  rctx.fill();
+  rctx.fillStyle = '#00f5d4';
+  rctx.beginPath();
+  rctx.arc(px, 178, 10, 0, Math.PI * 2);
+  rctx.fill();
+  rctx.font = 'bold 18px Sarabun';
+  rctx.textAlign = 'center';
+  rctx.fillStyle = listen ? '#ffd36b' : '#f3e5c8';
+  rctx.fillText(listen ? 'มันหยุดฟัง!' : 'สัมภเวสี (บนพื้น)', Math.max(70, Math.min(530, sx)), 88);
+  rctx.fillStyle = '#00f5d4';
+  rctx.fillText('P1', Math.max(30, Math.min(570, px)), 160);
+  rctx.fillStyle = '#ffd166';
+  rctx.fillText('ศาล/ธูป', left + span - 30, 222);
+  rctx.textAlign = 'left';
+}

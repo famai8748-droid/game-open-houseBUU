@@ -24,7 +24,8 @@ const OFFERINGS = ['garland', 'incense', 'dessert'];
 const FLAG_KEYS = [
   'door1Opened', 'inspectedDust', 'inspectedPortraits', 'samphawesiTriggered',
   'offeringsPlaced', 'photosRestored', 'cutscenePlaying', 'gameOver', 'victory',
-  'visited2', 'visited4', 'codeRead', 'cabinetUnlocked', 'songPlayed', 'escaped'
+  'visited2', 'visited4', 'codeRead', 'cabinetUnlocked', 'songPlayed', 'escaped',
+  'inUnder', 'night2' // the phones' views follow these (under-house radar, second night)
 ];
 
 class RoomError extends Error {
@@ -105,7 +106,10 @@ const PATCH_SCHEMA = {
     ranatHint: (t) => shortText(t, 32),
     bridgePct: (n) => num(n, 0, 100),
     bridgeWallPct: (n) => num(n, -20, 100),
-    bridgeState: (s) => oneOf(s, ['', 'run', 'hand', 'listen'])
+    bridgeState: (s) => oneOf(s, ['', 'run', 'hand', 'listen']),
+    underPct: (n) => num(n, 0, 100),
+    underSamPct: (n) => num(n, 0, 100),
+    underState: (s) => oneOf(s, ['', 'walk', 'listen'])
   })
 };
 
