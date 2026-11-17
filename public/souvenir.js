@@ -71,14 +71,13 @@ function souvenirUrl(d) {
 
 function souvenirImagePaths(d) {
   return {
-    bg: d.lore === 3 ? 'assets/ending_true.jpg' : (d.female ? 'assets/hospital_wake_rin.jpg' : 'assets/hospital_wake.jpg'),
-    sprite: d.female ? 'assets/frames/student_female_walk_0.png' : 'assets/frames/student_male_walk_0.png'
+    bg: d.lore === 3 ? 'assets/ending_true.jpg' : (d.female ? 'assets/hospital_wake_rin.jpg' : 'assets/hospital_wake.jpg')
   };
 }
 
 const souvenirReady = (img) => !!(img && img.complete && img.naturalWidth > 0);
 
-// Draws the 1200x630 card. imgs = { bg, sprite } (HTMLImageElements; missing ones are skipped).
+// Draws the 1200x630 card. imgs = { bg } (an HTMLImageElement; skipped if missing).
 function drawSouvenirCard(c, d, imgs = {}) {
   c.width = 1200;
   c.height = 630;
@@ -117,18 +116,8 @@ function drawSouvenirCard(c, d, imgs = {}) {
   g.lineWidth = 1.5;
   g.strokeRect(24, 24, 1152, 582);
 
-  // Character sprite standing on the right
-  const sprite = imgs.sprite;
-  if (souvenirReady(sprite)) {
-    const sh = 330;
-    const sw = sh * (sprite.naturalWidth / sprite.naturalHeight);
-    g.save();
-    g.imageSmoothingEnabled = false;
-    g.shadowColor = 'rgba(255, 200, 120, 0.35)';
-    g.shadowBlur = 24;
-    g.drawImage(sprite, 990 - sw / 2, 560 - sh, sw, sh);
-    g.restore();
-  }
+  // No standing sprite: the hospital paintings already show the player in bed (a sprite made it
+  // look like two of them), and on the true ending it would cover the uncle on the right.
 
   g.textAlign = 'left';
   g.fillStyle = '#ff6b5e';

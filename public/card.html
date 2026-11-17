@@ -90,8 +90,8 @@
       const paths = souvenirImagePaths(data);
       const fonts = ['bold 20px "Chakra Petch"', '600 28px Sarabun', 'bold 38px Sarabun']
         .map((f) => (document.fonts ? document.fonts.load(f, 'กขค ABC').catch(() => null) : null));
-      const [bg, sprite] = await Promise.all([load(paths.bg), load(paths.sprite), ...fonts]);
-      const canvas = drawSouvenirCard(document.createElement('canvas'), data, { bg, sprite });
+      const [bg] = await Promise.all([load(paths.bg), ...fonts]);
+      const canvas = drawSouvenirCard(document.createElement('canvas'), data, { bg });
       canvas.toBlob((blob) => {
         if (!blob) { msg.textContent = 'วาดการ์ดไม่สำเร็จ ลองเปิดลิงก์ใหม่อีกครั้ง'; return; }
         const url = URL.createObjectURL(blob);

@@ -541,3 +541,82 @@ test('a ghost grab can be fought off once, and the bridge teaches its rules', { 
   assert.equal(s.loopErrors, 0, 'no frame of the game loop failed');
   assert.deepEqual(errors, [], 'no errors in the page console');
 });
+
+// ---- two players: the main screen plus two phones (each its own headless Chrome) ----
+async function openPhone(port, code, role) {
+  const phone = await launchBrowser();
+  const errors = watchErrors(phone);
+  await phone.send('Runtime.enable');
+  await phone.send('Log.enable');
+  await phone.send('Page.enable');
+  await phone.send('Page.navigate', { url: `http://127.0.0.1:${port}/?room=${code}&role=${role}` });
+  await waitFor(() => phone.evaluate(`typeof state === 'object' && state.role === '${role}' && !!net.playerToken`),
+    { timeout: 20000, what: `the ${role} phone to join` });
+  return { phone, errors };
+}
+
+test('co-op: the phones play the ranat and the bridge together with the main screen', { skip: !BROWSER && 'no Chrome/Edge found', timeout: 150000 }, async (t) => {
+  const server = startServer();
+  t.after(() => server.child.kill());
+  await server.ready;
+  const host = await launchBrowser();
+  t.after(() => host.close());
+  const hostErrors = watchErrors(host);
+  await openGame(host, server.port);
+  await host.evaluate(HELPERS);
+
+  await host.evaluate('openCoopLobby().then(() => true)');
+  const code = await waitFor(() => host.evaluate('state.roomCode'), { what: 'a room code' });
+  const p1 = await openPhone(server.port, code, 'p1');
+  t.after(() => p1.phone.close());
+  const p2 = await openPhone(server.port, code, 'p2');
+  t.after(() => p2.phone.close());
+  await waitFor(() => host.evaluate('!!(net.players && net.players.p1 && net.players.p2)'), { timeout: 10000, what: 'the lobby to see both phones' });
+
+  await host.evaluate('startFromLobby(); true');
+  await waitFor(() => host.evaluate('isStoryIntroOpen()'), { what: 'the prologue' });
+  await host.evaluate(`window.skipStoryIntro(); grantProgressUpTo(4); enterScene(4, 400); true`);
+  await settle(host);
+  await host.evaluate('state.ghost.stunTimer = 120; true');
+
+  // ranat: P2 hears the phrase, P1 strikes it on the phone's number pad
+  await host.evaluate('state.flags.ranatSeen = true; openRanat(); true');
+  const phrase = await host.evaluate(`ranat.seq.slice(0, RANAT.rounds[ranat.round]).map((n) => THAI_DIGITS[n + 1]).join(' · ')`);
+  await waitFor(() => p2.phone.evaluate(`document.getElementById('p2-clue-text').textContent`).then((s) => s.includes(phrase)),
+    { timeout: 8000, what: 'P2 to see the ranat phrase' });
+  assert.equal(await p2.phone.evaluate(`document.getElementById('p2-clue-text').textContent.includes('รหัสตู้')`), false, 'P2 is not shown the cabinet code while the ranat is open');
+  await waitFor(() => host.evaluate("ranat.phase === 'input'"), { what: 'the ranat to wait for the player' });
+  await waitFor(() => p1.phone.evaluate(`!document.getElementById('p1-lock').classList.contains('hidden')`), { timeout: 8000, what: 'the P1 number pad' });
+  const first = await host.evaluate('ranat.seq[0] + 1');
+  await p1.phone.evaluate(`[...document.querySelectorAll('#p1-lock .keypad button')].find((b) => b.getAttribute('onclick') === "sendRemoteInput('digit', ${first})").click(); true`);
+  await waitFor(() => host.evaluate('ranat.pos === 1'), { timeout: 5000, what: 'the P1 phone to strike the right bar' });
+  await host.evaluate('closeRanat(); true');
+
+  // bridge: P2's radar switches to the bridge, P1 runs from the phone, P2 rings the bell
+  await host.evaluate(`state.flags.offeringsPlaced = state.flags.photosRestored = state.flags.songPlayed = true; state.flags.escaped = false; enterScene(5, 220); true`);
+  await settle(host);
+  assert.equal(await host.evaluate('chase.active'), true);
+  await waitFor(() => p2.phone.evaluate(`state.scene === 5 && /สะพานข้ามภพ/.test(document.getElementById('p2-clue-text').textContent)`),
+    { timeout: 8000, what: 'P2 to switch to the bridge radar' });
+  const before = await host.evaluate('chase.dist');
+  await p1.phone.evaluate('startRemoteMove(1); true');
+  await waitFor(() => host.evaluate(`(() => { if (isDialogueOpen()) __pt.drain(); return chase.dist > ${before} + 60; })()`), { timeout: 8000, what: 'the P1 phone to run the player along the bridge' });
+  await p1.phone.evaluate('stopRemoteMove(); true');
+  await waitFor(() => p2.phone.evaluate(`(state.remoteGoal.bridgePct || 0) > 0 && state.remoteGoal.bridgeState !== ''`), { timeout: 8000, what: 'P2 to see P1 on the bridge' });
+
+  await host.evaluate('state.bellCooldown = 0; state.ghost.stunTimer = 0; broadcastState(); true');
+  await waitFor(() => p2.phone.evaluate(`!document.getElementById('btn-stun-ghost').disabled`), { timeout: 8000, what: 'the P2 bell to be ready' });
+  await p2.phone.evaluate(`document.getElementById('btn-stun-ghost').click(); true`);
+  await waitFor(() => host.evaluate('state.ghost.stunTimer > 0'), { timeout: 5000, what: 'the P2 bell to hold back the dark' });
+
+  // across the bridge: P2's radar goes back to the house view
+  assert.equal(await host.evaluate('staffSkipScene()'), true);
+  await waitFor(() => p2.phone.evaluate(`!!state.flags.escaped && !/สะพานข้ามภพ/.test(document.getElementById('p2-clue-text').textContent)`),
+    { timeout: 8000, what: 'P2 to leave the bridge view' });
+
+  await sleep(300);
+  assert.equal(await host.evaluate('staff.errors'), 0, 'no frame of the game loop failed');
+  assert.deepEqual(hostErrors, [], 'no errors on the main screen');
+  assert.deepEqual(p1.errors, [], 'no errors on the P1 phone');
+  assert.deepEqual(p2.errors, [], 'no errors on the P2 phone');
+});

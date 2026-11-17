@@ -12,8 +12,16 @@ if not exist "%CHROME%" set "CHROME=%ProgramFiles(x86)%\Google\Chrome\Applicatio
 if not exist "%CHROME%" set "CHROME=%LocalAppData%\Google\Chrome\Application\chrome.exe"
 
 start "BUU game server" /min cmd /c "npm run local"
-rem give the server a moment to start listening
-timeout /t 2 /nobreak >nul
+
+rem Network check before Chrome covers the screen: LAN address, firewall, internet, and a
+rem phone test (scan the QR it prints). It waits for the server itself. Enter skips the phone test.
+chcp 65001 >nul
+node tools\booth-check.js --wait=25
+if errorlevel 1 (
+  echo.
+  echo   Something needs a look ^(see above^). Press any key to open the game - it opens by itself in 60 s.
+  timeout /t 60 >nul
+)
 
 if exist "%CHROME%" (
   rem A separate profile keeps the flags (and the booth's hall of fame) apart from everyday Chrome.

@@ -6,11 +6,11 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { spawn } = require('child_process');
 const { URL } = require('url');
 const { createApiHandler, sendJson } = require('./server/http-api');
 const { createMemoryStore } = require('./server/stores');
+const { getLocalLanIp } = require('./server/lan-ip');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -55,15 +55,13 @@ function startPublicTunnel(attempt = 0) {
   });
 }
 
-function getLocalLanIp() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name] || []) {
-      if (net.family === 'IPv4' && !net.internal) return net.address;
-    }
-  }
-  return 'localhost';
-}
+// Booth phone test (tools/booth-check.js): a phone that opens /phone-check proves it can reach
+// this laptop over the venue Wi-Fi (no client isolation, firewall open).
+let lastPhoneCheck = null;
+const PHONE_CHECK_PAGE = `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ทดสอบมือถือ</title><style>body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#070508;color:#f6dda9;font-family:sans-serif;text-align:center;padding:24px}
+b{font-size:28px;color:#9fe3cf}p{color:#ddd2be;line-height:1.6}</style></head><body><b>มือถือต่อโน้ตบุ๊กบูธได้</b>
+<p>โหมดเล่น 2 คนใช้ได้บน Wi-Fi นี้<br>ดูหน้าต่างเช็คบนโน้ตบุ๊กได้เลย</p></body></html>`;
 
 // ----------------------------------------------------------------------------
 // SSE clients: code -> Set<{ res, role }>
@@ -184,6 +182,16 @@ function serveStatic(pathname, res) {
 const server = http.createServer((req, res) => {
   const parsed = new URL(req.url, 'http://localhost');
   const pathname = parsed.pathname;
+
+  if (pathname === '/phone-check') {
+    const addr = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+    if (addr !== '127.0.0.1' && addr !== '::1') lastPhoneCheck = { at: Date.now(), from: addr };
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return res.end(PHONE_CHECK_PAGE);
+  }
+  if (pathname === '/phone-check/status') {
+    return sendJson(res, 200, { ok: true, lastPhoneCheck });
+  }
 
   if (pathname.startsWith('/api/')) {
     res.setHeader('Access-Control-Allow-Origin', '*');
