@@ -4050,3 +4050,83 @@ body,
 @media (prefers-reduced-motion: reduce) {
   .ranat-bars button.hit { animation-duration: 0.2s; }
 }
+
+/* ---- the promise at the gate: a two-answer choice in the dialogue frame ---- */
+.choice-box {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(860px, 92%);
+  z-index: 26;
+  padding: 16px 24px 14px;
+  background: linear-gradient(172deg, rgba(30, 24, 20, 0.97), rgba(11, 9, 12, 0.98));
+  border: 1px solid #7a5b37;
+  border-radius: 5px 11px 6px 13px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+}
+.choice-box.hidden { display: none; }
+.choice-text {
+  color: #f0e4cc;
+  font-size: 19px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+.choice-opts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.choice-opt {
+  text-align: left;
+  padding: 10px 14px 11px;
+  background: rgba(10, 7, 9, 0.6);
+  border: 1px solid rgba(240, 207, 149, 0.25);
+  color: #cec4b4;
+  font-family: 'Sarabun', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.choice-opt b { display: block; font-size: 20px; color: inherit; }
+.choice-opt span { display: block; font-size: 14px; color: #9a8e7c; margin-top: 2px; }
+.choice-opt.on {
+  border-color: #e9c684;
+  background: rgba(120, 70, 30, 0.35);
+  color: #f6dda9;
+  box-shadow: inset 0 0 0 1px rgba(233, 198, 132, 0.4), 0 0 18px rgba(233, 160, 80, 0.18);
+}
+.choice-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #9a8e7c;
+  text-align: right;
+}
+.choice-clock { color: #ff8a7a; }
+@media (max-width: 640px) {
+  .choice-opts { grid-template-columns: 1fr; }
+}
+
+/* refused promise: the hospital at night, cold and flickering */
+.closeup.tone-night .closeup-img {
+  filter: grayscale(0.5) sepia(0.7) hue-rotate(175deg) saturate(1.6) brightness(0.42) contrast(1.2);
+  animation: closeupDrift 40s ease-out both, nightFlicker 3.2s steps(1) infinite;
+}
+@keyframes nightFlicker {
+  0%, 100% { opacity: 1; }
+  41% { opacity: 0.55; }
+  43% { opacity: 1; }
+  77% { opacity: 0.7; }
+  78% { opacity: 1; }
+  79% { opacity: 0.4; }
+  81% { opacity: 1; }
+}
+.ending-bg.night { filter: grayscale(0.5) sepia(0.7) hue-rotate(175deg) saturate(1.6) brightness(0.42); }
+@media (prefers-reduced-motion: reduce) {
+  .closeup.tone-night .closeup-img { animation: none; }
+}
+
+/* second night on the title menu */
+.t-item.t-night2 { color: #e0796d; }
+.t-item.t-night2:hover,
+.t-item.t-night2:focus-visible { color: #ff9d90; }

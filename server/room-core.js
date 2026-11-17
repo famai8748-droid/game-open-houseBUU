@@ -59,7 +59,7 @@ const num = (v, min, max) => (typeof v === 'number' && Number.isFinite(v) ? Math
 const bool = (v) => (typeof v === 'boolean' ? v : undefined);
 const oneOf = (v, list) => (list.includes(v) ? v : undefined);
 const shortText = (v, max) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, max) : undefined);
-const CONTEXTS = ['title', 'play', 'paused', 'dialogue', 'cutscene', 'puzzle', 'ritual', 'lock', 'gameover', 'victory'];
+const CONTEXTS = ['title', 'play', 'paused', 'dialogue', 'cutscene', 'puzzle', 'ritual', 'lock', 'choice', 'gameover', 'victory'];
 const uniqList = (v, allowed) => (Array.isArray(v) ? [...new Set(v.filter((x) => allowed.includes(x)))] : undefined);
 
 function pick(src, schema) {

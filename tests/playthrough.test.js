@@ -207,6 +207,7 @@ async function settle(browser, { timeout = 15000 } = {}) {
   // finish cutscenes and conversations, including the ones a callback opens next
   await waitFor(async () => {
     const s = await browser.evaluate(`(() => {
+      if (isChoiceOpen()) { choicePick(window.__ptAnswer || 0); return false; }
       if (state.flags.cutscenePlaying) { skipCutscene(); return false; }
       if (isDialogueOpen()) { __pt.drain(); return false; }
       return true;
@@ -398,6 +399,9 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   assert.equal(ending, true, 'the ending screen is on show');
   const endBg = await browser.evaluate(`document.getElementById('ending-bg').getAttribute('src')`);
   assert.match(endBg, /ending_true/, 'with all three diary pages the end screen shows the house at peace');
+  assert.equal(await browser.evaluate('!!state.flags.promiseBroken'), false, 'the playthrough keeps the promise');
+  assert.match(await browser.evaluate(`document.querySelector('#ending-modal .ending-kicker').textContent`), /รอดพ้น/);
+  assert.equal(await browser.evaluate('night2Unlocked()'), true, 'finishing unlocks the second night');
 
   // let a few frames render the ending, then look for any error on the way
   await sleep(500);
@@ -614,9 +618,77 @@ test('co-op: the phones play the ranat and the bridge together with the main scr
   await waitFor(() => p2.phone.evaluate(`!!state.flags.escaped && !/สะพานข้ามภพ/.test(document.getElementById('p2-clue-text').textContent)`),
     { timeout: 8000, what: 'P2 to leave the bridge view' });
 
+  // the promise at the gate: the P1 phone moves the highlight and answers
+  await settle(host);
+  await host.evaluate(`__pt.use('uncle_raj_pattern')`);
+  await waitFor(() => host.evaluate(`(() => { if (isDialogueOpen()) __pt.drain(); return isChoiceOpen(); })()`), { timeout: 10000, what: 'the promise question' });
+  await waitFor(() => p1.phone.evaluate(`document.getElementById('p1-btn-interact').textContent.includes('สัญญา')`), { timeout: 8000, what: 'the P1 button to offer the promise' });
+  await p1.phone.evaluate('startRemoteMove(1); true');
+  await sleep(500); // held: repeats every 150 ms, but only the first press moves the highlight
+  await p1.phone.evaluate('stopRemoteMove(); true');
+  await waitFor(() => host.evaluate('choice.idx === 1'), { timeout: 5000, what: 'the P1 phone to pick the second answer' });
+  await waitFor(() => p1.phone.evaluate(`document.getElementById('p1-btn-interact').textContent.includes('ไม่รับปาก')`), { timeout: 8000, what: 'the P1 button to follow' });
+  await p1.phone.evaluate(`document.getElementById('p1-btn-interact').click(); true`);
+  await waitFor(() => host.evaluate('!isChoiceOpen() && !!state.flags.promiseBroken'), { timeout: 5000, what: 'the P1 phone to answer' });
+
   await sleep(300);
   assert.equal(await host.evaluate('staff.errors'), 0, 'no frame of the game loop failed');
   assert.deepEqual(hostErrors, [], 'no errors on the main screen');
   assert.deepEqual(p1.errors, [], 'no errors on the P1 phone');
   assert.deepEqual(p2.errors, [], 'no errors on the P2 phone');
+});
+
+test('refusing the promise ends in the hospital at night, and the second night is harder', { skip: !BROWSER && 'no Chrome/Edge found', timeout: 120000 }, async (t) => {
+  const server = startServer();
+  t.after(() => server.child.kill());
+  await server.ready;
+  const browser = await launchBrowser();
+  t.after(() => browser.close());
+  const errors = watchErrors(browser);
+
+  await openGame(browser, server.port);
+  await browser.evaluate(HELPERS);
+  assert.equal(await browser.evaluate(`document.getElementById('btn-night2').classList.contains('hidden')`), true, 'no second night before anyone has finished');
+  await browser.evaluate(`startSoloGame(); true`);
+  await waitFor(() => browser.evaluate('isStoryIntroOpen()'), { what: 'the prologue' });
+  await browser.evaluate(`window.skipStoryIntro(); grantProgressUpTo(5); state.flags.offeringsPlaced = state.flags.photosRestored = state.flags.songPlayed = state.flags.escaped = true; enterScene(5, 600); true`);
+  await settle(browser);
+
+  // the uncle asks; the keyboard picks the second answer
+  await browser.evaluate(`__pt.use('uncle_raj_pattern')`);
+  await waitFor(() => browser.evaluate(`(() => { if (isDialogueOpen()) __pt.drain(); return isChoiceOpen(); })()`), { timeout: 10000, what: 'the promise question' });
+  assert.equal(await browser.evaluate('hostContext()'), 'choice');
+  assert.equal(await browser.evaluate('isWorldFrozen()'), true, 'nothing moves while the question is up');
+  const press = (key) => browser.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: '${key}', bubbles: true })); true`);
+  await press('ArrowRight');
+  assert.equal(await browser.evaluate('choice.idx'), 1);
+  await press('e');
+  assert.equal(await browser.evaluate('!isChoiceOpen() && !!state.flags.promiseBroken'), true, 'E answers with the highlighted choice');
+
+  await settle(browser, { timeout: 30000 });
+  await waitFor(() => browser.evaluate('state.flags.victory'), { timeout: 20000, what: 'the broken-promise ending' });
+  assert.match(await browser.evaluate(`document.querySelector('#ending-modal .ending-kicker').textContent`), /ผิดสัญญา/);
+  assert.equal(await browser.evaluate(`document.getElementById('ending-bg').classList.contains('night')`), true, 'the end screen is the hospital at night');
+  assert.match(await browser.evaluate(`document.getElementById('ending-stats').textContent`), /ยังมีอีกตอนจบ/);
+  assert.equal(await browser.evaluate('night2Unlocked()'), true);
+  assert.deepEqual(errors, [], 'no errors in the first night');
+
+  // the second night: from the title, no prologue, harder rules
+  await browser.evaluate('restartGame(); true');
+  await waitFor(() => browser.evaluate(`document.readyState === 'complete' && typeof state === 'object' && state.started === false && typeof startSecondNight === 'function'`),
+    { timeout: 20000, what: 'the title screen' });
+  await browser.evaluate(HELPERS);
+  assert.equal(await browser.evaluate(`document.getElementById('btn-night2').classList.contains('hidden')`), false, 'the title offers the second night');
+  await browser.evaluate(`document.getElementById('btn-night2').click(); true`);
+  await waitFor(() => browser.evaluate('state.started && isDialogueOpen()'), { what: 'the second night to start' });
+  assert.equal(await browser.evaluate('isStoryIntroOpen()'), false, 'the prologue is skipped');
+  assert.equal(await browser.evaluate('isNight2() && state.scene === 1'), true);
+  assert.equal(await browser.evaluate('nightGhostSpeed() > 1 && bellCooldownSecs() > CONFIG.BELL_COOLDOWN && nightWall() > 1'), true, 'the ghosts, the bell and the bridge are harder');
+  await settle(browser);
+  await browser.evaluate(`saveCheckpoint(); true`);
+  assert.equal(await browser.evaluate(`JSON.parse(sessionStorage.getItem('buu-horror-checkpoint-v1')).flags.night2`), true, 'a checkpoint keeps the second night');
+
+  await sleep(300);
+  assert.equal(await browser.evaluate('staff.errors'), 0, 'no frame of the game loop failed');
+  assert.deepEqual(errors, [], 'no errors in the page console');
 });

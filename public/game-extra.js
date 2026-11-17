@@ -3,6 +3,9 @@
  *   1. mash   : "กดรัวๆ ให้หลุด" — a ghost's first grab in each room, and the hands on the bridge
  *   2. ranat  : แม่จันทร์'s unfinished song in scene 4 (listen to a phrase, then play it back)
  *   3. chase  : the run across the spirit bridge, between the back door and the dawn (scene 5)
+ *   4. choice : a two-answer question (keyboard, mouse/touch, or the P1 phone)
+ *   5. promise: keep or refuse the uncle's promise; refusing ends in the hospital at night
+ *   6. night2 : "คืนที่สอง", a harder replay unlocked on this machine after a finish
  * game.js calls into this file from its update / render / input paths; nothing here runs
  * before a game has started.
  * ============================================================================ */
@@ -511,7 +514,7 @@ function chaseHandFreed() {
 function chaseBell(source) {
   if (state.bellCooldown > 0) return false;
   state.ghost.stunTimer = CONFIG.BELL_STUN;
-  state.bellCooldown = CONFIG.BELL_COOLDOWN;
+  state.bellCooldown = bellCooldownSecs();
   playSound('chime');
   showToast(`${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! ความมืดชะงัก ${CONFIG.BELL_STUN} วินาที`);
   if (mash.active && mash.kind === 'hand') endMash(true);
@@ -599,7 +602,7 @@ function updateChase(dt) {
   } else {
     const over = Math.max(0, Math.min(1, (chaseGap() - CHASE.MAX_GAP) / 60));
     const base = chase.listen ? CHASE.WALL_LISTEN : CHASE.WALL;
-    chase.wall += (base + over * (CHASE.WALL_FAST - base)) * dt;
+    chase.wall += (base + over * (CHASE.WALL_FAST - base)) * nightWall() * dt;
   }
   const gap = chaseGap();
   g.x = CHASE.PX - gap;
@@ -1000,3 +1003,217 @@ function skipChase() {
   finishChase();
   return true;
 }
+
+// ----------------------- 4. Choices (the promise at the gate) -----------------------
+// A question with two answers. Keyboard: ← → / A D to pick, E / Enter / Space to confirm.
+// Mouse/touch: tap an answer. P1 phone: the move buttons pick, the big button confirms.
+// Nobody answering for a while (an idle booth) confirms the default.
+const choice = { open: false, idx: 0, opts: [], onPick: null, timer: null, deadline: 0, phoneDir: 0 };
+
+function isChoiceOpen() {
+  return choice.open;
+}
+
+function choiceElement() {
+  let el = document.getElementById('choice-box');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'choice-box';
+  el.className = 'choice-box hidden';
+  el.innerHTML = '<div class="dialogue-speaker" id="choice-speaker"></div>'
+    + '<div class="choice-text" id="choice-text"></div>'
+    + '<div class="choice-opts" id="choice-opts"></div>'
+    + '<div class="choice-hint">← → เลือก · กด [E] ยืนยัน<span class="choice-clock" id="choice-clock"></span></div>';
+  (document.getElementById('game-screen') || document.body).appendChild(el);
+  return el;
+}
+
+function openChoice({ speaker = '', text = '', options, defaultIndex = 0, timeoutMs = 30000, onPick }) {
+  const el = choiceElement();
+  choice.open = true;
+  choice.idx = defaultIndex;
+  choice.opts = options;
+  choice.onPick = onPick;
+  choice.phoneDir = 0;
+  choice.deadline = performance.now() + timeoutMs;
+  state.moveInput = 0;
+  document.getElementById('choice-speaker').textContent = speaker;
+  document.getElementById('choice-text').textContent = text;
+  const box = document.getElementById('choice-opts');
+  box.textContent = '';
+  options.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'choice-opt';
+    b.innerHTML = '<b></b><span></span>';
+    b.firstChild.textContent = o.label;
+    b.lastChild.textContent = o.sub || '';
+    b.addEventListener('click', (e) => { e.stopPropagation(); choicePick(i); });
+    b.addEventListener('mouseenter', () => { if (choice.idx !== i) { choice.idx = i; renderChoice(); } });
+    box.appendChild(b);
+  });
+  el.classList.remove('hidden');
+  renderChoice();
+  playSound('reveal');
+  clearInterval(choice.timer);
+  choice.timer = setInterval(() => {
+    const left = Math.ceil((choice.deadline - performance.now()) / 1000);
+    const clock = document.getElementById('choice-clock');
+    if (clock) clock.textContent = left <= 10 ? ` · ${Math.max(0, left)}` : '';
+    if (left <= 0) choicePick(defaultIndex);
+  }, 250);
+  broadcastState();
+}
+
+function renderChoice() {
+  [...document.querySelectorAll('#choice-opts .choice-opt')].forEach((b, i) => b.classList.toggle('on', i === choice.idx));
+}
+
+function choiceMove(dir) {
+  if (!choice.open || !dir) return;
+  choice.idx = (choice.idx + dir + choice.opts.length) % choice.opts.length;
+  choice.deadline = Math.max(choice.deadline, performance.now() + 10000); // someone is still deciding
+  renderChoice();
+  playSound('ui_move');
+  broadcastState();
+}
+
+function choicePick(i = choice.idx) {
+  if (!choice.open) return;
+  choice.open = false;
+  clearInterval(choice.timer);
+  document.getElementById('choice-box').classList.add('hidden');
+  playSound('ui_select');
+  const cb = choice.onPick;
+  choice.onPick = null;
+  broadcastState();
+  if (cb) cb(i);
+}
+
+// What the P1 phone's big button says while a choice is up.
+function choiceLabel() {
+  const o = choice.opts[choice.idx];
+  return o ? `ยืนยัน: ${o.label}` : '';
+}
+
+function handleChoiceKey(e) {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  if (k === 'a' || e.key === 'ArrowLeft' || e.key === 'ArrowUp' || k === 'w') choiceMove(-1);
+  else if (k === 'd' || e.key === 'ArrowRight' || e.key === 'ArrowDown' || k === 's') choiceMove(1);
+  else if (/^[12]$/.test(e.key)) choicePick(Number(e.key) - 1);
+  else if (k === 'e' || e.key === 'Enter' || e.code === 'Space') { e.preventDefault(); choicePick(); }
+}
+
+// The P1 phone repeats a held move every 150 ms: only a new press moves the highlight.
+function handleChoiceRemote(action, value) {
+  if (action === 'move') {
+    const dir = Math.sign(Number(value) || 0);
+    if (dir && dir !== choice.phoneDir) choiceMove(dir);
+    choice.phoneDir = dir;
+  } else if (action === 'interact') {
+    choicePick();
+  }
+}
+
+// ----------------------- 5. The promise, and what happens when it is refused -----------------------
+function askPromise(onAnswer) {
+  openChoice({
+    speaker: 'คุณลุงชุดราชปะแตน',
+    text: 'จะให้สัญญากับข้าไหม?',
+    options: [
+      { label: 'สัญญา', sub: 'จะไปงาน Open House BUU ให้ได้' },
+      { label: 'ไม่รับปาก', sub: 'แค่อยากกลับบ้าน ไม่เชื่อเรื่องพวกนี้' }
+    ],
+    onPick: (i) => {
+      state.flags.promiseBroken = i === 1;
+      onAnswer(i === 0);
+    }
+  });
+}
+
+// Refused: you still wake up... and that night something dances at the foot of the bed.
+function playBrokenPromise(onDone) {
+  const male = state.character !== 'female';
+  setMusicLevel(0, 1);
+  playCloseup({
+    src: male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin,
+    fit: 'cover',
+    tone: 'night',
+    captions: [
+      'คืนนั้น... ไฟนีออนในห้องพักผู้ป่วยกะพริบถี่ขึ้นเรื่อยๆ',
+      'เสียงระนาดแว่วมาจากทางเดิน ทั้งที่โรงพยาบาลเงียบสนิท',
+      'ในเงาสะท้อนบนกระจกหน้าต่าง... มีใครบางคนกำลังรำอยู่ที่ปลายเตียง'
+    ],
+    captionMs: 3000,
+    onDone: () => flashDancer(onDone)
+  });
+  setTimeout(() => playSound('dancer_motif'), 3400);
+}
+
+// The jumpscare face without the game-over screen (respects the jumpscare setting).
+function flashDancer(onDone) {
+  const js = document.getElementById('jumpscare');
+  if (!js || settings.jumpscare === 'off') return onDone();
+  const face = document.getElementById('jumpscare-face');
+  face.src = ASSET_LIST.jumpscareDancer;
+  face.classList.remove('wide');
+  const soft = settings.jumpscare === 'soft';
+  playSound('scare');
+  js.classList.remove('hidden');
+  js.classList.toggle('soft', soft);
+  restartAnimation(js, 'play');
+  state.flags.cutscenePlaying = true;
+  setTimeout(() => {
+    js.classList.add('hidden');
+    js.classList.remove('play', 'soft');
+    state.flags.cutscenePlaying = false;
+    onDone();
+  }, soft ? 700 : (REDUCED_MOTION ? 500 : 1150));
+}
+
+// ----------------------- 6. คืนที่สอง (second night) -----------------------
+// Unlocked on this machine once anyone has finished. Same house, harder rules: the ghosts move
+// faster, the rooms are darker, the bell recharges slower and the dark on the bridge runs harder.
+// The prologue is skipped (you have been here before). Stored in state.flags so checkpoints,
+// the phones and a "เล่นต่อ" keep it.
+const NIGHT2_KEY = 'buu-horror-night2-v1';
+const NIGHT2 = { ghostSpeed: 1.2, darkness: 0.035, bellCooldown: 16, wall: 1.18 };
+
+const isNight2 = () => !!state.flags.night2;
+const nightGhostSpeed = () => (isNight2() ? NIGHT2.ghostSpeed : 1);
+const nightDarkness = () => (isNight2() ? NIGHT2.darkness : 0);
+const bellCooldownSecs = () => (isNight2() ? NIGHT2.bellCooldown : CONFIG.BELL_COOLDOWN);
+const nightWall = () => (isNight2() ? NIGHT2.wall : 1);
+
+function night2Unlocked() {
+  try { return !!localStorage.getItem(NIGHT2_KEY); } catch (_) { return false; }
+}
+
+function unlockNight2() {
+  try { localStorage.setItem(NIGHT2_KEY, String(Date.now())); } catch (_) {}
+  syncNight2Button();
+}
+
+function syncNight2Button() {
+  const b = document.getElementById('btn-night2');
+  if (b) b.classList.toggle('hidden', !night2Unlocked());
+}
+
+function startSecondNight() {
+  state.flags.night2 = true;
+  startSoloGame();
+}
+
+// Called by startIntroSequence instead of the prologue.
+function beginSecondNight() {
+  setMusicLevel(0, 0.8);
+  showChapterCard(1);
+  queueDialogue([
+    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไม่นะ... ทำไมกลับมาที่นี่อีก' },
+    { speaker: getPlayerName(), text: `ป่าเดิม เรือนเดิม... แต่คืนนี้มันมืดกว่าเดิม แล้ว${pWord('ผม', 'ฉัน')}ได้ยินเสียงฝีเท้ามันเร็วขึ้น` },
+    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'คืนที่สอง พวกมันจำเธอได้แล้ว... อย่าให้มันจับได้อีก' }
+  ], () => showControlsTip());
+}
+
+syncNight2Button();

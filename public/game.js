@@ -1656,7 +1656,7 @@ function buildStatePatch() {
     support: {
       bellCooldown: Math.ceil(state.bellCooldown),
       context: hostContext(),
-      prompt: !state.started || state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : nearSpot ? nearSpot.label : '',
+      prompt: !state.started ? '' : isChoiceOpen() ? choiceLabel() : state.flags.cutscenePlaying ? '' : mash.active ? mashLabel() : chase.active ? chasePrompt() : nearSpot ? nearSpot.label : '',
       goal: objective ? objective.text : '',
       code: isRanatOpen() ? '' : (state.scene === 4 && !state.flags.cabinetUnlocked ? thaiCode() : ''),
       lockInput: isLockOpen() ? lockDisplay() : isRanatOpen() ? ranatDisplay() : '',
@@ -1675,6 +1675,7 @@ function hostContext() {
   if (isPaused()) return 'paused';
   if (state.flags.victory) return 'victory';
   if (state.flags.gameOver) return 'gameover';
+  if (isChoiceOpen()) return 'choice';
   if (state.flags.cutscenePlaying) return 'cutscene';
   if (isRitualOpen()) return 'ritual';
   if (isLockOpen() || isRanatOpen()) return 'lock'; // the ranat borrows the phone's number pad (bars 1-5)
@@ -1750,6 +1751,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
     if (action === 'interact') window.advanceStory();
     return;
   }
+  if (isChoiceOpen()) return handleChoiceRemote(action, value); // the promise at the gate
   if (action === 'move') {
     const s = Number(seq) || 0;
     if (s < net.lastMoveSeq) return; // out-of-order packet
@@ -1780,7 +1782,7 @@ function useBell(source) {
   if (chase.active) return chaseBell(source);
   if (!state.ghost.active || state.bellCooldown > 0) return false;
   state.ghost.stunTimer = CONFIG.BELL_STUN;
-  state.bellCooldown = CONFIG.BELL_COOLDOWN;
+  state.bellCooldown = bellCooldownSecs();
   playSound('chime');
   showToast(`${source === 'P2' ? 'ญาณทิพย์ (P2)' : getPlayerName()} สั่นกระดิ่งอาคม! วิญญาณถูกตรึง ${CONFIG.BELL_STUN} วินาที`);
   broadcastState();
@@ -1921,6 +1923,7 @@ function updatePhoneButtons(room) {
     puzzle: 'วางเศษรูปลงกรอบ',
     gameover: 'ฟื้นสติ ลองใหม่',
     victory: 'รอดแล้ว!',
+    choice: prompt || 'ยืนยันคำตอบ',
     play: prompt ? `${prompt}` : 'สำรวจ (ยังไม่มีอะไรใกล้ๆ)'
   };
   const ib = document.getElementById('p1-btn-interact');
@@ -2150,6 +2153,7 @@ function startIntroSequence() {
   setAmbientScene(1);
   state.player.x = 160;
   updateHud();
+  if (isNight2()) return beginSecondNight(); // you have seen the prologue: straight into the forest
   startStoryIntro(() => {
     showChapterCard(1);
     showControlsTip();
@@ -2883,40 +2887,86 @@ function triggerEndingDialogue() {
     { speaker: getPlayerName(), text: `คุณลุงเป็นใคร${pWord('ครับ', 'คะ')}... แล้วพ่อกับแม่${pWord('ผม', 'หนู')}—` },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ปลอดภัยแล้ว อยู่ที่โรงพยาบาล... แต่เอ็งน่ะ ตอนรถคว่ำดวงจิตหลุดออกจากร่าง ก่อนที่หมอจะได้พูดคำว่า "ช่วยไม่ได้"' },
     { speaker: 'คุณลุงชุดราชปะแตน', text: 'ข้าจะพาเอ็งกลับเข้าร่าง... แต่ต้องแลกด้วยสัญญา เอ็งต้องไปที่หนึ่งให้ได้ ไม่อย่างนั้น มันจะดึงเอ็งกลับมาทุกคืน' },
-    { speaker: getPlayerName(), text: `ที่ไหน${pWord('ครับ', 'คะ')}... ${pWord('ผม', 'หนู')}สัญญา${pWord('ครับ', 'ค่ะ')}` },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'งาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ จำคำข้าไว้ อย่าผิดสัญญา' },
-    { speaker: getPlayerName(), text: `คุณลุง${pWord('ครับ', 'คะ')}... แล้วเสียงกระซิบที่คอยบอกทาง${pWord('ผม', 'หนู')}ตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน` },
-    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ก็เพื่อนเอ็งไง... คนที่เอ็งเพิ่งไปงานศพมาเมื่อหัวค่ำ มันเดินตามเอ็งมาตลอดทาง ไม่ยอมให้เอ็งหลงอยู่ที่นี่' },
-    { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' },
-    ...(loreFound() === 3 ? [
+    { speaker: 'คุณลุงชุดราชปะแตน', text: 'ที่นั่นคืองาน "Open House BUU วันที่ 20 – 21 นี้"... ไปให้ถึง แล้วความฝันร้ายนี้จะจบ' }
+  ], () => askPromise((kept) => {
+    const friend = [
+      { speaker: getPlayerName(), text: `คุณลุง${pWord('ครับ', 'คะ')}... แล้วเสียงกระซิบที่คอยบอกทาง${pWord('ผม', 'หนู')}ตลอดคืน เสียงนั้นคุ้นหูเหลือเกิน` },
+      { speaker: 'คุณลุงชุดราชปะแตน', text: 'ก็เพื่อนเอ็งไง... คนที่เอ็งเพิ่งไปงานศพมาเมื่อหัวค่ำ มันเดินตามเอ็งมาตลอดทาง ไม่ยอมให้เอ็งหลงอยู่ที่นี่' }
+    ];
+    const lore = loreFound() === 3 ? [
       { speaker: getPlayerName(), text: `คุณลุง${pWord('ครับ', 'คะ')}... ลายมือในบันทึกพวกนั้น คุณลุงคือหลวงสุนทร เจ้าของเรือนใช่ไหม${pWord('ครับ', 'คะ')}` },
       { speaker: 'คุณลุงชุดราชปะแตน', text: '...ร้อยปีแล้วที่ข้ายืนรอตรงนี้ ขอบใจเอ็งที่ทำให้แม่จันทร์ได้รำจบ และให้ตาเหมือนได้กินอิ่มเสียที' },
       { speaker: 'คุณลุงชุดราชปะแตน', text: 'ถึงเวลาข้าจะได้ตามลูกไปบ้างแล้ว... เอ็งเองก็อย่ามัวหันหลังกลับมาที่นี่ล่ะ' }
-    ] : [])
-  ], () => {
-    const endCaptions = [
-      'เฟรม 1/6 : เศษรูปทั้งสามประสานกันในกรอบไม้... ภาพสุดท้ายคือใบหน้าของคุณเองที่ยังหลับตาบนเตียงโรงพยาบาล',
-      'เฟรม 2/6 : ความทรงจำไหลคืนมา... คุณไม่ได้ตาย แต่ก็ยังไม่กลับเข้าไปในร่าง',
-      'เฟรม 3/6 : ก้าวพ้นประตูเรือนไทย ออกสู่หมอกยามรุ่งอรุณที่เย็นจนเจ็บผิว',
-      'เฟรม 4/6 : คุณลุงชุดราชปะแตนยืนรออยู่ตรงนั้น เงาของท่านยาวผิดปกติ',
-      'เฟรม 5/6 : "จำสัญญาของเราไว้... ไม่อย่างนั้น มันจะดึงเจ้ากลับมา"',
-      'เฟรม 6/6 : แล้วพบกันที่ OPEN HOUSE BUU วันที่ 20 – 21 นี้'
+    ] : [];
+    const lines = kept ? [
+      { speaker: getPlayerName(), text: `${pWord('ผม', 'หนู')}สัญญา${pWord('ครับ', 'ค่ะ')}... จะไปให้ถึงงานนั้นให้ได้` },
+      { speaker: 'คุณลุงชุดราชปะแตน', text: 'ดี... จำคำของเอ็งไว้ อย่าผิดสัญญา' },
+      ...friend,
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'ไปเถอะ... ไปให้ถึงวันนั้นแทนเราด้วยนะ' },
+      ...lore
+    ] : [
+      { speaker: getPlayerName(), text: `${pWord('ผม', 'หนู')}...ไม่รับปากอะไรทั้งนั้น${pWord('ครับ', 'ค่ะ')} ${pWord('ผม', 'หนู')}แค่อยากกลับบ้าน` },
+      { speaker: 'คุณลุงชุดราชปะแตน', text: 'เอ็งเลือกเองนะ... ข้าพาเอ็งกลับเข้าร่างได้ แต่ข้าห้ามมันไม่ให้ตามเอ็งไปไม่ได้' },
+      ...friend,
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'อย่าทำแบบนี้เลย... เราไม่อยากเห็นเธอต้องกลับมาที่นี่อีก' },
+      ...lore,
+      { speaker: 'คุณลุงชุดราชปะแตน', text: 'ถ้าเปลี่ยนใจเมื่อไหร่ งาน Open House BUU ยังรอเอ็งอยู่... ไปให้ถึงก่อนที่มันจะไปถึงตัวเอ็ง' }
     ];
-    playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playTrueEnding(() => playHospitalWake(() => playPhoneSting(() => {
-      state.flags.victory = true;
-      clearCheckpoint();
-      markTitleGhost();
-      playSound('chime');
-      showEndingStats();
-      setMusicLevel(0.85, 1.2);
-      // the end screen shows where the night ended: the house at peace, or the hospital room
-      const male = state.character !== 'female';
-      const bg = document.getElementById('ending-bg');
-      bg.src = loreFound() === 3 ? ASSET_LIST.endingTrue : (male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin);
-      document.getElementById('ending-modal').classList.remove('hidden');
-      broadcastState();
-    }))));
-  });
+    queueDialogue(lines, () => playEndingChain(kept));
+  }));
+}
+
+function playEndingChain(kept) {
+  const endCaptions = [
+    'เฟรม 1/6 : เศษรูปทั้งสามประสานกันในกรอบไม้... ภาพสุดท้ายคือใบหน้าของคุณเองที่ยังหลับตาบนเตียงโรงพยาบาล',
+    'เฟรม 2/6 : ความทรงจำไหลคืนมา... คุณไม่ได้ตาย แต่ก็ยังไม่กลับเข้าไปในร่าง',
+    'เฟรม 3/6 : ก้าวพ้นประตูเรือนไทย ออกสู่หมอกยามรุ่งอรุณที่เย็นจนเจ็บผิว',
+    'เฟรม 4/6 : คุณลุงชุดราชปะแตนยืนรออยู่ตรงนั้น เงาของท่านยาวผิดปกติ',
+    kept
+      ? 'เฟรม 5/6 : "จำสัญญาของเราไว้... ไม่อย่างนั้น มันจะดึงเจ้ากลับมา"'
+      : 'เฟรม 5/6 : "เอ็งไม่ได้ให้สัญญา... มันจะตามเอ็งไปทุกคืน"',
+    kept
+      ? 'เฟรม 6/6 : แล้วพบกันที่ OPEN HOUSE BUU วันที่ 20 – 21 นี้'
+      : 'เฟรม 6/6 : ทางเดียวที่จะหลุดพ้น... ไปให้ถึง OPEN HOUSE BUU วันที่ 20 – 21 นี้'
+  ];
+  const last = kept ? playPhoneSting : playBrokenPromise;
+  playFrameByFrameCutscene('cutscene_end', endCaptions, 750, () => playTrueEnding(() => playHospitalWake(() => last(() => {
+    state.flags.victory = true;
+    clearCheckpoint();
+    markTitleGhost();
+    unlockNight2();
+    playSound('chime');
+    showEndingText(kept);
+    showEndingStats();
+    setMusicLevel(0.85, 1.2);
+    // the end screen shows where the night ended: the house at peace, or the hospital room
+    const male = state.character !== 'female';
+    const bg = document.getElementById('ending-bg');
+    bg.src = loreFound() === 3 && kept ? ASSET_LIST.endingTrue : (male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin);
+    bg.classList.toggle('night', !kept);
+    document.getElementById('ending-modal').classList.remove('hidden');
+    broadcastState();
+  }))));
+}
+
+// The end screen's headline follows the answer at the gate.
+function showEndingText(kept) {
+  const kicker = document.querySelector('#ending-modal .ending-kicker');
+  const h2 = document.querySelector('#ending-modal h2');
+  const desc = document.querySelector('#ending-modal .ending-desc');
+  if (!kicker || !h2 || !desc) return;
+  const night = isNight2() ? ' · คืนที่สอง' : '';
+  if (kept) {
+    kicker.textContent = 'รอดพ้นจากเรือนซ่อนวิญญาณ' + night;
+    h2.textContent = '"อย่าลืมสัญญาของเราล่ะ..."';
+    desc.innerHTML = 'คุณลุงชุดราชปะแตนได้นำทางดวงจิตของคุณกลับคืนสู่ร่างที่โรงพยาบาลอย่างปลอดภัย<br/>'
+      + 'แต่คำสัญญาที่ได้ให้ไว้หน้าประตูเรือนไทยยังคงก้องอยู่ในความทรงจำ...';
+  } else {
+    kicker.textContent = 'ตอนจบ: ผิดสัญญา' + night;
+    h2.textContent = '"มันจะดึงเอ็งกลับมาทุกคืน..."';
+    desc.innerHTML = 'คุณกลับเข้าร่างได้ก็จริง แต่ไม่ได้ให้สัญญาไว้กับใคร<br/>'
+      + 'และทุกคืนหลังจากนั้น เสียงระนาดก็แว่วมาจากปลายเตียง... ยังไม่สายเกินไปที่จะเปลี่ยนใจ';
+  }
 }
 
 // ----------------------- Close-up viewer -----------------------
@@ -2925,7 +2975,7 @@ function triggerEndingDialogue() {
 // that fade in one after another. Runs as a cutscene: E / tap / Space close it after a moment.
 const CLOSEUP_SKIP_AFTER = 700;
 function playCloseup({ src, html = '', box = null, captions = [], captionMs = 3400, holdMs = 0,
-  fit = 'contain', focus = 'center', beep = 0, onDone }) {
+  fit = 'contain', focus = 'center', beep = 0, tone = '', onDone }) {
   const el = document.getElementById('closeup');
   if (!el) return onDone && onDone();
   if (activeCutscene) activeCutscene.finish();
@@ -2935,6 +2985,7 @@ function playCloseup({ src, html = '', box = null, captions = [], captionMs = 34
   img.src = src;
   img.style.objectFit = fit;
   img.style.objectPosition = focus;
+  el.classList.toggle('tone-night', tone === 'night'); // the broken-promise night: dark, cold, flickering
   txt.innerHTML = html;
   txt.className = 'closeup-text ' + ((box && box.cls) || '') + (html ? '' : ' hidden');
   if (box) {
@@ -3374,6 +3425,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   const k = e.key.toLowerCase();
+  if (isChoiceOpen()) {
+    handleChoiceKey(e);
+    return;
+  }
   if (isRanatOpen()) {
     if (e.repeat) return;
     if (/^[1-5]$/.test(e.key)) ranatPress(Number(e.key));
@@ -3543,7 +3598,7 @@ function updateGhost(dt) {
   const g = state.ghost;
   const p = state.player;
   const hiddenSafe = p.hidden && !p.flashlight;
-  let speed = CONFIG.GHOST_SPEED[g.type] || 100;
+  let speed = (CONFIG.GHOST_SPEED[g.type] || 100) * nightGhostSpeed();
   if (p.sixthSense) speed *= CONFIG.SIXTH_SENSE_GHOST_MULT;
   g.frozen = false; // set again below only while the beam pins her this frame
   if (performance.now() < fx.ghostHoldUntil) return; // a scripted scare owns her for a moment
@@ -4239,7 +4294,7 @@ function renderDarknessAndFlashlight() {
   // Inside the house it is properly dark: the ghost is only clearly seen in the flashlight
   // (or with the sixth sense, which lifts the darkness but draws the ghost faster).
   const DARKNESS = { 1: 0.6, 2: 0.88, 3: 0.94, 4: 0.94 };
-  const baseAlpha = isSensing() ? 0.5 : (DARKNESS[state.scene] || 0.8);
+  const baseAlpha = isSensing() ? 0.5 : Math.min(0.975, (DARKNESS[state.scene] || 0.8) + nightDarkness());
   dctx.fillStyle = `rgba(5, 6, 12, ${baseAlpha})`;
   dctx.fillRect(0, 0, 1280, 720);
 
@@ -4990,7 +5045,7 @@ function isStoryIntroOpen() {
 
 // Nothing in the room moves or reacts: used by every input path and the pause menu.
 function isWorldFrozen() {
-  return isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen() || mash.active;
+  return isPaused() || state.flags.cutscenePlaying || state.flags.gameOver || isDialogueOpen() || isOverlayOpen() || mash.active || isChoiceOpen();
 }
 
 // ---- Timer, ranks and the booth's hall of fame ----------------------------------------
@@ -5057,6 +5112,16 @@ function showEndingStats() {
       badge.textContent = 'ผู้ไขความลับแห่งเรือน — อ่านบันทึกของหลวงสุนทรครบทุกหน้า';
       stats.appendChild(badge);
     }
+    const extra = [];
+    if (isNight2()) extra.push('ผู้รอดคืนที่สอง — ผ่านเรือนซ่อนวิญญาณในโหมดยาก');
+    if (state.flags.promiseBroken) extra.push('ยังมีอีกตอนจบ — ลองเล่นใหม่แล้วให้สัญญากับคุณลุงดูสิ');
+    else if (!isNight2()) extra.push('ปลดล็อก "คืนที่สอง" (โหมดยาก) ที่หน้าแรกแล้ว');
+    extra.forEach((text) => {
+      const line = document.createElement('div');
+      line.className = 'ending-meta ending-lore';
+      line.textContent = text;
+      stats.appendChild(line);
+    });
   }
   const entry = document.getElementById('hof-entry');
   if (entry) entry.classList.remove('hidden');
@@ -5068,7 +5133,7 @@ function showEndingStats() {
 function saveToHallOfFame() {
   const input = document.getElementById('hof-name');
   const name = (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14) || 'ไม่ระบุชื่อ';
-  const entry = { name, time: Math.round(state.playTime || 0), deaths: state.deaths || 0, rank: rankFor(state.playTime || 0, state.deaths || 0), at: Date.now() };
+  const entry = { name, time: Math.round(state.playTime || 0), deaths: state.deaths || 0, rank: rankFor(state.playTime || 0, state.deaths || 0) + (isNight2() ? ' · คืนที่สอง' : ''), at: Date.now() };
   const list = loadHof();
   list.push(entry);
   list.sort((a, b) => hofScore(a) - hofScore(b));
@@ -5088,6 +5153,7 @@ async function showSouvenirQr() {
     female: state.character === 'female',
     buu: !!state.flags.buuFound,
     coop: !!state.roomCode,
+    night2: isNight2(),
     lore: loreFound(),
     deaths: state.deaths || 0,
     time: state.playTime || 0,
