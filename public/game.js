@@ -1753,7 +1753,7 @@ function handleIncomingRemoteInput({ action, value, seq }) {
     if (action === 'interact') window.advanceStory();
     return;
   }
-  if (isChoiceOpen()) return handleChoiceRemote(action, value); // the promise at the gate
+  if (isChoiceOpen()) return handleChoiceRemote(action, value, seq); // the promise at the gate
   if (action === 'move') {
     const s = Number(seq) || 0;
     if (s < net.lastMoveSeq) return; // out-of-order packet
@@ -5119,7 +5119,9 @@ function showEndingStats() {
     if (state.flags.buuFound) {
       const promise = document.createElement('div');
       promise.className = 'ending-meta ending-lore';
-      promise.textContent = 'ผู้รักษาคำสัญญา — เก็บใบปลิว Open House ม.บูรพา ที่ร่วงอยู่ในป่าได้';
+      promise.textContent = state.flags.promiseBroken // refused at the gate: no "promise keeper" title
+        ? 'เก็บใบปลิว Open House ม.บูรพา ในป่าได้ — แต่ยังไม่ได้ให้สัญญากับคุณลุง'
+        : 'ผู้รักษาคำสัญญา — เก็บใบปลิว Open House ม.บูรพา ที่ร่วงอยู่ในป่าได้';
       stats.appendChild(promise);
     }
     if (loreFound() === 3) {
@@ -5170,6 +5172,7 @@ async function showSouvenirQr() {
     buu: !!state.flags.buuFound,
     coop: !!state.roomCode,
     night2: isNight2(),
+    broken: !!state.flags.promiseBroken,
     lore: loreFound(),
     deaths: state.deaths || 0,
     time: state.playTime || 0,

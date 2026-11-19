@@ -1057,7 +1057,11 @@ function openChoice({ speaker = '', text = '', options, defaultIndex = 0, timeou
   renderChoice();
   playSound('reveal');
   clearInterval(choice.timer);
+  let lastTick = performance.now();
   choice.timer = setInterval(() => {
+    const tick = performance.now();
+    if (isPaused()) choice.deadline += tick - lastTick; // the staff panel / pause menu stops the clock
+    lastTick = tick;
     const left = Math.ceil((choice.deadline - performance.now()) / 1000);
     const clock = document.getElementById('choice-clock');
     if (clock) clock.textContent = left <= 10 ? ` · ${Math.max(0, left)}` : '';
@@ -1107,8 +1111,11 @@ function handleChoiceKey(e) {
 }
 
 // The P1 phone repeats a held move every 150 ms: only a new press moves the highlight.
-function handleChoiceRemote(action, value) {
+function handleChoiceRemote(action, value, seq) {
   if (action === 'move') {
+    const s = Number(seq) || 0;
+    if (s < net.lastMoveSeq) return; // out-of-order packet (slow Wi-Fi): would step the highlight twice
+    net.lastMoveSeq = s;
     const dir = Math.sign(Number(value) || 0);
     if (dir && dir !== choice.phoneDir) choiceMove(dir);
     choice.phoneDir = dir;
@@ -1137,6 +1144,7 @@ function askPromise(onAnswer) {
 function playBrokenPromise(onDone) {
   const male = state.character !== 'female';
   setMusicLevel(0, 1);
+  const motif = setTimeout(() => playSound('dancer_motif'), 3400);
   playCloseup({
     src: male ? ASSET_LIST.hospitalWake : ASSET_LIST.hospitalWakeRin,
     fit: 'cover',
@@ -1147,9 +1155,8 @@ function playBrokenPromise(onDone) {
       'ในเงาสะท้อนบนกระจกหน้าต่าง... มีใครบางคนกำลังรำอยู่ที่ปลายเตียง'
     ],
     captionMs: 3000,
-    onDone: () => flashDancer(onDone)
+    onDone: () => { clearTimeout(motif); flashDancer(onDone); } // skipped early: no late sound on the end screen
   });
-  setTimeout(() => playSound('dancer_motif'), 3400);
 }
 
 // The jumpscare face without the game-over screen (respects the jumpscare setting).
@@ -1292,8 +1299,10 @@ function leaveUnderState() {
 }
 
 function exitUnder() {
+  const left = state.struggleLeft;
   leaveUnderState();
   enterScene(3, UNDER.TRAP_X);
+  state.struggleLeft = left; // same room upstairs: no fresh escape for going down and back up
 }
 
 function goDownTrapdoor() {
@@ -1512,7 +1521,6 @@ function updateUnder(dt) {
 }
 
 function underCaught() {
-  under.cause = 'heard';
   playSound('creak', { gain: 1.4 });
   triggerGameOver();
 }

@@ -23,7 +23,7 @@ function rankFor(time, deaths) {
 function encodeSouvenir(d) {
   const bytes = [
     SOUVENIR_VERSION,
-    (d.female ? 1 : 0) | (d.buu ? 2 : 0) | (d.coop ? 4 : 0) | ((Math.max(0, Math.min(3, d.lore | 0))) << 3) | (d.night2 ? 32 : 0),
+    (d.female ? 1 : 0) | (d.buu ? 2 : 0) | (d.coop ? 4 : 0) | ((Math.max(0, Math.min(3, d.lore | 0))) << 3) | (d.night2 ? 32 : 0) | (d.broken ? 64 : 0),
     Math.max(0, Math.min(255, d.deaths | 0))
   ];
   const t = Math.max(0, Math.min(65535, Math.round(d.time || 0)));
@@ -55,6 +55,7 @@ function decodeSouvenir(str) {
       coop: !!(b[1] & 4),
       lore: (b[1] >> 3) & 3,
       night2: !!(b[1] & 32),
+      broken: !!(b[1] & 64),
       deaths: b[2],
       time: (b[3] << 8) | b[4],
       name: name.replace(/\s+/g, ' ').trim()
@@ -143,7 +144,7 @@ function drawSouvenirCard(c, d, imgs = {}) {
 
   let by = 396;
   const badges = [];
-  if (d.buu) badges.push('ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
+  if (d.buu) badges.push(d.broken ? 'พบใบปลิว Open House ในป่า — แต่ยังไม่ได้ให้สัญญา' : 'ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
   if (d.lore === 3) badges.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
   if (d.night2) badges.push('ผู้รอดคืนที่สอง — ผ่านเรือนในโหมดยาก');
   if (d.coop) badges.push('Co-op 2 ผู้เล่น — รอดมาด้วยกัน');
