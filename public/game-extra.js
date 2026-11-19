@@ -1324,8 +1324,15 @@ function resetUnder() {
   state.ghost.stunTimer = 1.5;
 }
 
+// Built once per incense state (labels and the shrine handler depend only on it), not every frame.
+let underSpotCache = { has: null, list: [] };
 function underHotspots() {
   const has = state.inventory.offerings.includes('incense');
+  if (underSpotCache.has !== has) underSpotCache = { has, list: buildUnderHotspots(has) };
+  return underSpotCache.list;
+}
+
+function buildUnderHotspots(has) {
   return [
     {
       id: 'under_ladder',
