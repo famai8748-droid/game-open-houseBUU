@@ -1191,7 +1191,7 @@ const NIGHT2 = { ghostSpeed: 1.2, darkness: 0.035, bellCooldown: 16, wall: 1.18 
 const isNight2 = () => !!state.flags.night2;
 const nightGhostSpeed = () => (isNight2() ? NIGHT2.ghostSpeed : 1);
 const nightDarkness = () => (isNight2() ? NIGHT2.darkness : 0);
-const bellCooldownSecs = () => (isNight2() ? NIGHT2.bellCooldown : CONFIG.BELL_COOLDOWN);
+const bellCooldownSecs = () => (isNight2() ? NIGHT2.bellCooldown : CONFIG.BELL_COOLDOWN) * (state.flags.prajitMet ? PRAJIT.BELL_MULT : 1);
 const nightWall = () => (isNight2() ? NIGHT2.wall : 1);
 
 function night2Unlocked() {
@@ -1753,4 +1753,61 @@ function renderP2UnderRadar(rctx, rg) {
   rctx.fillStyle = '#ffd166';
   rctx.fillText('ศาล/ธูป', left + span - 30, 222);
   rctx.textAlign = 'left';
+}
+
+// ----------------------- 8. ดร.ประจิต (secret character in the forest) -----------------------
+// Most players walk straight to the right. Anyone who turns back to the far left of the forest
+// finds a warm lantern in the fog: ดร.ประจิต, the one living person out here that night, looking
+// for a lost student. Meeting him is optional: the bell recharges a little faster for the rest
+// of the night, and the end screen and the phone card get a badge. He is gone afterwards.
+const PRAJIT = { X: 92, FEET: 616, H: 240, BELL_MULT: 0.8 };
+
+function prajitHotspots(sceneNum) {
+  if (sceneNum !== 1 || state.flags.prajitMet) return [];
+  return [{
+    id: 'prajit',
+    x: PRAJIT.X,
+    width: 44,
+    label: 'แสงตะเกียงในหมอก',
+    isHiddenClue: true,
+    onInteract: () => meetPrajit()
+  }];
+}
+
+function meetPrajit() {
+  if (state.flags.prajitMet) return;
+  state.flags.prajitMet = true;
+  playSound('reveal');
+  playCloseup({
+    src: ASSET_LIST.prajitCloseup,
+    fit: 'cover',
+    focus: '70% center',
+    captions: [
+      'แสงตะเกียงสีส้มอุ่นๆ ส่องผ่านหมอก... คนที่ยืนถืออยู่ไม่ใช่ผี',
+      'เขายิ้มให้เหมือนอาจารย์ที่เพิ่งเจอนักศึกษาเดินหลงมาผิดตึก'
+    ],
+    captionMs: 3000,
+    onDone: () => queueDialogue([
+      { speaker: 'ดร.ประจิต', text: 'หลงทางมาไกลเลยนะ... งาน Open House ไม่ได้อยู่ทางนี้หรอก' },
+      { speaker: getPlayerName(), text: `อาจารย์${pWord('ครับ', 'คะ')}... อาจารย์มาทำอะไรในป่าแบบนี้${pWord('ครับ', 'คะ')}` },
+      { speaker: 'ดร.ประจิต', text: 'มาตามหาคนที่ยังไม่กลับบ้านน่ะสิ เรือนหลังนั้นข้างหน้า ผีข้างในมีกฎของมัน สังเกตให้ดีก่อนวิ่ง' },
+      { speaker: 'ดร.ประจิต', text: 'เอาแสงตะเกียงนี้ไปด้วย กระดิ่งของเธอจะพร้อมดังได้เร็วขึ้น... แล้วเจอกันที่งานนะ' },
+      { speaker: 'เสียงกระซิบที่คุ้นหู', text: 'เขา... หายไปแล้ว เหลือแต่กลิ่นน้ำมันตะเกียงอุ่นๆ' }
+    ], () => showToast('พบตัวละครลับ: ดร.ประจิต — กระดิ่งอาคมชาร์จเร็วขึ้น และหน้าจบจะได้ตราพิเศษ', '', 4600))
+  });
+  saveCheckpoint();
+  broadcastState();
+}
+
+// Drawn in the forest until he has been met.
+function drawPrajit() {
+  if (state.scene !== 1 || state.flags.prajitMet || !isReady(IMAGES.prajit)) return;
+  drawGroundShadow(PRAJIT.X, PRAJIT.FEET - 2, 40, 10, 0.55);
+  drawSpriteProportional(IMAGES.prajit, PRAJIT.X, PRAJIT.FEET, PRAJIT.H, false, null, 0.92);
+}
+
+// Where his lantern glows through the darkness (scene 1 only, until he has been met).
+function prajitLight() {
+  if (state.scene !== 1 || state.flags.prajitMet) return null;
+  return { x: PRAJIT.X + 32, y: PRAJIT.FEET - 60 };
 }

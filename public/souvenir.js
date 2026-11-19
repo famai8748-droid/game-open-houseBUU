@@ -23,7 +23,7 @@ function rankFor(time, deaths) {
 function encodeSouvenir(d) {
   const bytes = [
     SOUVENIR_VERSION,
-    (d.female ? 1 : 0) | (d.buu ? 2 : 0) | (d.coop ? 4 : 0) | ((Math.max(0, Math.min(3, d.lore | 0))) << 3) | (d.night2 ? 32 : 0) | (d.broken ? 64 : 0),
+    (d.female ? 1 : 0) | (d.buu ? 2 : 0) | (d.coop ? 4 : 0) | ((Math.max(0, Math.min(3, d.lore | 0))) << 3) | (d.night2 ? 32 : 0) | (d.broken ? 64 : 0) | (d.prajit ? 128 : 0),
     Math.max(0, Math.min(255, d.deaths | 0))
   ];
   const t = Math.max(0, Math.min(65535, Math.round(d.time || 0)));
@@ -56,6 +56,7 @@ function decodeSouvenir(str) {
       lore: (b[1] >> 3) & 3,
       night2: !!(b[1] & 32),
       broken: !!(b[1] & 64),
+      prajit: !!(b[1] & 128),
       deaths: b[2],
       time: (b[3] << 8) | b[4],
       name: name.replace(/\s+/g, ' ').trim()
@@ -146,21 +147,24 @@ function drawSouvenirCard(c, d, imgs = {}) {
   const badges = [];
   if (d.buu) badges.push(d.broken ? 'พบใบปลิว Open House ในป่า — แต่ยังไม่ได้ให้สัญญา' : 'ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
   if (d.lore === 3) badges.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
+  if (d.prajit) badges.push('ศิษย์ ดร.ประจิต — พบแสงตะเกียงหลังป่า');
   if (d.night2) badges.push('ผู้รอดคืนที่สอง — ผ่านเรือนในโหมดยาก');
   if (d.coop) badges.push('Co-op 2 ผู้เล่น — รอดมาด้วยกัน');
+  const step = badges.length > 3 ? 40 : 48; // five badges still fit above the footer
+  const boxH = badges.length > 3 ? 34 : 38;
   badges.forEach((b) => {
     g.fillStyle = 'rgba(240, 207, 149, 0.12)';
-    g.fillRect(64, by - 28, 680, 38);
+    g.fillRect(64, by - 28, 680, boxH);
     g.strokeStyle = 'rgba(240, 207, 149, 0.35)';
-    g.strokeRect(64, by - 28, 680, 38);
+    g.strokeRect(64, by - 28, 680, boxH);
     g.fillStyle = '#9fe3cf';
     g.font = '600 20px Sarabun, sans-serif';
     g.fillText(b, 80, by - 3);
-    by += 48;
+    by += step;
   });
 
   g.fillStyle = '#f0cf95';
   g.font = 'bold 26px "Chakra Petch", Sarabun, sans-serif';
-  g.fillText('OPEN HOUSE BUU · วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา', 64, 566);
+  g.fillText('OPEN HOUSE BUU · วันที่ 20 – 21 นี้ ณ มหาวิทยาลัยบูรพา', 64, Math.max(566, by + 8));
   return c;
 }

@@ -252,6 +252,12 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   await settle(browser);
   s = await snap(browser);
   assert.equal(s.closeup, false, 'the close-up closes again');
+  // the secret lantern at the far left: ดร.ประจิต
+  await browser.evaluate(`__pt.use('prajit')`);
+  s = await snap(browser);
+  assert.equal(s.closeup, true, 'the lantern opens the close-up of ดร.ประจิต');
+  await settle(browser);
+  assert.equal(await browser.evaluate(`state.flags.prajitMet && bellCooldownSecs() < CONFIG.BELL_COOLDOWN && !getSceneHotspots(1).some((h) => h.id === 'prajit')`), true, 'meeting him speeds up the bell and he is gone');
   await browser.evaluate(`__pt.use('mansion_front_door')`);
   await settle(browser);
   s = await snap(browser);
@@ -406,6 +412,7 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   assert.equal(ending, true, 'the ending screen is on show');
   const endBg = await browser.evaluate(`document.getElementById('ending-bg').getAttribute('src')`);
   assert.match(endBg, /ending_true/, 'with all three diary pages the end screen shows the house at peace');
+  assert.match(await browser.evaluate(`document.getElementById('ending-stats').textContent`), /ดร.ประจิต/, 'the end screen has his badge');
   assert.equal(await browser.evaluate('!!state.flags.promiseBroken'), false, 'the playthrough keeps the promise');
   assert.match(await browser.evaluate(`document.querySelector('#ending-modal .ending-kicker').textContent`), /รอดพ้น/);
   assert.equal(await browser.evaluate('night2Unlocked()'), true, 'finishing unlocks the second night');

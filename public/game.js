@@ -790,6 +790,8 @@ const ASSET_LIST = {
   lorePage2: 'assets/lore_page_2.jpg',
   lorePage3: 'assets/lore_page_3.jpg',
   buuFlyer: 'assets/buu_flyer_closeup.jpg',
+  prajit: 'assets/npc_prajit.png',
+  prajitCloseup: 'assets/prajit_closeup.jpg',
   hospitalWake: 'assets/hospital_wake.jpg',
   hospitalBedside: 'assets/hospital_bedside.jpg',
   hospitalWakeRin: 'assets/hospital_wake_rin.jpg',
@@ -918,8 +920,8 @@ let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
   if (sceneNum === 3 && under.active) return underHotspots();
   const inv = state.inventory;
-  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
-  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum)) };
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.prajitMet}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
+  if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum), prajitHotspots(sceneNum)) };
   return hotspotCache.list;
 }
 
@@ -4272,6 +4274,7 @@ function drawSceneProps() {
   }
   drawLorePage();
   drawBuuFlyer();
+  drawPrajit();
 }
 
 let lightCanvas = null;
@@ -4333,6 +4336,8 @@ function renderDarknessAndFlashlight() {
   if (state.scene === 1) {
     punchLight(468, 282, 10, 155 + flicker, 0.85); // Pole bulb
     punchLight(1086, 250, 15, 220 + flicker, 0.95); // Thai house porch lantern
+    const pl = prajitLight();
+    if (pl) punchLight(pl.x, pl.y, 8, 150 + flicker, 0.9); // a lantern far behind you in the fog
   } else if (state.scene === 2) {
     punchLight(990, 380, 20, 220, 0.75); // Moonlight window
   } else if (state.scene === 3) {
@@ -5131,6 +5136,7 @@ function showEndingStats() {
       stats.appendChild(badge);
     }
     const extra = [];
+    if (state.flags.prajitMet) extra.push('ศิษย์ ดร.ประจิต — พบแสงตะเกียงหลังป่า');
     if (isNight2()) extra.push('ผู้รอดคืนที่สอง — ผ่านเรือนซ่อนวิญญาณในโหมดยาก');
     if (state.flags.promiseBroken) extra.push('ยังมีอีกตอนจบ — ลองเล่นใหม่แล้วให้สัญญากับคุณลุงดูสิ');
     else if (!isNight2()) extra.push('ปลดล็อก "คืนที่สอง" (โหมดยาก) ที่หน้าแรกแล้ว');
@@ -5173,6 +5179,7 @@ async function showSouvenirQr() {
     coop: !!state.roomCode,
     night2: isNight2(),
     broken: !!state.flags.promiseBroken,
+    prajit: !!state.flags.prajitMet,
     lore: loreFound(),
     deaths: state.deaths || 0,
     time: state.playTime || 0,

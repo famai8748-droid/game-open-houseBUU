@@ -12,7 +12,7 @@ vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/souvenir.js'), '
 const { encodeSouvenir, decodeSouvenir, souvenirUrl } = vm.runInContext('({ encodeSouvenir, decodeSouvenir, souvenirUrl })', sandbox);
 
 test('survivor card data round-trips through the QR fragment', () => {
-  const run = { female: true, buu: true, coop: true, lore: 3, night2: true, broken: true, deaths: 4, time: 755, name: 'มายด์ May' };
+  const run = { female: true, buu: true, coop: true, lore: 3, night2: true, broken: true, prajit: true, deaths: 4, time: 755, name: 'มายด์ May' };
   assert.deepEqual({ ...decodeSouvenir(encodeSouvenir(run)) }, run);
 });
 
