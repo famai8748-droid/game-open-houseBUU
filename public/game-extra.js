@@ -1781,6 +1781,7 @@ function prajitHotspots(sceneNum) {
     width: 44,
     label: 'แสงตะเกียงในหมอก',
     isHiddenClue: true,
+    noMarker: true, // only the lantern itself gives him away
     onInteract: () => meetPrajit()
   }];
 }

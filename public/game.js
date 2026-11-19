@@ -4729,6 +4729,7 @@ function renderAtmosphereParticles() {
 function renderHotspotIndicators() {
   const spots = getSceneHotspots(state.scene);
   spots.forEach((s) => {
+    if (s.noMarker) return;
     const dist = Math.abs(state.player.x - s.x);
     const near = isSensing() || dist < 150;
     // far spots stay as faint embers so the dark rooms never hide where to go
