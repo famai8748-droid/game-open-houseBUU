@@ -1755,11 +1755,13 @@ function handleIncomingRemoteInput({ action, value, seq }) {
     if (action === 'interact') window.advanceStory();
     return;
   }
-  if (isChoiceOpen()) return handleChoiceRemote(action, value, seq); // the promise at the gate
   if (action === 'move') {
     const s = Number(seq) || 0;
-    if (s < net.lastMoveSeq) return; // out-of-order packet
+    if (s < net.lastMoveSeq) return; // out-of-order packet (slow Wi-Fi)
     net.lastMoveSeq = s;
+  }
+  if (isChoiceOpen()) return handleChoiceRemote(action, value); // the promise at the gate
+  if (action === 'move') {
     net.remoteMoving = value !== 0;
     net.remoteMoveAt = performance.now();
     if (value === 0) {
@@ -3589,6 +3591,8 @@ function updateGame(dt) {
     state.player.frame = 0;
   }
 
+  if (state.scene === 1) updatePrajit(); // the lantern behind you (game-extra.js)
+
   // Hotspot prompt
   const spot = getActiveHotspot();
   const promptEl = document.getElementById('interact-prompt');
@@ -5122,23 +5126,7 @@ function showEndingStats() {
     meta.className = 'ending-meta';
     meta.textContent = `เวลา ${formatTime(t)} · ถูกวิญญาณจับ ${d} ครั้ง · บันทึกของเรือน ${loreFound()}/3`;
     stats.append(rank, meta);
-    if (state.flags.buuFound) {
-      const promise = document.createElement('div');
-      promise.className = 'ending-meta ending-lore';
-      promise.textContent = state.flags.promiseBroken // refused at the gate: no "promise keeper" title
-        ? 'เก็บใบปลิว Open House ม.บูรพา ในป่าได้ — แต่ยังไม่ได้ให้สัญญากับคุณลุง'
-        : 'ผู้รักษาคำสัญญา — เก็บใบปลิว Open House ม.บูรพา ที่ร่วงอยู่ในป่าได้';
-      stats.appendChild(promise);
-    }
-    if (loreFound() === 3) {
-      const badge = document.createElement('div');
-      badge.className = 'ending-meta ending-lore';
-      badge.textContent = 'ผู้ไขความลับแห่งเรือน — อ่านบันทึกของหลวงสุนทรครบทุกหน้า';
-      stats.appendChild(badge);
-    }
-    const extra = [];
-    if (state.flags.prajitMet) extra.push('ศิษย์ ดร.ประจิต — พบแสงตะเกียงหลังป่า');
-    if (isNight2()) extra.push('ผู้รอดคืนที่สอง — ผ่านเรือนซ่อนวิญญาณในโหมดยาก');
+    const extra = souvenirBadges(runSummary()); // the same titles the phone card shows
     if (state.flags.promiseBroken) extra.push('ยังมีอีกตอนจบ — ลองเล่นใหม่แล้วให้สัญญากับคุณลุงดูสิ');
     else if (!isNight2()) extra.push('ปลดล็อก "คืนที่สอง" (โหมดยาก) ที่หน้าแรกแล้ว');
     extra.forEach((text) => {
@@ -5169,12 +5157,9 @@ function saveToHallOfFame() {
   showToast('บันทึกชื่อลงหอเกียรติยศแล้ว');
 }
 
-// Ending: a QR the visitor scans to get the survivor card on their own phone (drawn by
-// souvenir.js on card.html). A download here would land on the booth laptop instead.
-let souvenirTimer = 0;
-async function showSouvenirQr() {
-  const input = document.getElementById('hof-name');
-  const url = souvenirUrl({
+// What this run earned, in the shape souvenir.js expects (the card and the end screen's badges).
+function runSummary() {
+  return {
     female: state.character === 'female',
     buu: !!state.flags.buuFound,
     coop: !!state.roomCode,
@@ -5183,7 +5168,17 @@ async function showSouvenirQr() {
     prajit: !!state.flags.prajitMet,
     lore: loreFound(),
     deaths: state.deaths || 0,
-    time: state.playTime || 0,
+    time: state.playTime || 0
+  };
+}
+
+// Ending: a QR the visitor scans to get the survivor card on their own phone (drawn by
+// souvenir.js on card.html). A download here would land on the booth laptop instead.
+let souvenirTimer = 0;
+async function showSouvenirQr() {
+  const input = document.getElementById('hof-name');
+  const url = souvenirUrl({
+    ...runSummary(),
     name: (input && input.value ? input.value : '').replace(/\s+/g, ' ').trim().slice(0, 14)
   });
   const box = document.getElementById('souvenir-qr');

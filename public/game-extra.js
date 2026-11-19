@@ -1111,11 +1111,8 @@ function handleChoiceKey(e) {
 }
 
 // The P1 phone repeats a held move every 150 ms: only a new press moves the highlight.
-function handleChoiceRemote(action, value, seq) {
+function handleChoiceRemote(action, value) { // late move packets were already dropped by the caller
   if (action === 'move') {
-    const s = Number(seq) || 0;
-    if (s < net.lastMoveSeq) return; // out-of-order packet (slow Wi-Fi): would step the highlight twice
-    net.lastMoveSeq = s;
     const dir = Math.sign(Number(value) || 0);
     if (dir && dir !== choice.phoneDir) choiceMove(dir);
     choice.phoneDir = dir;
@@ -1757,20 +1754,27 @@ function renderP2UnderRadar(rctx, rg) {
 
 // ----------------------- 8. ดร.ประจิต (secret character in the forest) -----------------------
 // Nothing is there at the start. Once you have walked past the middle of the forest, a lantern
-// lights up far behind you in the fog; anyone who turns back to the far left finds ดร.ประจิต, the one living person out here that night, looking
-// for a lost student. Meeting him is optional: the bell recharges a little faster for the rest
+// lights up far behind you in the fog. Anyone who turns back to the far left finds ดร.ประจิต,
+// the one living person out here that night, looking for a lost student. Meeting him is optional: the bell recharges a little faster for the rest
 // of the night, and the end screen and the phone card get a badge. He is gone afterwards.
 const PRAJIT = { X: 92, FEET: 616, H: 240, BELL_MULT: 0.8, REVEAL_X: 560 };
-const prajit = { revealed: false }; // per page: a new game is a reload
+const prajit = { revealed: false, hintAt: 0 }; // per page: a new game is a reload
 
 // The lantern appears behind you only after you have gone past the middle of the forest.
 function checkPrajitReveal() {
   if (prajit.revealed || state.scene !== 1 || state.flags.prajitMet || state.player.x < PRAJIT.REVEAL_X || isWorldFrozen()) return;
   prajit.revealed = true;
+  prajit.hintAt = performance.now() + 700;
   playSound('creak', { gain: 0.5, pan: -0.8 });
-  setTimeout(() => {
-    if (state.scene === 1 && !state.flags.prajitMet && !isWorldFrozen()) showToast('ข้างหลัง... มีแสงตะเกียงวูบขึ้นมาในหมอก ทางซ้ายสุดของป่า', 'hint', 4200);
-  }, 700);
+}
+
+// Called from updateGame in the forest: the reveal, then its hint once nothing covers the screen
+// (a close-up or a conversation just waits the hint out instead of dropping it).
+function updatePrajit() {
+  checkPrajitReveal();
+  if (!prajit.hintAt || performance.now() < prajit.hintAt || isWorldFrozen()) return;
+  prajit.hintAt = 0;
+  if (state.scene === 1 && !state.flags.prajitMet) showToast('ข้างหลัง... มีแสงตะเกียงวูบขึ้นมาในหมอก ทางซ้ายสุดของป่า', 'hint', 4200);
 }
 
 function prajitHotspots(sceneNum) {
@@ -1814,7 +1818,6 @@ function meetPrajit() {
 // Drawn in the forest until he has been met.
 // From afar he is only a dim shape behind the lantern; he comes clear as you walk back to him.
 function drawPrajit() {
-  checkPrajitReveal();
   if (state.scene !== 1 || state.flags.prajitMet || !prajit.revealed || !isReady(IMAGES.prajit)) return;
   const dist = Math.abs(state.player.x - PRAJIT.X);
   const alpha = Math.max(0.12, Math.min(0.95, 0.95 - (dist - 120) / 420 * 0.83));

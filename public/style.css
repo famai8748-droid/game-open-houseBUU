@@ -4130,3 +4130,15 @@ body,
 .t-item.t-night2 { color: #e0796d; }
 .t-item.t-night2:hover,
 .t-item.t-night2:focus-visible { color: #ff9d90; }
+
+/* Short screens (a 720p window, a laptop with browser bars): the end screen with every badge
+   still fits without scrolling. */
+@media (max-height: 760px) and (min-width: 761px) {
+  .ending-screen .ending-box { padding-top: 14px; padding-bottom: 14px; }
+  .ending-screen h2 { font-size: clamp(24px, 3.4vw, 34px); margin-bottom: 4px; }
+  .ending-screen .ending-desc { font-size: 14px; line-height: 1.5; }
+  .ending-screen .buu-banner { padding: 8px 0; margin: 10px 0 8px; }
+  .ending-screen .buu-title { font-size: clamp(24px, 3.6vw, 36px); }
+  .ending-stats { margin: 8px 0; }
+  .ending-screen .ending-lore { line-height: 1.45; }
+}

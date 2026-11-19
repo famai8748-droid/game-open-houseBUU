@@ -81,6 +81,17 @@ function souvenirImagePaths(d) {
 const souvenirReady = (img) => !!(img && img.complete && img.naturalWidth > 0);
 
 // Draws the 1200x630 card. imgs = { bg } (an HTMLImageElement; skipped if missing).
+// The titles a run earned. The end screen and the phone card both use this list, so they agree.
+function souvenirBadges(d) {
+  const out = [];
+  if (d.buu) out.push(d.broken ? 'พบใบปลิว Open House ในป่า — แต่ยังไม่ได้ให้สัญญา' : 'ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
+  if (d.lore === 3) out.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
+  if (d.prajit) out.push('ศิษย์ ดร.ประจิต — พบแสงตะเกียงหลังป่า');
+  if (d.night2) out.push('ผู้รอดคืนที่สอง — ผ่านเรือนในโหมดยาก');
+  if (d.coop) out.push('Co-op 2 ผู้เล่น — รอดมาด้วยกัน');
+  return out;
+}
+
 function drawSouvenirCard(c, d, imgs = {}) {
   c.width = 1200;
   c.height = 630;
@@ -144,12 +155,7 @@ function drawSouvenirCard(c, d, imgs = {}) {
   g.fillText(`เวลา ${formatTime(d.time)}  ·  ถูกวิญญาณจับ ${d.deaths} ครั้ง  ·  บันทึกของเรือน ${d.lore}/3`, 64, 336);
 
   let by = 396;
-  const badges = [];
-  if (d.buu) badges.push(d.broken ? 'พบใบปลิว Open House ในป่า — แต่ยังไม่ได้ให้สัญญา' : 'ผู้รักษาคำสัญญา — พบใบปลิว Open House ในป่า');
-  if (d.lore === 3) badges.push('ผู้ไขความลับแห่งเรือน — อ่านบันทึกหลวงสุนทรครบทุกหน้า');
-  if (d.prajit) badges.push('ศิษย์ ดร.ประจิต — พบแสงตะเกียงหลังป่า');
-  if (d.night2) badges.push('ผู้รอดคืนที่สอง — ผ่านเรือนในโหมดยาก');
-  if (d.coop) badges.push('Co-op 2 ผู้เล่น — รอดมาด้วยกัน');
+  const badges = souvenirBadges(d);
   const step = badges.length > 3 ? 40 : 48; // five badges still fit above the footer
   const boxH = badges.length > 3 ? 34 : 38;
   badges.forEach((b) => {
