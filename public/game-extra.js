@@ -1756,14 +1756,25 @@ function renderP2UnderRadar(rctx, rg) {
 }
 
 // ----------------------- 8. ดร.ประจิต (secret character in the forest) -----------------------
-// Most players walk straight to the right. Anyone who turns back to the far left of the forest
-// finds a warm lantern in the fog: ดร.ประจิต, the one living person out here that night, looking
+// Nothing is there at the start. Once you have walked past the middle of the forest, a lantern
+// lights up far behind you in the fog; anyone who turns back to the far left finds ดร.ประจิต, the one living person out here that night, looking
 // for a lost student. Meeting him is optional: the bell recharges a little faster for the rest
 // of the night, and the end screen and the phone card get a badge. He is gone afterwards.
-const PRAJIT = { X: 92, FEET: 616, H: 240, BELL_MULT: 0.8 };
+const PRAJIT = { X: 92, FEET: 616, H: 240, BELL_MULT: 0.8, REVEAL_X: 560 };
+const prajit = { revealed: false }; // per page: a new game is a reload
+
+// The lantern appears behind you only after you have gone past the middle of the forest.
+function checkPrajitReveal() {
+  if (prajit.revealed || state.scene !== 1 || state.flags.prajitMet || state.player.x < PRAJIT.REVEAL_X || isWorldFrozen()) return;
+  prajit.revealed = true;
+  playSound('creak', { gain: 0.5, pan: -0.8 });
+  setTimeout(() => {
+    if (state.scene === 1 && !state.flags.prajitMet && !isWorldFrozen()) showToast('ข้างหลัง... มีแสงตะเกียงวูบขึ้นมาในหมอก ทางซ้ายสุดของป่า', 'hint', 4200);
+  }, 700);
+}
 
 function prajitHotspots(sceneNum) {
-  if (sceneNum !== 1 || state.flags.prajitMet) return [];
+  if (sceneNum !== 1 || state.flags.prajitMet || !prajit.revealed) return [];
   return [{
     id: 'prajit',
     x: PRAJIT.X,
@@ -1800,14 +1811,34 @@ function meetPrajit() {
 }
 
 // Drawn in the forest until he has been met.
+// From afar he is only a dim shape behind the lantern; he comes clear as you walk back to him.
 function drawPrajit() {
-  if (state.scene !== 1 || state.flags.prajitMet || !isReady(IMAGES.prajit)) return;
-  drawGroundShadow(PRAJIT.X, PRAJIT.FEET - 2, 40, 10, 0.55);
-  drawSpriteProportional(IMAGES.prajit, PRAJIT.X, PRAJIT.FEET, PRAJIT.H, false, null, 0.92);
+  checkPrajitReveal();
+  if (state.scene !== 1 || state.flags.prajitMet || !prajit.revealed || !isReady(IMAGES.prajit)) return;
+  const dist = Math.abs(state.player.x - PRAJIT.X);
+  const alpha = Math.max(0.12, Math.min(0.95, 0.95 - (dist - 120) / 420 * 0.83));
+  drawGroundShadow(PRAJIT.X, PRAJIT.FEET - 2, 40, 10, 0.55 * alpha);
+  drawSpriteProportional(IMAGES.prajit, PRAJIT.X, PRAJIT.FEET, PRAJIT.H, false, null, alpha);
+  // the lantern itself stays bright at any distance: the thing you notice over your shoulder
+  const l = prajitLight();
+  const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 180) + (Math.random() - 0.5) * 0.08;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const glow = ctx.createRadialGradient(l.x, l.y, 2, l.x, l.y, 46);
+  glow.addColorStop(0, `rgba(255, 200, 110, ${0.75 * pulse})`);
+  glow.addColorStop(0.35, `rgba(255, 160, 70, ${0.3 * pulse})`);
+  glow.addColorStop(1, 'rgba(255, 140, 60, 0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(l.x, l.y, 46, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = `rgba(255, 236, 190, ${pulse})`;
+  ctx.fillRect(l.x - 2, l.y - 4, 4, 7);
+  ctx.restore();
 }
 
 // Where his lantern glows through the darkness (scene 1 only, until he has been met).
 function prajitLight() {
-  if (state.scene !== 1 || state.flags.prajitMet) return null;
+  if (state.scene !== 1 || state.flags.prajitMet || !prajit.revealed) return null;
   return { x: PRAJIT.X + 32, y: PRAJIT.FEET - 60 };
 }

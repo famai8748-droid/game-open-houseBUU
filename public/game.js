@@ -920,7 +920,7 @@ let hotspotCache = { key: '', list: [] };
 function getSceneHotspots(sceneNum) {
   if (sceneNum === 3 && under.active) return underHotspots();
   const inv = state.inventory;
-  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.prajitMet}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
+  const key = `${sceneNum}|${inv.offerings.join()}|${inv.photos.join()}|${state.flags.offeringsPlaced}|${state.flags.codeRead}|${loreFound()}|${!!state.flags.buuFound}|${!!state.flags.prajitMet}|${prajit.revealed}|${!!state.flags.songPlayed}|${!!state.flags.escaped}`;
   if (hotspotCache.key !== key) hotspotCache = { key, list: buildSceneHotspots(sceneNum).concat(loreHotspots(sceneNum), buuHotspots(sceneNum), prajitHotspots(sceneNum)) };
   return hotspotCache.list;
 }

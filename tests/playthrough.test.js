@@ -244,6 +244,7 @@ test('a full solo playthrough reaches the ending without errors', { skip: !BROWS
   assert.equal(s.scene, 1);
 
   // Scene 1: the forest; the wet flyer in the grass opens its close-up, then the door leads in
+  assert.equal(await browser.evaluate(`getSceneHotspots(1).some((h) => h.id === 'prajit')`), false, 'nobody stands at the far left at the start');
   await browser.evaluate(`__pt.use('forest_sign')`);
   await settle(browser);
   await browser.evaluate(`__pt.use('buu_flyer')`);
